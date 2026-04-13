@@ -2,6 +2,7 @@ package repl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -18,9 +19,10 @@ import (
 )
 
 const (
-	exitCommand  = "/exit"
-	helpCommand  = "/help"
-	modelCommand = "/model"
+	exitCommand    = "/exit"
+	helpCommand    = "/help"
+	modelCommand   = "/model"
+	compactCommand = "/compact"
 
 	defaultWidth = 120
 	maxHeight    = 3
@@ -122,6 +124,8 @@ type replModel struct {
 	loadingText         string
 	userScrolled        bool
 	streamCancel        context.CancelFunc
+	isCompacting        bool
+	compactionCancel    context.CancelFunc
 	contextStatus       contextStatus
 }
 
@@ -259,7 +263,7 @@ func (m replModel) Init() tea.Cmd {
 }
 
 func (m *replModel) spinnerHeight() int {
-	if m.showSpinner && m.streamHandler != nil && m.streamHandler.IsActive() {
+	if m.showSpinner {
 		return 1
 	}
 	return 0
@@ -307,6 +311,10 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
+	if m.isCompacting {
+		return *m, nil
+	}
+
 	m.output.AddUserInput(input, promptStyle)
 
 	if input == exitCommand {
@@ -328,9 +336,24 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return m.startModelSelection(), nil
 	}
 
+	if input == compactCommand || strings.HasPrefix(input, compactCommand+" ") {
+		extraPrompt := strings.TrimSpace(strings.TrimPrefix(input, compactCommand))
+		if !m.appState.IsClientReady(m.ctx.cfg) {
+			m.output.AddError("LLM client not initialized. Use /model to configure.", errorStyle)
+			m.textarea.Reset()
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil
+		}
+		m.textarea.Reset()
+		return m.startCompaction(extraPrompt)
+	}
+
 	if !m.appState.IsClientReady(m.ctx.cfg) {
 		m.output.AddError("LLM client not initialized. Use /model to configure.", errorStyle)
 		m.textarea.Reset()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
 		return *m, nil
 	}
 
@@ -342,6 +365,8 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		m.clearStreamCancel()
 		m.output.AddError(err.Error(), errorStyle)
 		m.textarea.Reset()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
 		return *m, nil
 	}
 
@@ -356,6 +381,33 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	m.viewport.GotoBottom()
 
 	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
+}
+
+func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
+	if m.compactionCancel != nil {
+		m.compactionCancel()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.compactionCancel = cancel
+	m.isCompacting = true
+	m.showSpinner = true
+	m.spinner.Spinner = nextLoadingSpinner()
+	m.loadingText = "Compacting..."
+	m.userScrolled = false
+	m.adjustTextareaHeight()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+
+	runCompaction := func() tea.Msg {
+		err := m.appState.Compact(ctx, m.ctx.cfg, extraPrompt)
+		if err != nil {
+			return compactionErrMsg{err: err}
+		}
+		return compactionDoneMsg{}
+	}
+
+	return *m, tea.Batch(m.spinner.Tick, runCompaction)
 }
 
 func (m *replModel) startStreamContext() context.Context {
@@ -503,6 +555,10 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case compactionDoneMsg:
+		return m.handleCompactionDone()
+	case compactionErrMsg:
+		return m.handleCompactionError(msg.err)
 	case diffReadyMsg:
 		m.streamHandler.HandleDiff(msg.req.lines)
 		close(msg.req.done)
@@ -597,7 +653,7 @@ func (m replModel) View() tea.View {
 		view.WriteString(m.viewport.View())
 		view.WriteString("\n")
 
-		if m.showSpinner && m.streamHandler != nil && m.streamHandler.IsActive() {
+		if m.showSpinner {
 			spinnerText := m.spinner.View() + " " + loadingTextStyled.Render(m.loadingText)
 			padding := m.width - lipgloss.Width(spinnerText) - 1
 			if padding < 0 {
@@ -641,7 +697,11 @@ func (m replModel) inputMetaView() string {
 	providerText := metaLabelStyle.Render("Provider:") + " " + highlightStyle.Render(provider)
 	modelText := metaLabelStyle.Render("Model:") + " " + infoValueStyle.Render(model)
 	left := providerText + "   " + modelText
-	right := renderContextStatus(m.contextStatus)
+	contextRight := renderContextStatus(m.contextStatus)
+	right := contextRight
+	if m.contextStatus.ShouldSuggestCompaction() {
+		right = contextRight + "  " + compactionSuggestionStyle.Render("Try /compact")
+	}
 
 	const leftPad = "  "
 	if m.width <= 0 {
@@ -649,6 +709,9 @@ func (m replModel) inputMetaView() string {
 	}
 
 	available := m.width - lipgloss.Width(leftPad)
+	if m.contextStatus.ShouldSuggestCompaction() && available <= lipgloss.Width(right)+1 {
+		right = contextRight
+	}
 	if available <= lipgloss.Width(right)+1 {
 		return leftPad + right
 	}
@@ -670,6 +733,7 @@ func (m replModel) inputMetaView() string {
 
 func getHelpText() string {
 	cmds := []struct{ cmd, desc string }{
+		{"/compact", "Compact conversation context"},
 		{"/help", "Show available commands"},
 		{"/model", "Change provider or model"},
 		{"/exit", "Quit Keen"},
@@ -683,6 +747,38 @@ func getHelpText() string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
+	m.isCompacting = false
+	m.showSpinner = false
+	m.compactionCancel = nil
+	m.refreshContextStatus(false)
+	m.output.AddStyledLine("  Context compacted.", lipgloss.NewStyle().Foreground(mutedColor))
+	m.output.AddEmptyLine()
+	m.adjustTextareaHeight()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m, nil
+}
+
+func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
+	m.isCompacting = false
+	m.showSpinner = false
+	m.compactionCancel = nil
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			m.output.AddStyledLine("  Compaction cancelled.", lipgloss.NewStyle().Foreground(mutedColor))
+			m.output.AddEmptyLine()
+		} else {
+			m.output.AddError("Compaction failed: "+err.Error(), errorStyle)
+		}
+	}
+	m.adjustTextareaHeight()
+	m.refreshContextStatus(false)
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m, nil
 }
 
 func (m *replModel) updateLLMClient() error {

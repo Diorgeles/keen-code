@@ -46,4 +46,3 @@ Based on the requirements, create a plan for the implementation with granular to
 3. When we press enter, the dropdown should also disappear.
 4. The arrow keys should wrap around the dropdown menu. Meaning, if users press up arrow when the first command is selected, the last command should be selected. Similarly, if users press down arrow when the last command is selected, the first command should be selected.
 5. Let's change the styling for the suggestions. We don't need borders. And we don't need to fill the selection. Rather, we can change the color of the currently selected command and its description text.
-6. 

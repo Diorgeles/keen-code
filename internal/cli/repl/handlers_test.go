@@ -266,6 +266,46 @@ func TestHandleKeyMsg_Esc_WhenIdleNoOp(t *testing.T) {
 	}
 }
 
+func TestHandleKeyMsg_Esc_CancelsCompactionBeforeSuggestions(t *testing.T) {
+	m := newTestModel()
+	m.isCompacting = true
+	m.suggestion.refresh("/c")
+	cancelled := false
+	m.compactionCancel = func() {
+		cancelled = true
+	}
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+
+	if !cancelled {
+		t.Fatal("expected esc to cancel compaction")
+	}
+	if newM.compactionCancel != nil {
+		t.Fatal("expected cancel func to be cleared after esc")
+	}
+	if !newM.suggestion.visible {
+		t.Fatal("expected suggestions to remain untouched while compaction consumes input")
+	}
+	if cmd != nil {
+		t.Fatal("expected no follow-up cmd")
+	}
+}
+
+func TestHandleKeyMsg_IgnoresTypingDuringCompaction(t *testing.T) {
+	m := newTestModel()
+	m.isCompacting = true
+	m.textarea.SetValue("draft")
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: 'x', Text: "x"})
+
+	if newM.textarea.Value() != "draft" {
+		t.Fatalf("expected typing to be ignored during compaction, got %q", newM.textarea.Value())
+	}
+	if cmd != nil {
+		t.Fatal("expected no cmd while compacting")
+	}
+}
+
 func TestHandleKeyMsg_CtrlJ(t *testing.T) {
 	ta := textarea.New()
 	ta.Focus()

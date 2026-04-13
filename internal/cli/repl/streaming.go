@@ -668,3 +668,7 @@ type permissionReadyMsg struct {
 type diffReadyMsg struct {
 	req diffEmitRequest
 }
+type compactionDoneMsg struct{}
+type compactionErrMsg struct {
+	err error
+}

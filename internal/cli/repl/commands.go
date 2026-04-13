@@ -8,6 +8,7 @@ type slashCommand struct {
 }
 
 var allSlashCommands = []slashCommand{
+	{"/compact", "Compact conversation context"},
 	{"/exit", "Quit Keen"},
 	{"/help", "Show available commands"},
 	{"/model", "Change provider or model"},

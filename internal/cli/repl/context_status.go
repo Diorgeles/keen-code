@@ -8,13 +8,20 @@ import (
 	"github.com/user/keen-code/internal/llm"
 )
 
-const contextProgressBarWidth = 20
+const (
+	contextProgressBarWidth    = 20
+	compactionSuggestThreshold = 70.0
+)
 
 type contextStatus struct {
 	CurrentTokens int
 	ContextWindow int
 	Percent       float64
 	KnownWindow   bool
+}
+
+func (s contextStatus) ShouldSuggestCompaction() bool {
+	return s.KnownWindow && s.Percent >= compactionSuggestThreshold
 }
 
 func estimateTokensFromWordCount(words int) int {

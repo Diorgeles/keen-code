@@ -12,11 +12,18 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := filterCommands("/")
-	if len(got) != 3 {
-		t.Fatalf("expected 3 commands, got %d", len(got))
+	if len(got) != 4 {
+		t.Fatalf("expected 4 commands, got %d", len(got))
 	}
-	if got[0].Name != "/exit" || got[1].Name != "/help" || got[2].Name != "/model" {
+	if got[0].Name != "/compact" || got[1].Name != "/exit" || got[2].Name != "/help" || got[3].Name != "/model" {
 		t.Errorf("unexpected order: %v", got)
+	}
+}
+
+func TestFilterCommandsC(t *testing.T) {
+	got := filterCommands("/c")
+	if len(got) != 1 || got[0].Name != "/compact" {
+		t.Errorf("expected /compact only, got %v", got)
 	}
 }
 

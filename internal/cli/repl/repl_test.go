@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -155,6 +156,34 @@ func TestHandleEnterKey_ModelCommand(t *testing.T) {
 	}
 	if newM.textarea.Value() != "" {
 		t.Error("expected textarea to be reset")
+	}
+}
+
+func TestHandleEnterKey_CompactCommandStartsCompaction(t *testing.T) {
+	m := newTestModel()
+	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
+	m.appState = NewAppState(&mockLLMClient{}, "")
+	m.textarea.SetValue("/compact Keep business logic details")
+
+	newM, cmd := m.handleEnterKey()
+
+	if !newM.isCompacting {
+		t.Fatal("expected compaction mode to start")
+	}
+	if !newM.showSpinner {
+		t.Fatal("expected spinner to be visible during compaction")
+	}
+	if newM.loadingText != "Compacting..." {
+		t.Fatalf("expected compaction loading text, got %q", newM.loadingText)
+	}
+	if newM.textarea.Value() != "" {
+		t.Fatal("expected textarea to be reset")
+	}
+	if newM.compactionCancel == nil {
+		t.Fatal("expected compaction cancel func to be set")
+	}
+	if cmd == nil {
+		t.Fatal("expected async compaction command")
 	}
 }
 
@@ -400,6 +429,9 @@ func TestUpdateNormalMode_DiffReadyRendersImmediately(t *testing.T) {
 func TestGetHelpText(t *testing.T) {
 	text := getHelpText()
 
+	if !strings.Contains(text, "/compact") {
+		t.Error("expected /compact in help text")
+	}
 	if !strings.Contains(text, "/help") {
 		t.Error("expected /help in help text")
 	}
@@ -447,6 +479,93 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	}
 	if !strings.Contains(meta, "50%") {
 		t.Fatalf("expected 50%% context usage, got %q", meta)
+	}
+}
+
+func TestInputMetaView_SuggestsCompactionAtSeventyPercent(t *testing.T) {
+	m := newTestModel()
+	m.width = 120
+	m.contextStatus = contextStatus{
+		KnownWindow:   true,
+		ContextWindow: 100,
+		CurrentTokens: 70,
+		Percent:       70,
+	}
+
+	meta := m.inputMetaView()
+	if !strings.Contains(meta, "Try /compact") {
+		t.Fatalf("expected compaction hint, got %q", meta)
+	}
+}
+
+func TestInputMetaView_DropsCompactionHintWhenWidthIsTight(t *testing.T) {
+	m := newTestModel()
+	m.width = 30
+	m.contextStatus = contextStatus{
+		KnownWindow:   true,
+		ContextWindow: 100,
+		CurrentTokens: 75,
+		Percent:       75,
+	}
+
+	meta := m.inputMetaView()
+	if strings.Contains(meta, "Try /compact") {
+		t.Fatalf("expected compaction hint to be dropped for narrow width, got %q", meta)
+	}
+	if !strings.Contains(meta, "75%") {
+		t.Fatalf("expected context status to remain visible, got %q", meta)
+	}
+}
+
+func TestSpinnerHeight_IncludesCompactionSpinner(t *testing.T) {
+	m := newTestModel()
+	m.showSpinner = true
+	m.isCompacting = true
+
+	if got := m.spinnerHeight(); got != 1 {
+		t.Fatalf("expected spinner height 1 during compaction, got %d", got)
+	}
+}
+
+func TestHandleCompactionDone_StopsCompactionAndRefreshesOutput(t *testing.T) {
+	m := newTestModel()
+	m.isCompacting = true
+	m.showSpinner = true
+	m.compactionCancel = func() {}
+	m.contextStatus = contextStatus{KnownWindow: true, Percent: 10}
+
+	newM, cmd := m.handleCompactionDone()
+
+	if newM.isCompacting || newM.showSpinner {
+		t.Fatal("expected compaction mode to stop")
+	}
+	if newM.compactionCancel != nil {
+		t.Fatal("expected compaction cancel func to be cleared")
+	}
+	if !strings.Contains(newM.output.Join(), "Context compacted.") {
+		t.Fatalf("expected completion message, got %q", newM.output.Join())
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+}
+
+func TestHandleCompactionError_CancelledShowsSoftMessage(t *testing.T) {
+	m := newTestModel()
+	m.isCompacting = true
+	m.showSpinner = true
+	m.compactionCancel = func() {}
+
+	newM, cmd := m.handleCompactionError(context.Canceled)
+
+	if newM.isCompacting || newM.showSpinner {
+		t.Fatal("expected compaction mode to stop")
+	}
+	if !strings.Contains(newM.output.Join(), "Compaction cancelled.") {
+		t.Fatalf("expected cancellation message, got %q", newM.output.Join())
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
 	}
 }
 

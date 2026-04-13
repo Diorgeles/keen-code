@@ -122,6 +122,14 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
+	if m.isCompacting {
+		if keyMsg.String() == keyEsc && m.compactionCancel != nil {
+			m.compactionCancel()
+			m.compactionCancel = nil
+		}
+		return *m, nil
+	}
+
 	if m.streamHandler != nil && m.streamHandler.HasPendingPermission() {
 		switch keyMsg.String() {
 		case "up", "k", "down", "j", keyEnter, keyEsc:

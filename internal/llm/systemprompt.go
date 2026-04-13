@@ -3,12 +3,8 @@ package llm
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"sort"
 	"strings"
-	"time"
 )
 
 const staticPrompt = `You are Keen Code, an expert coding agent running in terminal environment.
@@ -36,6 +32,8 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Make minimal changes. Prefer editing an existing file to creating a new one.
 - Verify your work. After making changes, run the project's test command if
   you know it. If you do not know it, check AGENTS.md, the README.md, or ask.
+- If user interrupts you while you are working on a task, do not pick it up again
+  unless user explicitly asks you to.
 
 # Tool usage
 - Prefer specialised tools over bash for file operations:
@@ -59,18 +57,12 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Before working on a file, consider what the code is supposed to do. If it
   looks malicious, refuse.`
 
-const maxDirEntries = 40
 const maxInstructionsSize = 8 * 1024
 
 func Build(workingDir string) string {
 	var sb strings.Builder
 	sb.WriteString(staticPrompt)
-
-	env := envBlock(workingDir)
-	if env != "" {
-		sb.WriteString("\n\n")
-		sb.WriteString(env)
-	}
+	sb.WriteString(fmt.Sprintf("\n\nWorking directory: %s", workingDir))
 
 	instructions := projectInstructions(workingDir)
 	if instructions != "" {
@@ -81,64 +73,8 @@ func Build(workingDir string) string {
 	return sb.String()
 }
 
-func envBlock(workingDir string) string {
-	gitRepo := "no"
-	if isGitRepo(workingDir) {
-		gitRepo = "yes"
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "<env>\n")
-	fmt.Fprintf(&sb, "  Working directory: %s\n", workingDir)
-	fmt.Fprintf(&sb, "  Platform: %s\n", runtime.GOOS)
-	fmt.Fprintf(&sb, "  Today's date: %s\n", time.Now().Format("2006-01-02"))
-	fmt.Fprintf(&sb, "  Is git repo: %s\n", gitRepo)
-	fmt.Fprintf(&sb, "</env>")
-
-	listing := dirListing(workingDir)
-	if listing != "" {
-		sb.WriteString("\n\nTop-level project structure:\n")
-		sb.WriteString(listing)
-	}
-
-	return sb.String()
-}
-
-func dirListing(workingDir string) string {
-	entries, err := os.ReadDir(workingDir)
-	if err != nil {
-		return ""
-	}
-	if len(entries) == 0 {
-		return ""
-	}
-
-	sort.Slice(entries, func(i, j int) bool {
-		iDir := entries[i].IsDir()
-		jDir := entries[j].IsDir()
-		if iDir != jDir {
-			return iDir
-		}
-		return entries[i].Name() < entries[j].Name()
-	})
-
-	var lines []string
-	for i, entry := range entries {
-		if i >= maxDirEntries {
-			break
-		}
-		name := entry.Name()
-		if entry.IsDir() {
-			name += "/"
-		}
-		lines = append(lines, name)
-	}
-
-	return strings.Join(lines, "\n")
-}
-
 func projectInstructions(workingDir string) string {
-	candidates := []string{"AGENTS.md", "CLAUDE.md"}
+	candidates := []string{"AGENTS.md", "CLAUDE.md", "GEMINI.md"}
 	path, content := findUpward(workingDir, candidates)
 	if content == "" {
 		return ""
@@ -177,14 +113,4 @@ func findUpward(dir string, candidates []string) (string, string) {
 	}
 
 	return "", ""
-}
-
-func isGitRepo(workingDir string) bool {
-	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
-	cmd.Dir = workingDir
-	out, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	return strings.TrimSpace(string(out)) == "true"
 }

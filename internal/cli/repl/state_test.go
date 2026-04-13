@@ -3,6 +3,7 @@ package repl
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/user/keen-code/internal/config"
@@ -291,5 +292,136 @@ func TestAppState_GetClient_Nil(t *testing.T) {
 	got := state.GetClient()
 	if got != nil {
 		t.Error("GetClient() expected nil, got non-nil")
+	}
+}
+
+func TestAppState_CompactReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
+	var capturedMessages []llm.Message
+	var capturedRegistry *tools.Registry
+
+	client := &mockLLMClient{
+		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
+			capturedMessages = append([]llm.Message(nil), messages...)
+			capturedRegistry = toolRegistry
+
+			ch := make(chan llm.StreamEvent, 2)
+			ch <- llm.StreamEvent{Type: llm.StreamEventTypeChunk, Content: "compacted summary"}
+			ch <- llm.StreamEvent{Type: llm.StreamEventTypeDone}
+			close(ch)
+			return ch, nil
+		},
+	}
+
+	state := NewAppState(client, t.TempDir())
+	original := make([]llm.Message, 0, 25)
+	for i := 0; i < 25; i++ {
+		role := llm.RoleUser
+		if i%2 == 1 {
+			role = llm.RoleAssistant
+		}
+		msg := llm.Message{Role: role, Content: "message " + strings.Repeat("x", i+1)}
+		original = append(original, msg)
+		state.AddMessage(role, msg.Content)
+	}
+
+	err := state.Compact(context.Background(), &config.ResolvedConfig{
+		APIKey: "key",
+		Model:  "model",
+	}, "Keep business logic details")
+	if err != nil {
+		t.Fatalf("Compact() returned error: %v", err)
+	}
+
+	if capturedRegistry != nil {
+		t.Fatal("expected compaction to disable tools")
+	}
+	if len(capturedMessages) != len(original)+2 {
+		t.Fatalf("expected %d compaction request messages, got %d", len(original)+2, len(capturedMessages))
+	}
+	if capturedMessages[0].Role != llm.RoleSystem {
+		t.Fatalf("expected first compaction message to be system, got %s", capturedMessages[0].Role)
+	}
+	if !strings.Contains(capturedMessages[0].Content, "Keep business logic details") {
+		t.Fatalf("expected extra prompt in system prompt, got %q", capturedMessages[0].Content)
+	}
+	for i, msg := range original {
+		got := capturedMessages[i+1]
+		if got != msg {
+			t.Fatalf("expected compaction request message %d to match original history", i)
+		}
+	}
+	last := capturedMessages[len(capturedMessages)-1]
+	if last.Role != llm.RoleUser {
+		t.Fatalf("expected final compaction message to be user, got %s", last.Role)
+	}
+	if last.Content != compactionUserInstruction {
+		t.Fatalf("unexpected final compaction instruction: %q", last.Content)
+	}
+
+	compacted := state.GetMessages()
+	if len(compacted) != 1 {
+		t.Fatalf("expected compacted history to contain one summary message, got %d", len(compacted))
+	}
+	if compacted[0].Role != llm.RoleUser || compacted[0].Content != "compacted summary" {
+		t.Fatalf("unexpected summary message: %#v", compacted[0])
+	}
+}
+
+func TestAppState_CompactLeavesMessagesUntouchedOnError(t *testing.T) {
+	client := &mockLLMClient{
+		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
+			ch := make(chan llm.StreamEvent, 1)
+			ch <- llm.StreamEvent{Type: llm.StreamEventTypeError, Error: errors.New("boom")}
+			close(ch)
+			return ch, nil
+		},
+	}
+
+	state := NewAppState(client, t.TempDir())
+	state.AddMessage(llm.RoleUser, "hello")
+	state.AddMessage(llm.RoleAssistant, "world")
+	original := state.GetMessages()
+
+	err := state.Compact(context.Background(), &config.ResolvedConfig{
+		APIKey: "key",
+		Model:  "model",
+	}, "")
+	if err == nil || err.Error() != "boom" {
+		t.Fatalf("expected boom error, got %v", err)
+	}
+
+	if got := state.GetMessages(); len(got) != len(original) || got[0] != original[0] || got[1] != original[1] {
+		t.Fatalf("expected messages to remain unchanged, got %#v", got)
+	}
+}
+
+func TestAppState_CompactLeavesMessagesUntouchedOnCancel(t *testing.T) {
+	client := &mockLLMClient{
+		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
+			ch := make(chan llm.StreamEvent)
+			go func() {
+				<-ctx.Done()
+				close(ch)
+			}()
+			return ch, nil
+		},
+	}
+
+	state := NewAppState(client, t.TempDir())
+	state.AddMessage(llm.RoleUser, "hello")
+	original := state.GetMessages()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := state.Compact(ctx, &config.ResolvedConfig{
+		APIKey: "key",
+		Model:  "model",
+	}, "")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	if got := state.GetMessages(); len(got) != len(original) || got[0] != original[0] {
+		t.Fatalf("expected messages to remain unchanged, got %#v", got)
 	}
 }

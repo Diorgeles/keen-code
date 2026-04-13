@@ -160,5 +160,6 @@ var (
 	contextStatusPercentStyle         = lipgloss.NewStyle().Foreground(secondaryColor).Bold(true).PaddingRight(2)
 	contextStatusPercentWarnStyle     = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
 	contextStatusPercentCriticalStyle = lipgloss.NewStyle().Foreground(errorColor).Bold(true)
-	contextStatusUnknownStyle         = lipgloss.NewStyle().Foreground(mutedColor).Italic(true)
+	contextStatusUnknownStyle         = lipgloss.NewStyle().Foreground(mutedColor).Italic(true).PaddingRight(2)
+	compactionSuggestionStyle         = lipgloss.NewStyle().Foreground(accentColor).Bold(true).PaddingRight(2)
 )

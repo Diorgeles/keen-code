@@ -90,3 +90,15 @@ func TestRenderContextStatusKnownShowsTwoDecimalPlacesWhenNeeded(t *testing.T) {
 		t.Fatalf("expected 33.33%% in status, got %q", got)
 	}
 }
+
+func TestContextStatus_ShouldSuggestCompaction(t *testing.T) {
+	if !(contextStatus{KnownWindow: true, Percent: 70}).ShouldSuggestCompaction() {
+		t.Fatal("expected compaction suggestion at 70%")
+	}
+	if (contextStatus{KnownWindow: true, Percent: 69.99}).ShouldSuggestCompaction() {
+		t.Fatal("did not expect compaction suggestion below 70%")
+	}
+	if (contextStatus{KnownWindow: false, Percent: 90}).ShouldSuggestCompaction() {
+		t.Fatal("did not expect compaction suggestion when context window is unknown")
+	}
+}
