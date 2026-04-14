@@ -277,11 +277,19 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 		switch seg.kind {
 		case segmentToolStart:
 			if seg.toolCall != nil {
+				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
+					// paired end follows immediately; the end case will render the combined line
+					continue
+				}
 				lines = append(lines, formatToolStart(seg.toolCall))
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
-				lines = append(lines, formatToolEnd(seg.toolCall))
+				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
+					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall))
+				} else {
+					lines = append(lines, formatToolEnd(seg.toolCall))
+				}
 			}
 		case segmentBash:
 			bashLines := sh.renderBashSegment(seg, width)
@@ -316,11 +324,19 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 		switch seg.kind {
 		case segmentToolStart:
 			if seg.toolCall != nil {
+				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
+					// paired end follows immediately; the end case will render the combined line
+					continue
+				}
 				lines = append(lines, formatToolStart(seg.toolCall))
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
-				lines = append(lines, formatToolEnd(seg.toolCall))
+				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
+					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall))
+				} else {
+					lines = append(lines, formatToolEnd(seg.toolCall))
+				}
 			}
 		case segmentBash:
 			bashLines := sh.renderBashSegment(seg, 0)

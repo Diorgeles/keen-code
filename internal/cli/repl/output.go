@@ -90,6 +90,14 @@ func formatToolStart(toolCall *llm.ToolCall) string {
 	return "\n  " + toolStartStyle.Render(fmt.Sprintf("⚙ %s(%s)...", toolCall.Name, inputDisplay))
 }
 
+func formatToolDone(startCall, endCall *llm.ToolCall) string {
+	inputDisplay := formatToolInput(startCall.Name, startCall.Input)
+	if endCall.Error != "" {
+		return "\n  " + toolErrorStyle.Render(fmt.Sprintf("✗ %s(%s) failed: %s", startCall.Name, inputDisplay, endCall.Error))
+	}
+	return "\n  " + toolSuccessStyle.Render(fmt.Sprintf("✓ %s(%s) (%s)", startCall.Name, inputDisplay, endCall.Duration))
+}
+
 func formatToolInput(toolName string, input map[string]any) string {
 	if input == nil {
 		return ""

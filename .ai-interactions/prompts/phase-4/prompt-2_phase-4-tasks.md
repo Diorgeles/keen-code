@@ -6,6 +6,19 @@
 2. Fix thinking for genkit clients so that thinking tokens are visually handle they are done for openai compatible models.
 3. Currently, model selection using up-down arrows don't wrap around. Let's fix that.
 4. Review the styles in @internal/cli/repl/styles.go. Currently, the colors are all over the place. Without changing anything in the UI, organise the colors.
+5. The tool outputs are shown as two lines like this:
+  ⚙ glob(pattern=**/*.go)...
+  ✓ glob (36.081459ms)
+  How can we show it as one while keeping the info shown intact?
+6. Instead of showing two lines for tool call start and end, we want to show one line. So for example, 
+  ⚙ glob(pattern=**/*.go)...
+  ✓ glob (36.081459ms)
+  will be shown as one line like this:
+  ⚙ glob(pattern=**/*.go)... ✓ glob [36.081459ms]
+  How to do it with minimal changes? Find a way to do it. Same for error.
+7. But in this approach of checking i+1 line for the same tool call, second line will render for a split second. So we want to avoid that.
+8. Can we just renderthe `formatToolEnd` message in the same line as the `formatToolStart` message?
+9. Tool start and tool end messages have different colors—yellow and green. I am thinking that we should rather have a single neutral color because if the tool result is fast, there is a fast transition between yellow and green color in the UI which doesn't look good.
 
 ### Interruption
 

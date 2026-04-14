@@ -47,4 +47,5 @@ Guard checks paths before filesystem operations:
 - Always run the tests after each change
 - Always run `go mod tidy` after each change
 - Commit messages should be concise and focus on the key changes with bullet points
+- Commit messages should follow the `feat(category): description` format
 - Never add co-authors to commit messages

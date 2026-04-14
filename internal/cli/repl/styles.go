@@ -42,10 +42,8 @@ var (
 
 	// ── State ───────────────────────────────────────────────────────────────────
 
-	errorColor   = compat.AdaptiveColor{Light: lipgloss.Color("#D32F2F"), Dark: lipgloss.Color("#EF5350")}
-	warningColor = compat.AdaptiveColor{Light: lipgloss.Color("#F57C00"), Dark: lipgloss.Color("#FFB74D")}
-	successColor = compat.AdaptiveColor{Light: lipgloss.Color("#388E3C"), Dark: lipgloss.Color("#66BB6A")}
-	whiteColor   = compat.AdaptiveColor{Light: lipgloss.Color("#FFFFFF"), Dark: lipgloss.Color("#FFFFFF")}
+	errorColor = compat.AdaptiveColor{Light: lipgloss.Color("#D32F2F"), Dark: lipgloss.Color("#EF5350")}
+	whiteColor = compat.AdaptiveColor{Light: lipgloss.Color("#FFFFFF"), Dark: lipgloss.Color("#FFFFFF")}
 
 	// ── Diff ────────────────────────────────────────────────────────────────────
 
@@ -109,8 +107,8 @@ var (
 
 	// ── Tools ───────────────────────────────────────────────────────────────────
 
-	toolStartStyle    = lipgloss.NewStyle().Foreground(warningColor).Bold(true)
-	toolSuccessStyle  = lipgloss.NewStyle().Foreground(successColor)
+	toolStartStyle    = lipgloss.NewStyle().Foreground(textDimColor).Bold(true)
+	toolSuccessStyle  = lipgloss.NewStyle().Foreground(secondaryColor)
 	toolErrorStyle    = lipgloss.NewStyle().Foreground(errorColor)
 	warningTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(errorColor)
 

@@ -121,6 +121,7 @@ func TestStreamHandler_HandleDone_MixedSegmentsChronological(t *testing.T) {
 		t.Fatalf("unexpected full response: %q", fullResponse)
 	}
 
+	// start and end are not adjacent (chunk between them), so both lines are emitted
 	if len(lines) != 4 {
 		t.Fatalf("expected 4 transcript lines, got %d", len(lines))
 	}
@@ -136,6 +137,27 @@ func TestStreamHandler_HandleDone_MixedSegmentsChronological(t *testing.T) {
 	}
 	if !strings.Contains(lines[3], "read_file") || !strings.Contains(lines[3], "✓") {
 		t.Fatalf("expected fourth line to be tool end, got %q", lines[3])
+	}
+}
+
+func TestStreamHandler_HandleDone_AdjacentToolStartEnd_CollapsedToOneLine(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	sh.Start(eventCh, "Loading...")
+
+	sh.HandleToolStart(&llm.ToolCall{Name: "glob", Input: map[string]any{"pattern": "**/*.go"}})
+	sh.HandleToolEnd(&llm.ToolCall{Name: "glob", Duration: 5})
+
+	lines, _ := sh.HandleDone()
+
+	if len(lines) != 1 {
+		t.Fatalf("expected 1 line for adjacent start/end, got %d: %v", len(lines), lines)
+	}
+	if !strings.Contains(lines[0], "glob") || !strings.Contains(lines[0], "✓") {
+		t.Fatalf("expected combined done line, got %q", lines[0])
+	}
+	if strings.Contains(lines[0], "⚙") {
+		t.Fatalf("expected no tool-start marker in combined line, got %q", lines[0])
 	}
 }
 
