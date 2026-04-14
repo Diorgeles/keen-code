@@ -1,12 +1,25 @@
-![Keen Code](./assets/keen-code.png)
+<div align="center">
 
-# Keen Code
+<img src="./assets/keen-code.png" alt="Keen Code" width="350"/>
 
-**Keen Code** is a terminal-based AI coding agent like Claude Code or OpenCode. Written in Go, it is simple and lightweight, avoids feature bloat, and aims at being a minimalistic coding agent.
+[![Latest Release](https://img.shields.io/github/v/release/mochow13/keen-code)](https://github.com/mochow13/keen-code/releases/latest)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/mochow13/keen-code/go.yml?branch=main)](https://github.com/mochow13/keen-code/actions)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/mochow13/keen-code)](https://go.dev/)
+[![License](https://img.shields.io/github/license/mochow13/keen-code)](https://github.com/mochow13/keen-code/blob/main/LICENSE)
 
-From requirements to implementation, Keen Code was engineered using a wide range of coding agents and agentic IDEs—Cursor, Windsurf, Claude Code, OpenCode, Codex CLI, and Kimi CLI were used for developing this project.
+</div>
 
-By far, AI coding agents are the most ubiquitous use case for AI in the era of AI agents. The goal of the project is to showcase how coding agents can be used to develop the coding agents themselves. It's a fairly complicated project which helps to test the capablities and push the limits of AI coding agents for a real-world and popular use case.
+**Keen Code** is a terminal-based AI coding agent like Claude Code or OpenCode. Written in Go, it is simpler, lighter, and avoids feature bloat. It is designed to be a minimalistic but useful coding agent for typical software engineering tasks.
+
+Keen Code is also highly opinionated. It avoids features that are not necessarily needed or useful for a regular software engineer. It tries to avoid unnecessary complexity and attempts to keep the agent harness as simple as possible.
+
+Keen also has higher trust in the models. This is why Keen doesn't have a `plan` mode because SOTA models are very capable of planning tasks without attempting to make edits to the codebase. These models have gone through rigorous post-training which includes effective planning and execution capabilities.
+
+From requirements to implementation, Keen Code was engineered using a wide range of coding agents and agentic IDEs like Cursor, Windsurf, Claude Code, OpenCode, Codex CLI, and Kimi CLI. Note that it was always a single agent that was used to develop the project at any given time. No multi-agent orchestration was used.
+
+By far, AI coding agents are the most ubiquitous use case for AI in the era of AI agents. The goal of the project is to showcase how coding agents can be used to develop the coding agents themselves. This is why most prompts are saved as markdown files in the `.ai-interactions` directory. 
+
+Keen Code is an experiment to play with the *new way of working* where engineers work with AI agents to develop software. In this setting, engineers are sometimes referred to as "orchestrators".
 
 ## Principles
 
@@ -17,8 +30,9 @@ Developing Keen Code is guided by the following principles:
 - The human engineer has a very strict set of roles:
   - Specifiy and clarify the requirements
   - Review design docs and influence design decisions
-  - Review **each and every change** made by the agents
-  - Keep a sharp eye on the quality and correctness of the code
+  - Review changes made by the agents
+    - Changes can also be reviewed by the agents themselves
+  - Ensure the quality and correctness of the code
   - Focus on best practices and standards relevant to the programing language (Go in this case)
   - Thoroughly review and test the product after each iteration
   - Continously provide feedback to the agents to improve the product
@@ -27,10 +41,26 @@ Developing Keen Code is guided by the following principles:
   - Prompts are pretty much chronologically ordered which demonstrates the thought process and iterative nature of the development
 - All the outputs are saved as markdown files in the `.ai-interactions/outputs` directory
   - These outputs are basically plans, design docs, and breakdowns of the tasks
-  - Outputs are also chronologically ordered
+  - These outputs are the "specs" that the agents later use to implement the tasks
 
+## Development Cycle Example
 
-## Install with script
+All features follow a **spec → plan → task → review** cycle. Here's a concrete example — the `read_file` tool from Phase 3:
+
+**Spec** — [`prompts/phase-3/prompt-3_read-file-tool.md`](.ai-interactions/prompts/phase-3/prompt-3_read-file-tool.md)
+Requirements defined upfront: ask permission before reading, respect FileGuard path rules, text files only, 1 MB limit, support relative and absolute paths.
+
+**Plan** — [`outputs/phase-3/output-3_read-file-tool.md`](.ai-interactions/outputs/phase-3/output-3_read-file-tool.md)
+Design doc produced by the agent: how `Guard.CheckPath` maps to the REPL permission prompt, exact struct contracts, permission flow diagram.
+
+**Task** — [`prompts/phase-3/prompt-5_phase-3-tasks.md`](.ai-interactions/prompts/phase-3/prompt-5_phase-3-tasks.md)
+Implementation broken into steps — tool contract, permission bridge, REPL selector, unit tests — each approved before the next began.
+
+**Review** — (inline feedback during implementation)
+The LLM was rejecting `.go` files because MIME detection flagged them as binary. Review caught this; switched to character-based text validation. The fix landed in the same iteration.
+
+## Install Keen Code
+### Install with script
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mochow13/keen-code/main/scripts/install.sh | bash
@@ -44,7 +74,7 @@ curl -fsSL https://raw.githubusercontent.com/mochow13/keen-code/main/scripts/ins
 
 Installs to `/usr/local/bin` if writable, otherwise `$HOME/.local/bin`.
 
-## Install with `npm`
+### Install with `npm`
 
 Install the CLI globally:
 
