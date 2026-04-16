@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-04-16
+
+### Changed
+- Simplified REPL context status display and metadata emphasis
+
 ## [0.2.0] - 2025-08-21
 
 ### Added
@@ -79,7 +84,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/mochow13/keen-code/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mochow13/keen-code/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/mochow13/keen-code/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/mochow13/keen-code/compare/v0.1.5...v0.1.6
