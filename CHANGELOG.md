@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-08-21
+
+### Added
+- Conversation session management with transcript persistence
+- `/sessions` command to list recent sessions with metadata
+- `/resume` command with interactive picker to restore conversations
+- `/compact` command to summarize conversation history via LLM
+- Event-sourced storage (session_started, user_message, assistant_turn, compaction_applied)
+- Store tool outputs, bash results, and file diffs in transcript for full replay
+
 ## [0.1.7] - 2026-03-24
 
 ### Added
@@ -69,7 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mochow13/keen-code/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/mochow13/keen-code/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/mochow13/keen-code/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/mochow13/keen-code/compare/v0.1.4...v0.1.5
