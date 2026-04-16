@@ -77,6 +77,9 @@ func TestRenderContextStatusKnownIncludesPercent(t *testing.T) {
 	if !strings.Contains(got, "50%") {
 		t.Fatalf("expected percent in status, got %q", got)
 	}
+	if strings.Contains(got, "█") || strings.Contains(got, "░") {
+		t.Fatalf("expected progress bar to be removed, got %q", got)
+	}
 }
 
 func TestRenderContextStatusKnownShowsTwoDecimalPlacesWhenNeeded(t *testing.T) {

@@ -331,6 +331,27 @@ func TestUpdateViewportContent_UsesViewportWidthWhenModelStartsWithoutResize(t *
 	}
 }
 
+func TestBuildInitialScreen_HighlightsModelOnly(t *testing.T) {
+	ctx := &replContext{
+		version:    "0.2.1",
+		workingDir: "/tmp/project",
+		cfg: &config.ResolvedConfig{
+			Provider: "openai",
+			Model:    "gpt-5.4",
+		},
+	}
+
+	lines := buildInitialScreen(ctx)
+	rendered := strings.Join(lines, "\n")
+
+	if strings.Contains(rendered, highlightStyle.Render("openai")) {
+		t.Fatalf("expected provider in initial screen to not use highlight style, got %q", rendered)
+	}
+	if !strings.Contains(rendered, highlightStyle.Render("gpt-5.4")) {
+		t.Fatalf("expected model in initial screen to use highlight style, got %q", rendered)
+	}
+}
+
 func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
 	wide := renderInputArea("> hello", 80)
 	wideLines := strings.Split(strings.TrimRight(wide, "\n"), "\n")
@@ -579,17 +600,23 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	m.refreshContextStatus(false)
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, "Provider:") {
-		t.Fatalf("expected provider text, got %q", meta)
+	if !strings.Contains(meta, "model:") {
+		t.Fatalf("expected combined model label, got %q", meta)
 	}
-	if !strings.Contains(meta, "Model:") {
-		t.Fatalf("expected model text, got %q", meta)
+	if !strings.Contains(meta, "openai") {
+		t.Fatalf("expected provider text in combined model display, got %q", meta)
 	}
-	if !strings.Contains(meta, "✎ᝰ") {
-		t.Fatalf("expected context status label, got %q", meta)
+	if !strings.Contains(meta, "context:") {
+		t.Fatalf("expected inline context label, got %q", meta)
 	}
 	if !strings.Contains(meta, "50%") {
 		t.Fatalf("expected 50%% context usage, got %q", meta)
+	}
+	if !strings.Contains(meta, highlightStyle.Render("openai/gpt-5.4")) {
+		t.Fatalf("expected provider/model to use the same highlight style, got %q", meta)
+	}
+	if !strings.Contains(meta, "·") {
+		t.Fatalf("expected separator dot between model and context, got %q", meta)
 	}
 }
 

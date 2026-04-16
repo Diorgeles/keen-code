@@ -147,17 +147,11 @@ func contextPercentStyle(percent float64) lipgloss.Style {
 }
 
 func renderContextStatus(status contextStatus) string {
-	label := contextStatusLabelStyle.Render("✎ᝰ")
+	label := contextStatusLabelStyle.Render("context:")
 	if !status.KnownWindow || status.ContextWindow <= 0 {
 		return label + " " + contextStatusUnknownStyle.Render("N/A")
 	}
 
-	filled := progressFillWidth(status.Percent, contextProgressBarWidth)
-	empty := contextProgressBarWidth - filled
-
-	fill := contextBarFillStyle.Render(strings.Repeat("█", filled))
-	rest := contextBarEmptyStyle.Render(strings.Repeat("░", empty))
-	bar := fill + rest
 	percent := contextPercentStyle(status.Percent).Render(formatPercent(status.Percent))
-	return label + " " + bar + " " + percent
+	return label + " " + percent
 }

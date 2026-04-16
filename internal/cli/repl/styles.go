@@ -28,8 +28,8 @@ var (
 	// ── Text ────────────────────────────────────────────────────────────────────
 
 	textPrimaryColor = compat.AdaptiveColor{
-		Light: lipgloss.Color("#212121"),
-		Dark:  lipgloss.Color("#EEEEEE"),
+		Light: lipgloss.Color("#757575"),
+		Dark:  lipgloss.Color("#BDBDBD"),
 	}
 	textSecondaryColor = compat.AdaptiveColor{
 		Light: lipgloss.Color("#424242"),
@@ -75,7 +75,7 @@ var (
 			BorderForeground(textDimColor).
 			Padding(1, 2).
 			MarginTop(1)
-	highlightStyle = lipgloss.NewStyle().Foreground(secondaryColor).Bold(true)
+	highlightStyle = lipgloss.NewStyle().Foreground(secondaryColor)
 
 	// ── Input ───────────────────────────────────────────────────────────────────
 
@@ -155,12 +155,11 @@ var (
 
 	// ── Context status ───────────────────────────────────────────────────────────
 
-	contextStatusLabelStyle           = lipgloss.NewStyle().Foreground(mutedColor).Bold(true)
-	contextBarEmptyStyle              = lipgloss.NewStyle().Foreground(mutedColor)
-	contextBarFillStyle               = lipgloss.NewStyle().Foreground(primaryColor)
-	contextStatusPercentStyle         = lipgloss.NewStyle().Foreground(secondaryColor).Bold(true).PaddingRight(2)
-	contextStatusPercentWarnStyle     = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
-	contextStatusPercentCriticalStyle = lipgloss.NewStyle().Foreground(errorColor).Bold(true)
-	contextStatusUnknownStyle         = lipgloss.NewStyle().Foreground(mutedColor).Italic(true).PaddingRight(2)
-	compactionSuggestionStyle         = lipgloss.NewStyle().Foreground(accentColor).Bold(true).PaddingRight(2)
+	metaLabelStyle                    = lipgloss.NewStyle().Foreground(textDimColor)
+	contextStatusLabelStyle           = lipgloss.NewStyle().Foreground(textDimColor)
+	contextStatusPercentStyle         = lipgloss.NewStyle().Foreground(secondaryColor)
+	contextStatusPercentWarnStyle     = lipgloss.NewStyle().Foreground(accentColor)
+	contextStatusPercentCriticalStyle = lipgloss.NewStyle().Foreground(errorColor)
+	contextStatusUnknownStyle         = lipgloss.NewStyle().Foreground(textDimColor)
+	compactionSuggestionStyle         = lipgloss.NewStyle().Foreground(accentColor)
 )

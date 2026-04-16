@@ -251,8 +251,8 @@ func buildInitialScreen(ctx *replContext) []string {
 
 	displayDir := abbreviateHome(ctx.workingDir)
 	lines = append(lines, "  "+infoLabelStyle.Render("Directory:")+" "+infoValueStyle.Render(displayDir))
-	lines = append(lines, "  "+infoLabelStyle.Render("Provider:")+" "+highlightStyle.Render(ctx.cfg.Provider))
-	lines = append(lines, "  "+infoLabelStyle.Render("Model:")+" "+infoValueStyle.Render(ctx.cfg.Model))
+	lines = append(lines, "  "+infoLabelStyle.Render("Provider:")+" "+infoValueStyle.Render(ctx.cfg.Provider))
+	lines = append(lines, "  "+infoLabelStyle.Render("Model:")+" "+highlightStyle.Render(ctx.cfg.Model))
 	lines = append(lines, "")
 
 	tips := []string{
@@ -755,27 +755,35 @@ func (m replModel) inputMetaView() string {
 		}
 	}
 
-	metaLabelStyle := lipgloss.NewStyle().Foreground(mutedColor)
-	providerText := metaLabelStyle.Render("Provider:") + " " + highlightStyle.Render(provider)
-	modelText := metaLabelStyle.Render("Model:") + " " + infoValueStyle.Render(model)
-	left := providerText + "   " + modelText
-	contextRight := renderContextStatus(m.contextStatus)
-	right := contextRight
+	modelText := metaLabelStyle.Render("model:") + " " + highlightStyle.Render(provider+"/"+model)
+	contextText := renderContextStatus(m.contextStatus)
+	separator := metaLabelStyle.Render("·")
+	left := modelText + " " + separator + " " + contextText
+	right := ""
 	if m.contextStatus.ShouldSuggestCompaction() {
-		right = contextRight + "  " + compactionSuggestionStyle.Render("Try /compact")
+		right = compactionSuggestionStyle.Render("Try /compact")
 	}
 
 	const leftPad = "  "
 	if m.width <= 0 {
+		if right == "" {
+			return leftPad + left
+		}
 		return leftPad + left + "   " + right
 	}
 
 	available := m.width - lipgloss.Width(leftPad)
-	if m.contextStatus.ShouldSuggestCompaction() && available <= lipgloss.Width(right)+1 {
-		right = contextRight
+	if right == "" {
+		return leftPad + left
+	}
+	if available < lipgloss.Width(left)+lipgloss.Width(right)+1 {
+		right = ""
+	}
+	if right == "" {
+		return leftPad + left
 	}
 	if available <= lipgloss.Width(right)+1 {
-		return leftPad + right
+		return leftPad + left
 	}
 
 	space := available - lipgloss.Width(left) - lipgloss.Width(right)
@@ -783,14 +791,18 @@ func (m replModel) inputMetaView() string {
 		return leftPad + left + strings.Repeat(" ", space) + right
 	}
 
-	compactLeft := metaLabelStyle.Render("P:") + " " + highlightStyle.Render(provider) +
-		"  " + metaLabelStyle.Render("M:") + " " + infoValueStyle.Render(model)
+	compactLeft := metaLabelStyle.Render("M:") + " " + highlightStyle.Render(provider+"/"+model) +
+		" " + separator + " " + metaLabelStyle.Render("C:") + " " + contextPercentStyle(m.contextStatus.Percent).Render(formatPercent(m.contextStatus.Percent))
+	if !m.contextStatus.KnownWindow || m.contextStatus.ContextWindow <= 0 {
+		compactLeft = metaLabelStyle.Render("M:") + " " + highlightStyle.Render(provider+"/"+model) +
+			" " + separator + " " + metaLabelStyle.Render("C:") + " " + contextStatusUnknownStyle.Render("N/A")
+	}
 	space = available - lipgloss.Width(compactLeft) - lipgloss.Width(right)
 	if space >= 1 {
 		return leftPad + compactLeft + strings.Repeat(" ", space) + right
 	}
 
-	return leftPad + right
+	return leftPad + left
 }
 
 func getHelpText() string {

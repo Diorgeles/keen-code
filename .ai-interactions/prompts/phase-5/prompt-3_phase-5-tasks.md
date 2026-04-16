@@ -6,3 +6,4 @@
 4. Let's add rules in bash.
 5. Let's also have rules for the input text area instead of a box.
 6. In tools where a path is provided as input, we show the full path in the UI. This is redundant. Let's show only the relative path to the working directory. This is just for the UI.
+7. We currently show provider in secondary color. Let's change that. We will show the model in secondary color only.
