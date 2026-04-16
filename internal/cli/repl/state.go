@@ -75,6 +75,11 @@ func (s *AppState) ClearMessages() {
 	s.messages = []llm.Message{}
 }
 
+func (s *AppState) ReplaceMessages(messages []llm.Message) {
+	s.messages = make([]llm.Message, len(messages))
+	copy(s.messages, messages)
+}
+
 func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig) (<-chan llm.StreamEvent, error) {
 	if s.llmClient == nil {
 		return nil, nil

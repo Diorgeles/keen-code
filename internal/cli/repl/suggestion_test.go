@@ -12,10 +12,10 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := filterCommands("/")
-	if len(got) != 4 {
-		t.Fatalf("expected 4 commands, got %d", len(got))
+	if len(got) != 6 {
+		t.Fatalf("expected 6 commands, got %d", len(got))
 	}
-	if got[0].Name != "/compact" || got[1].Name != "/exit" || got[2].Name != "/help" || got[3].Name != "/model" {
+	if got[0].Name != "/compact" || got[1].Name != "/exit" || got[2].Name != "/help" || got[3].Name != "/model" || got[4].Name != "/resume" || got[5].Name != "/sessions" {
 		t.Errorf("unexpected order: %v", got)
 	}
 }

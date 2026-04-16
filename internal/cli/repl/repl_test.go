@@ -2,6 +2,7 @@ package repl
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/internal/tools"
 	"github.com/user/keen-code/providers"
 )
@@ -31,6 +33,7 @@ func newTestModel() replModel {
 		streamHandler:       NewStreamHandler(nil),
 		permissionRequester: NewREPLPermissionRequester(),
 		diffEmitter:         NewREPLDiffEmitter(),
+		sessions:            newReplSessionState(""),
 		spinner:             spinner.New(),
 		width:               80,
 		height:              30,
@@ -156,6 +159,27 @@ func TestHandleEnterKey_ModelCommand(t *testing.T) {
 	}
 	if newM.textarea.Value() != "" {
 		t.Error("expected textarea to be reset")
+	}
+}
+
+func TestHandleEnterKey_SessionsCommand_EmptyState(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	m := newTestModel()
+	m.sessions = newReplSessionState(filepath.Join(tmp, "project"))
+	m.textarea.SetValue(sessionsCommand)
+
+	newM, cmd := m.handleEnterKey()
+
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if newM.sessionPicker != nil {
+		t.Fatal("expected no session picker for empty state")
+	}
+	if !strings.Contains(newM.output.Join(), "No saved sessions for this directory.") {
+		t.Fatalf("expected empty state message, got %q", newM.output.Join())
 	}
 }
 
@@ -441,6 +465,69 @@ func TestGetHelpText(t *testing.T) {
 	if !strings.Contains(text, "/exit") {
 		t.Error("expected /exit in help text")
 	}
+	if !strings.Contains(text, "/resume") {
+		t.Error("expected /resume in help text")
+	}
+	if !strings.Contains(text, "/sessions") {
+		t.Error("expected /sessions in help text")
+	}
+}
+
+func TestReplayLoadedSession_RebuildsOutputAndConversation(t *testing.T) {
+	m := newTestModel()
+	loaded := &session.LoadedSession{
+		Events: []session.Event{
+			{
+				Kind:        session.KindUserMessage,
+				UserMessage: &session.MessagePayload{Content: "hello"},
+			},
+			{
+				Kind: session.KindAssistantTurn,
+				AssistantTurn: &session.AssistantTurnPayload{
+					Transcript: []session.TranscriptItem{
+						{
+							Kind:    session.TranscriptItemReasoning,
+							Content: "thinking",
+						},
+						{
+							Kind:    session.TranscriptItemText,
+							Content: "world",
+						},
+					},
+					Message: "world",
+				},
+			},
+			{
+				Kind: session.KindCompactionApplied,
+				CompactionApplied: &session.CompactionAppliedPayload{
+					Status: "Context compacted.",
+					Messages: []llm.Message{
+						{Role: llm.RoleUser, Content: "summary"},
+					},
+				},
+			},
+		},
+	}
+
+	m.replayLoadedSession(loaded)
+
+	if !strings.Contains(m.output.Join(), "hello") {
+		t.Fatalf("expected replayed user message, got %q", m.output.Join())
+	}
+	if !strings.Contains(m.output.Join(), "thinking") {
+		t.Fatalf("expected replayed reasoning, got %q", m.output.Join())
+	}
+	if !strings.Contains(m.output.Join(), "world") {
+		t.Fatalf("expected replayed assistant, got %q", m.output.Join())
+	}
+	if !strings.Contains(m.output.Join(), "Context compacted.") {
+		t.Fatalf("expected replayed compaction status, got %q", m.output.Join())
+	}
+
+	messages := m.appState.GetMessages()
+	if len(messages) != 1 || messages[0].Content != "summary" {
+		t.Fatalf("expected compacted conversation state, got %#v", messages)
+	}
 }
 
 func TestInputMetaView_ShowsContextPercent(t *testing.T) {
@@ -542,7 +629,7 @@ func TestHandleCompactionDone_StopsCompactionAndRefreshesOutput(t *testing.T) {
 	if newM.compactionCancel != nil {
 		t.Fatal("expected compaction cancel func to be cleared")
 	}
-	if !strings.Contains(newM.output.Join(), "Context compacted.") {
+	if !strings.Contains(newM.output.Join(), "✓ Context compacted.") {
 		t.Fatalf("expected completion message, got %q", newM.output.Join())
 	}
 	if cmd != nil {

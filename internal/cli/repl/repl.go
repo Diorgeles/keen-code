@@ -15,14 +15,17 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/providers"
 )
 
 const (
-	exitCommand    = "/exit"
-	helpCommand    = "/help"
-	modelCommand   = "/model"
-	compactCommand = "/compact"
+	exitCommand     = "/exit"
+	helpCommand     = "/help"
+	modelCommand    = "/model"
+	compactCommand  = "/compact"
+	sessionsCommand = "/sessions"
+	resumeCommand   = "/resume"
 
 	defaultWidth = 120
 	maxHeight    = 3
@@ -113,6 +116,8 @@ type replModel struct {
 	modelSelection      *Model
 	permissionRequester *REPLPermissionRequester
 	diffEmitter         *REPLDiffEmitter
+	sessions            *replSessionState
+	sessionPicker       *SessionPicker
 	suggestion          suggestionModel
 	quitting            bool
 	streamHandler       *StreamHandler
@@ -177,6 +182,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 
 	permissionRequester := NewREPLPermissionRequester()
 	diffEmitter := NewREPLDiffEmitter()
+	sessions := newReplSessionState(ctx.workingDir)
 	setupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter)
 
 	mdRenderer, err := NewMarkdownRenderer(defaultWidth)
@@ -199,6 +205,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		mdRenderer:          mdRenderer,
 		permissionRequester: permissionRequester,
 		diffEmitter:         diffEmitter,
+		sessions:            sessions,
 		suggestion:          newSuggestionModel(),
 	}
 	model.refreshContextStatus(false)
@@ -245,9 +252,8 @@ func buildInitialScreen(ctx *replContext) []string {
 	lines = append(lines, "")
 
 	tips := []string{
-		"Type /help  for available commands",
-		"Type /exit  to quit",
-		"Type /model to change provider or model",
+		"Use /help  for available commands",
+		"Use /model to change provider or model",
 		"Press Enter to send, Ctrl+Enter for new line",
 		"Shift+click to select and copy text",
 	}
@@ -336,6 +342,28 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return m.startModelSelection(), nil
 	}
 
+	if input == sessionsCommand || input == resumeCommand {
+		m.textarea.Reset()
+		summaries, err := m.sessions.listSessions()
+		if err != nil {
+			m.output.AddError("Failed to load sessions: "+err.Error(), errorStyle)
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil
+		}
+		if len(summaries) == 0 {
+			m.output.AddStyledLine("  No saved sessions for this directory.", lipgloss.NewStyle().Foreground(mutedColor))
+			m.output.AddEmptyLine()
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil
+		}
+		m.sessionPicker = NewSessionPicker(summaries)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
 	if input == compactCommand || strings.HasPrefix(input, compactCommand+" ") {
 		extraPrompt := strings.TrimSpace(strings.TrimPrefix(input, compactCommand))
 		if !m.appState.IsClientReady(m.ctx.cfg) {
@@ -351,6 +379,14 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 
 	if !m.appState.IsClientReady(m.ctx.cfg) {
 		m.output.AddError("LLM client not initialized. Use /model to configure.", errorStyle)
+		m.textarea.Reset()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	if err := m.sessions.appendUserMessage(input); err != nil {
+		m.output.AddError("Session persistence failed: "+err.Error(), errorStyle)
 		m.textarea.Reset()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
@@ -446,6 +482,10 @@ func (m *replModel) updateViewportContent() {
 
 	if m.modelSelection != nil {
 		content.WriteString(formatModelSelectionCard(m.modelSelection))
+	}
+
+	if m.sessionPicker != nil {
+		content.WriteString(formatSessionPickerCard(m.sessionPicker))
 	}
 
 	m.viewport.SetContent(content.String())
@@ -736,6 +776,8 @@ func getHelpText() string {
 		{"/compact", "Compact conversation context"},
 		{"/help", "Show available commands"},
 		{"/model", "Change provider or model"},
+		{"/resume", "Open the session picker"},
+		{"/sessions", "List saved sessions for this directory"},
 		{"/exit", "Quit Keen"},
 	}
 
@@ -754,8 +796,10 @@ func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
 	m.showSpinner = false
 	m.compactionCancel = nil
 	m.refreshContextStatus(false)
-	m.output.AddStyledLine("  Context compacted.", lipgloss.NewStyle().Foreground(mutedColor))
-	m.output.AddEmptyLine()
+	addCompactionSuccessStatus(m.output, "Context compacted.")
+	if err := m.sessions.appendCompaction(m.appState.GetMessages(), "Context compacted."); err != nil {
+		m.handleSessionPersistenceError(err)
+	}
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
@@ -768,10 +812,10 @@ func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
 	m.compactionCancel = nil
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			m.output.AddStyledLine("  Compaction cancelled.", lipgloss.NewStyle().Foreground(mutedColor))
-			m.output.AddEmptyLine()
+			addCompactionCancelledStatus(m.output, "Compaction cancelled.")
 		} else {
-			m.output.AddError("Compaction failed: "+err.Error(), errorStyle)
+			status := "Compaction failed: " + err.Error()
+			addCompactionErrorStatus(m.output, status)
 		}
 	}
 	m.adjustTextareaHeight()
@@ -788,6 +832,34 @@ func (m *replModel) updateLLMClient() error {
 	}
 	m.appState.UpdateClient(client)
 	return nil
+}
+
+func (m *replModel) handleSessionPersistenceError(err error) {
+	if err == nil {
+		return
+	}
+	m.output.AddError("Session persistence failed: "+err.Error(), errorStyle)
+}
+
+func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {
+	if loaded == nil {
+		return
+	}
+
+	replay := newSessionReplay(m.width, m.mdRenderer)
+
+	for _, event := range loaded.Events {
+		replay.applyEvent(event)
+	}
+
+	replay.flushDone()
+
+	m.output = replay.output
+	m.appState.ReplaceMessages(session.BuildConversation(loaded.Events))
+	m.sessionPicker = nil
+	m.refreshContextStatus(false)
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
 }
 
 func RunREPL(

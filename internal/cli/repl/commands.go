@@ -12,6 +12,8 @@ var allSlashCommands = []slashCommand{
 	{"/exit", "Quit Keen"},
 	{"/help", "Show available commands"},
 	{"/model", "Change provider or model"},
+	{"/resume", "Open the session picker"},
+	{"/sessions", "List saved sessions for this directory"},
 }
 
 func filterCommands(input string) []slashCommand {

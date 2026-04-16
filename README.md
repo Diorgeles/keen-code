@@ -21,9 +21,20 @@ By far, AI coding agents are the most ubiquitous use case for AI in the era of A
 
 Keen Code is an experiment to play with the *new way of working* where engineers work with AI agents to develop software. In this setting, engineers are sometimes referred to as "orchestrators".
 
-## Principles
+## Table of Contents
 
-Developing Keen Code is guided by the following principles:
+- [Development Philosophy](#development-philosophy)
+- [Development Cycle Example](#development-cycle-example)
+- [Install Keen Code](#install-keen-code)
+  - [Install with script](#install-with-script)
+  - [Install with npm](#install-with-npm)
+- [Run Keen](#run-keen)
+- [Supported Providers](#supported-providers)
+- [Built-in Tools](#built-in-tools)
+
+## Development Philosophy
+
+Developing Keen Code is guided by the following philosophy:
 
 - All the code is written by AI agents, not humans
 - The project is developed iteratively using spec-task-code-review cycle by a human engineer

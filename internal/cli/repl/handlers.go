@@ -43,11 +43,15 @@ func (m *replModel) handleLLMReasoningChunk(chunk string) (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
+	segments := cloneStreamSegments(m.streamHandler.segments)
 	m.showSpinner = false
 	m.clearStreamCancel()
 	m.adjustTextareaHeight()
 	responseLines, fullResponse := m.streamHandler.HandleDone()
 	m.appState.AddMessage(llm.RoleAssistant, fullResponse)
+	if err := m.sessions.appendAssistantTurn(segments, fullResponse, false, ""); err != nil {
+		m.handleSessionPersistenceError(err)
+	}
 	m.refreshContextStatus(false)
 	for _, line := range responseLines {
 		m.output.AddLine(line)
@@ -61,10 +65,14 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
+	segments := cloneStreamSegments(m.streamHandler.segments)
 	m.showSpinner = false
 	m.clearStreamCancel()
 	m.adjustTextareaHeight()
 	pendingLines, errMsg := m.streamHandler.HandleError(err)
+	if persistErr := m.sessions.appendAssistantTurn(segments, "", false, errMsg); persistErr != nil {
+		m.handleSessionPersistenceError(persistErr)
+	}
 	for _, line := range pendingLines {
 		m.output.AddLine(line)
 	}
@@ -110,6 +118,10 @@ func (m *replModel) handleToolEnd(toolCall *llm.ToolCall) (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
+	if m.sessionPicker != nil {
+		return m.handleSessionPickerKeyMsg(msg)
+	}
+
 	if m.modelSelection != nil {
 		var cmd tea.Cmd
 		m.modelSelection, cmd = m.modelSelection.Update(msg)
@@ -181,7 +193,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		return *m, tea.Quit
 	case keyEsc:
 		if m.streamHandler != nil && m.streamHandler.IsActive() {
-			m.interruptStream("Interrupted...what should the agent do instead?")
+			m.interruptStream(interruptedPromptText)
 		}
 		return *m, nil
 	case keyUp, keyShiftUp:
@@ -230,8 +242,14 @@ func (m *replModel) interruptStream(message string) {
 	m.showSpinner = false
 
 	partialResponse := m.streamHandler.GetResponse()
+	segments := cloneStreamSegments(m.streamHandler.segments)
+	interruptedMessage := ""
 	if partialResponse != "" {
-		m.appState.AddMessage(llm.RoleAssistant, partialResponse+"\n\n[Response interrupted by user]")
+		interruptedMessage = partialResponse + "\n\n[Response interrupted by user]"
+		m.appState.AddMessage(llm.RoleAssistant, interruptedMessage)
+	}
+	if err := m.sessions.appendAssistantTurn(segments, interruptedMessage, true, ""); err != nil {
+		m.handleSessionPersistenceError(err)
 	}
 
 	for _, line := range m.streamHandler.HandleInterrupt() {
@@ -242,6 +260,42 @@ func (m *replModel) interruptStream(message string) {
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
+}
+
+func (m *replModel) handleSessionPickerKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
+	keyMsg, ok := msg.(tea.KeyPressMsg)
+	if !ok || m.sessionPicker == nil {
+		return *m, nil
+	}
+
+	switch keyMsg.String() {
+	case keyUp, "k", keyShiftUp:
+		m.sessionPicker.Move(-1)
+		m.updateViewportContent()
+	case keyDown, "j", keyShiftDown:
+		m.sessionPicker.Move(1)
+		m.updateViewportContent()
+	case keyEnter:
+		selected := m.sessionPicker.Current()
+		if selected == nil {
+			return *m, nil
+		}
+		loaded, err := m.sessions.load(*selected)
+		if err != nil {
+			m.sessionPicker = nil
+			m.handleSessionPersistenceError(err)
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil
+		}
+		m.replayLoadedSession(loaded)
+	case keyEsc:
+		m.sessionPicker = nil
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+	}
+
+	return *m, nil
 }
 
 func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.Cmd) {

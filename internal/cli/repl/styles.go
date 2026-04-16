@@ -68,11 +68,11 @@ var (
 
 	normalStyle = lipgloss.NewStyle()
 	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(primaryColor)
-	tipStyle    = lipgloss.NewStyle().Foreground(mutedColor).Italic(true)
-	hintStyle   = lipgloss.NewStyle().Foreground(mutedColor).Italic(true)
+	tipStyle    = lipgloss.NewStyle().Foreground(textDimColor).Italic(true)
+	hintStyle   = lipgloss.NewStyle().Foreground(textDimColor)
 	boxStyle    = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(mutedColor).
+			BorderForeground(textDimColor).
 			Padding(1, 2).
 			MarginTop(1)
 	highlightStyle = lipgloss.NewStyle().Foreground(secondaryColor).Bold(true)
@@ -94,16 +94,20 @@ var (
 
 	// ── Help ────────────────────────────────────────────────────────────────────
 
-	helpCmdStyle  = lipgloss.NewStyle().Foreground(secondaryColor).Bold(true).Width(12)
-	helpDescStyle = lipgloss.NewStyle().Foreground(textSecondaryColor)
+	helpCmdStyle   = lipgloss.NewStyle().Foreground(secondaryColor).Bold(true).Width(12)
+	helpDescStyle  = lipgloss.NewStyle().Foreground(textSecondaryColor)
+	timestampStyle = lipgloss.NewStyle().Foreground(textDimColor)
 
 	// ── Assistant output ────────────────────────────────────────────────────────
 
-	assistantStyle    = lipgloss.NewStyle().Foreground(textPrimaryColor)
-	reasoningStyle    = lipgloss.NewStyle().Foreground(textDimColor).Italic(true).Faint(true)
-	errorStyle        = lipgloss.NewStyle().Foreground(errorColor)
-	interruptedStyle  = lipgloss.NewStyle().Foreground(primaryColor).Bold(true)
-	loadingTextStyled = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+	assistantStyle           = lipgloss.NewStyle().Foreground(textPrimaryColor)
+	reasoningStyle           = lipgloss.NewStyle().Foreground(textDimColor).Faint(true)
+	errorStyle               = lipgloss.NewStyle().Foreground(errorColor)
+	interruptedStyle         = lipgloss.NewStyle().Foreground(primaryColor).Bold(true)
+	loadingTextStyled        = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+	compactionSuccessStyle   = lipgloss.NewStyle().Foreground(secondaryColor)
+	compactionErrorStyle     = lipgloss.NewStyle().Foreground(errorColor)
+	compactionCancelledStyle = lipgloss.NewStyle().Foreground(mutedColor)
 
 	// ── Tools ───────────────────────────────────────────────────────────────────
 
