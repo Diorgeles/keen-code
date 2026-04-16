@@ -52,7 +52,8 @@ func TestNamespaceDirName_ContainsSlugAndHash(t *testing.T) {
 
 func TestShortHash_IsStable(t *testing.T) {
 	value := "/Users/me/src/keen-code"
-	if shortHash(value) != shortHash(value) {
+	hash := shortHash(value)
+	if shortHash(value) != hash {
 		t.Fatal("expected shortHash to be stable for the same input")
 	}
 }

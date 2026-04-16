@@ -74,6 +74,13 @@ func (s *replSessionState) appendCompaction(messages []llm.Message, status strin
 	})
 }
 
+func (s *replSessionState) resetSession() {
+	if s == nil {
+		return
+	}
+	s.current = nil
+}
+
 func (s *replSessionState) listSessions() ([]session.Summary, error) {
 	if s == nil || s.store == nil {
 		return nil, nil

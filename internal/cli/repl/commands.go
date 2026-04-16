@@ -8,10 +8,12 @@ type slashCommand struct {
 }
 
 var allSlashCommands = []slashCommand{
+	{"/clear", "Clear the session and create a new one (also /new)"},
 	{"/compact", "Compact conversation context"},
 	{"/exit", "Quit Keen"},
 	{"/help", "Show available commands"},
 	{"/model", "Change provider or model"},
+	{"/new", "Start a new session (also /clear)"},
 	{"/resume", "Open the session picker"},
 	{"/sessions", "List saved sessions for this directory"},
 }

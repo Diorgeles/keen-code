@@ -26,6 +26,8 @@ const (
 	compactCommand  = "/compact"
 	sessionsCommand = "/sessions"
 	resumeCommand   = "/resume"
+	clearCommand    = "/clear"
+	newCommand      = "/new"
 
 	defaultWidth = 120
 	maxHeight    = 3
@@ -362,6 +364,11 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return *m, nil
+	}
+
+	if input == clearCommand || input == newCommand {
+		m.textarea.Reset()
+		return m.handleClear(), nil
 	}
 
 	if input == compactCommand || strings.HasPrefix(input, compactCommand+" ") {
@@ -773,9 +780,11 @@ func (m replModel) inputMetaView() string {
 
 func getHelpText() string {
 	cmds := []struct{ cmd, desc string }{
+		{"/clear", "Start a new session (also /new)"},
 		{"/compact", "Compact conversation context"},
 		{"/help", "Show available commands"},
 		{"/model", "Change provider or model"},
+		{"/new", "Start a new session (also /clear)"},
 		{"/resume", "Open the session picker"},
 		{"/sessions", "List saved sessions for this directory"},
 		{"/exit", "Quit Keen"},
@@ -789,6 +798,25 @@ func getHelpText() string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func (m *replModel) handleClear() replModel {
+	m.appState.ClearMessages()
+	m.sessions.resetSession()
+
+	newOutput := NewOutputBuilder(m.width)
+	initialLines := buildInitialScreen(m.ctx)
+	for _, line := range initialLines {
+		newOutput.AddLine(line)
+	}
+	newOutput.AddStyledLine("  ✓ New session started", compactionSuccessStyle)
+	newOutput.AddEmptyLine()
+	m.output = newOutput
+
+	m.refreshContextStatus(false)
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
 }
 
 func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
