@@ -2,6 +2,8 @@ package repl
 
 import (
 	"fmt"
+	"maps"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -10,8 +12,9 @@ import (
 )
 
 type OutputBuilder struct {
-	lines []string
-	width int
+	lines      []string
+	width      int
+	workingDir string
 }
 
 func NewOutputBuilder(width int) *OutputBuilder {
@@ -78,47 +81,53 @@ func (ob *OutputBuilder) IsEmpty() bool {
 }
 
 func (ob *OutputBuilder) AddToolStart(toolCall *llm.ToolCall) {
-	ob.lines = append(ob.lines, formatToolStart(toolCall))
+	ob.lines = append(ob.lines, formatToolStart(toolCall, ob.workingDir))
 }
 
 func (ob *OutputBuilder) AddToolEnd(toolCall *llm.ToolCall) {
 	ob.lines = append(ob.lines, formatToolEnd(toolCall))
 }
 
-func formatToolStart(toolCall *llm.ToolCall) string {
-	inputDisplay := formatToolInput(toolCall.Name, toolCall.Input)
+func formatToolStart(toolCall *llm.ToolCall, workingDir string) string {
+	inputDisplay := formatToolInput(toolCall.Name, toolCall.Input, workingDir)
 	return "\n  " + toolStartStyle.Render(fmt.Sprintf("⚙ %s(%s)...", toolCall.Name, inputDisplay))
 }
 
-func formatToolDone(startCall, endCall *llm.ToolCall) string {
-	inputDisplay := formatToolInput(startCall.Name, startCall.Input)
+func formatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string {
+	inputDisplay := formatToolInput(startCall.Name, startCall.Input, workingDir)
 	if endCall.Error != "" {
 		return "\n  " + toolErrorStyle.Render(fmt.Sprintf("✗ %s(%s) failed: %s", startCall.Name, inputDisplay, endCall.Error))
 	}
-	return "\n  " + toolSuccessStyle.Render(fmt.Sprintf("✓ %s(%s) (%s)", startCall.Name, inputDisplay, endCall.Duration))
+	return "\n  " + toolSuccessStyle.Render(fmt.Sprintf("✓ %s(%s) ➜ [%s]", startCall.Name, inputDisplay, endCall.Duration))
 }
 
-func formatToolInput(toolName string, input map[string]any) string {
+func formatToolInput(toolName string, input map[string]any, workingDir string) string {
 	if input == nil {
 		return ""
 	}
 
+	displayInput := make(map[string]any, len(input))
+	maps.Copy(displayInput, input)
+	if path, ok := displayInput["path"].(string); ok {
+		displayInput["path"] = formatToolPathForUI(path, workingDir)
+	}
+
 	switch toolName {
 	case "write_file", "edit_file":
-		if path, ok := input["path"]; ok {
+		if path, ok := displayInput["path"]; ok {
 			return fmt.Sprintf("path=%v", path)
 		}
 		return ""
 	}
 
-	return jsonMarshalCompact(input)
+	return jsonMarshalCompact(displayInput)
 }
 
 func formatToolEnd(toolCall *llm.ToolCall) string {
 	if toolCall.Error != "" {
 		return "  " + toolErrorStyle.Render(fmt.Sprintf("✗ %s failed: %s", toolCall.Name, toolCall.Error))
 	}
-	return "  " + toolSuccessStyle.Render(fmt.Sprintf("✓ %s (%s)", toolCall.Name, toolCall.Duration)) + "\n"
+	return "  " + toolSuccessStyle.Render(fmt.Sprintf("✓ %s ➜ [%s]", toolCall.Name, toolCall.Duration)) + "\n"
 }
 
 func jsonMarshalCompact(v map[string]any) string {
@@ -135,4 +144,16 @@ func jsonMarshalCompact(v map[string]any) string {
 		parts = append(parts, fmt.Sprintf("%s=%v", k, v[k]))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func formatToolPathForUI(path, workingDir string) string {
+	if path == "" || workingDir == "" || !filepath.IsAbs(path) {
+		return path
+	}
+
+	relPath, err := filepath.Rel(workingDir, path)
+	if err != nil {
+		return path
+	}
+	return relPath
 }

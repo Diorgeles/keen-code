@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
@@ -327,6 +328,29 @@ func TestUpdateViewportContent_UsesViewportWidthWhenModelStartsWithoutResize(t *
 	}
 	if !strings.Contains(content, "thinking") {
 		t.Fatalf("expected reasoning content to be rendered, got %q", content)
+	}
+}
+
+func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
+	wide := renderInputArea("> hello", 80)
+	wideLines := strings.Split(strings.TrimRight(wide, "\n"), "\n")
+	if len(wideLines) != 3 {
+		t.Fatalf("expected 3 input-area lines, got %v", wideLines)
+	}
+	if !strings.Contains(wideLines[0], "─") || !strings.Contains(wideLines[2], "─") {
+		t.Fatalf("expected top and bottom input rules, got %q", wide)
+	}
+	if wideRuleWidth := lipgloss.Width(wideLines[0]); wideRuleWidth != 80 {
+		t.Fatalf("expected wide input rules to match viewport width, got width %d", wideRuleWidth)
+	}
+
+	narrow := renderInputArea("> hi", 24)
+	narrowLines := strings.Split(strings.TrimRight(narrow, "\n"), "\n")
+	if len(narrowLines) != 3 {
+		t.Fatalf("expected 3 narrow input-area lines, got %v", narrowLines)
+	}
+	if narrowRuleWidth := lipgloss.Width(narrowLines[0]); narrowRuleWidth != 24 {
+		t.Fatalf("expected narrow input rules to match viewport width, got width %d", narrowRuleWidth)
 	}
 }
 

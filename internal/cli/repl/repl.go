@@ -210,6 +210,8 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		sessions:            sessions,
 		suggestion:          newSuggestionModel(),
 	}
+	model.output.workingDir = ctx.workingDir
+	model.streamHandler.workingDir = ctx.workingDir
 	model.refreshContextStatus(false)
 
 	if needsSetup {
@@ -564,6 +566,19 @@ func formatModelSelectionCard(ms *Model) string {
 	return sb.String()
 }
 
+func renderInputArea(content string, width int) string {
+	ruleWidth := defaultWidth
+	if width > 0 {
+		ruleWidth = width
+	}
+	if ruleWidth < 1 {
+		ruleWidth = 1
+	}
+
+	rule := inputRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	return rule + "\n" + content + "\n" + rule
+}
+
 func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.width = msg.Width
 	m.height = msg.Height
@@ -710,7 +725,7 @@ func (m replModel) View() tea.View {
 			view.WriteString("\n")
 		}
 
-		view.WriteString(inputBorderStyle.Render(m.textarea.View()))
+		view.WriteString(renderInputArea(m.textarea.View(), m.width))
 		view.WriteString("\n")
 		if m.suggestion.visible {
 			view.WriteString(m.suggestion.view(m.width))
@@ -805,6 +820,7 @@ func (m *replModel) handleClear() replModel {
 	m.sessions.resetSession()
 
 	newOutput := NewOutputBuilder(m.width)
+	newOutput.workingDir = m.ctx.workingDir
 	initialLines := buildInitialScreen(m.ctx)
 	for _, line := range initialLines {
 		newOutput.AddLine(line)
@@ -874,7 +890,7 @@ func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {
 		return
 	}
 
-	replay := newSessionReplay(m.width, m.mdRenderer)
+	replay := newSessionReplay(m.width, m.mdRenderer, m.ctx.workingDir)
 
 	for _, event := range loaded.Events {
 		replay.applyEvent(event)

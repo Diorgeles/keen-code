@@ -8,7 +8,7 @@ import (
 )
 
 func TestSessionReplay_InterruptedTurnRendersTranscriptAndPrompt(t *testing.T) {
-	replay := newSessionReplay(80, nil)
+	replay := newSessionReplay(80, nil, "")
 	replay.applyEvent(session.Event{
 		Kind: session.KindAssistantTurn,
 		AssistantTurn: &session.AssistantTurnPayload{
@@ -30,7 +30,7 @@ func TestSessionReplay_InterruptedTurnRendersTranscriptAndPrompt(t *testing.T) {
 }
 
 func TestSessionReplay_ErrorTurnRendersTranscriptAndError(t *testing.T) {
-	replay := newSessionReplay(80, nil)
+	replay := newSessionReplay(80, nil, "")
 	replay.applyEvent(session.Event{
 		Kind: session.KindAssistantTurn,
 		AssistantTurn: &session.AssistantTurnPayload{

@@ -15,6 +15,7 @@ type StreamHandler struct {
 	eventCh         <-chan llm.StreamEvent
 	loadingText     string
 	lastWidth       int
+	workingDir      string
 	mdRenderer      *MarkdownRenderer
 	segments        []streamSegment
 }
@@ -281,12 +282,12 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 					// paired end follows immediately; the end case will render the combined line
 					continue
 				}
-				lines = append(lines, formatToolStart(seg.toolCall))
+				lines = append(lines, formatToolStart(seg.toolCall, sh.workingDir))
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
-					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall))
+					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
 				} else {
 					lines = append(lines, formatToolEnd(seg.toolCall))
 				}
@@ -309,7 +310,7 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 				lines = append(lines, renderPermissionCard(seg, width)...)
 			}
 		case segmentDiff:
-			lines = append(lines, renderDiffSegment(seg)...)
+			lines = append(lines, renderDiffSegment(seg, width)...)
 		}
 	}
 
@@ -328,12 +329,12 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 					// paired end follows immediately; the end case will render the combined line
 					continue
 				}
-				lines = append(lines, formatToolStart(seg.toolCall))
+				lines = append(lines, formatToolStart(seg.toolCall, sh.workingDir))
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
-					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall))
+					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
 				} else {
 					lines = append(lines, formatToolEnd(seg.toolCall))
 				}
@@ -350,7 +351,7 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 				lines = append(lines, renderPermissionResolved(seg.permissionReq)...)
 			}
 		case segmentDiff:
-			lines = append(lines, renderDiffSegment(seg)...)
+			lines = append(lines, renderDiffSegment(seg, sh.lastWidth)...)
 		}
 	}
 
@@ -456,13 +457,23 @@ func formatResponseLines(response string) []string {
 }
 
 func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []string {
+	ruleWidth := defaultWidth - 2
+	if width > 0 {
+		ruleWidth = width - 2
+	}
+	if ruleWidth < 1 {
+		ruleWidth = 1
+	}
+	rule := "  " + diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+
 	lines := make([]string, 0)
 
 	lines = append(lines, "")
-	lines = append(lines, bashCommandStyle.Render("$ "+seg.command))
+	lines = append(lines, rule)
+	lines = append(lines, bashCommandStyle.Render("  $ "+seg.command))
 
 	if seg.summary != "" {
-		lines = append(lines, bashSummaryStyle.Render("› "+seg.summary))
+		lines = append(lines, bashSummaryStyle.Render("  › "+seg.summary))
 	}
 
 	lines = append(lines, "")
@@ -488,6 +499,8 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 		}
 	}
 
+	lines = append(lines, rule)
+
 	return lines
 }
 
@@ -506,15 +519,31 @@ func renderDiffLine(dl tools.EditDiffLine) string {
 	}
 }
 
-func renderDiffSegment(seg *streamSegment) []string {
+func renderDiffSegment(seg *streamSegment, width int) []string {
 	if len(seg.diffLines) == 0 {
 		return nil
 	}
-	lines := make([]string, 0, len(seg.diffLines)+1)
-	lines = append(lines, "")
+
+	rendered := make([]string, 0, len(seg.diffLines))
 	for _, dl := range seg.diffLines {
-		lines = append(lines, renderDiffLine(dl))
+		line := renderDiffLine(dl)
+		rendered = append(rendered, line)
 	}
+
+	ruleWidth := defaultWidth - 2
+	if width > 0 {
+		ruleWidth = width - 2
+	}
+	if ruleWidth < 1 {
+		ruleWidth = 1
+	}
+
+	rule := "  " + diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	lines := make([]string, 0, len(rendered)+3)
+	lines = append(lines, "")
+	lines = append(lines, rule)
+	lines = append(lines, rendered...)
+	lines = append(lines, rule)
 	return lines
 }
 

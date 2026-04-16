@@ -13,7 +13,7 @@ type sessionReplay struct {
 	handler *StreamHandler
 }
 
-func newSessionReplay(width int, mdRenderer *MarkdownRenderer) *sessionReplay {
+func newSessionReplay(width int, mdRenderer *MarkdownRenderer, workingDir string) *sessionReplay {
 	outputWidth := defaultWidth
 	if width > 0 {
 		outputWidth = width
@@ -21,12 +21,13 @@ func newSessionReplay(width int, mdRenderer *MarkdownRenderer) *sessionReplay {
 
 	handler := NewStreamHandler(mdRenderer)
 	handler.lastWidth = width
+	handler.workingDir = workingDir
 	if handler.lastWidth <= 0 {
 		handler.lastWidth = defaultWidth
 	}
 
 	return &sessionReplay{
-		output:  NewOutputBuilder(outputWidth),
+		output:  &OutputBuilder{width: outputWidth, lines: []string{}, workingDir: workingDir},
 		handler: handler,
 	}
 }

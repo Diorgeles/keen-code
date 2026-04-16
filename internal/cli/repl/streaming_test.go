@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/tools"
 )
 
 func TestStreamHandler_HandleChunk(t *testing.T) {
@@ -184,6 +185,50 @@ func TestStreamHandler_View_WithRunningBashShowsCommand(t *testing.T) {
 	}
 	if !strings.Contains(view, "running tests") {
 		t.Fatal("expected bash summary in view")
+	}
+}
+
+func TestStreamHandler_View_BashUsesViewportWidthRules(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")
+	sh.HandleBashStart("npm test", "running tests")
+
+	wideView := sh.View(80)
+	wideLines := strings.Split(strings.TrimRight(wideView, "\n"), "\n")
+	wideNonEmpty := make([]string, 0, len(wideLines))
+	for _, line := range wideLines {
+		if strings.TrimSpace(line) != "" {
+			wideNonEmpty = append(wideNonEmpty, line)
+		}
+	}
+	if len(wideNonEmpty) < 3 {
+		t.Fatalf("expected ruled bash block, got %v", wideNonEmpty)
+	}
+	if !strings.Contains(wideNonEmpty[0], "─") || !strings.Contains(wideNonEmpty[len(wideNonEmpty)-1], "─") {
+		t.Fatalf("expected top and bottom bash rules, got %q", wideView)
+	}
+	if wideRuleWidth := lipgloss.Width(wideNonEmpty[0]); wideRuleWidth != 80 {
+		t.Fatalf("expected bash rules to match viewport width, got width %d", wideRuleWidth)
+	}
+
+	narrowView := sh.View(24)
+	narrowLines := strings.Split(strings.TrimRight(narrowView, "\n"), "\n")
+	for _, line := range narrowLines {
+		if w := lipgloss.Width(line); w > 24 {
+			t.Fatalf("line exceeds viewport width (%d > %d): %q", w, 24, line)
+		}
+	}
+	narrowNonEmpty := make([]string, 0, len(narrowLines))
+	for _, line := range narrowLines {
+		if strings.TrimSpace(line) != "" {
+			narrowNonEmpty = append(narrowNonEmpty, line)
+		}
+	}
+	if len(narrowNonEmpty) < 3 {
+		t.Fatalf("expected non-empty narrow bash lines, got %v", narrowNonEmpty)
+	}
+	if narrowRuleWidth := lipgloss.Width(narrowNonEmpty[0]); narrowRuleWidth != 24 {
+		t.Fatalf("expected narrow bash rules to match viewport width, got width %d", narrowRuleWidth)
 	}
 }
 
@@ -600,6 +645,59 @@ func TestRenderPermissionCard_Resolved_Denied(t *testing.T) {
 
 	if !strings.Contains(view, "✗") {
 		t.Error("expected X mark in resolved denied card")
+	}
+}
+
+func TestRenderDiffSegment_RendersRulesUsingViewportWidth(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+	sh.HandleDiff([]tools.EditDiffLine{
+		{Kind: tools.DiffLineHunk, Content: "@@ -1,2 +1,3 @@"},
+		{Kind: tools.DiffLineRemoved, Content: "short", OldLineNum: 1},
+		{Kind: tools.DiffLineAdded, Content: "shorter", NewLineNum: 1},
+	})
+
+	wideView := sh.View(80)
+	wideLines := strings.Split(strings.TrimRight(wideView, "\n"), "\n")
+	if len(wideLines) < 5 {
+		t.Fatalf("expected ruled diff lines, got %v", wideLines)
+	}
+
+	nonEmpty := make([]string, 0, len(wideLines))
+	for _, line := range wideLines {
+		if strings.TrimSpace(line) != "" {
+			nonEmpty = append(nonEmpty, line)
+		}
+	}
+	if len(nonEmpty) < 4 {
+		t.Fatalf("expected non-empty diff lines, got %v", nonEmpty)
+	}
+	if !strings.Contains(nonEmpty[0], "─") || !strings.Contains(nonEmpty[len(nonEmpty)-1], "─") {
+		t.Fatalf("expected top and bottom diff rules, got %q", wideView)
+	}
+	wideRuleWidth := lipgloss.Width(nonEmpty[0])
+	if wideRuleWidth != 80 {
+		t.Fatalf("expected diff rules to match viewport width, got width %d", wideRuleWidth)
+	}
+
+	narrowView := sh.View(24)
+	narrowLines := strings.Split(strings.TrimRight(narrowView, "\n"), "\n")
+	for _, line := range narrowLines {
+		if w := lipgloss.Width(line); w > 24 {
+			t.Fatalf("line exceeds viewport width (%d > %d): %q", w, 24, line)
+		}
+	}
+	narrowNonEmpty := make([]string, 0, len(narrowLines))
+	for _, line := range narrowLines {
+		if strings.TrimSpace(line) != "" {
+			narrowNonEmpty = append(narrowNonEmpty, line)
+		}
+	}
+	if len(narrowNonEmpty) < 4 {
+		t.Fatalf("expected non-empty narrow diff lines, got %v", narrowNonEmpty)
+	}
+	if narrowRuleWidth := lipgloss.Width(narrowNonEmpty[0]); narrowRuleWidth != 24 {
+		t.Fatalf("expected narrow diff rules to match viewport width, got width %d", narrowRuleWidth)
 	}
 }
 

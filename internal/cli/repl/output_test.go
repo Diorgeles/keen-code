@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -101,6 +102,37 @@ func TestOutputBuilder_IsEmpty(t *testing.T) {
 
 	if ob.IsEmpty() {
 		t.Error("IsEmpty() should be false after adding line")
+	}
+}
+
+func TestFormatToolInput_ShowsRelativePathToWorkingDir(t *testing.T) {
+	workingDir := filepath.Join(string(filepath.Separator), "tmp", "project")
+	got := formatToolInput("read_file", map[string]any{
+		"path": filepath.Join(workingDir, "internal", "cli", "repl", "output.go"),
+	}, workingDir)
+
+	if got != "path=internal/cli/repl/output.go" {
+		t.Fatalf("expected relative path display, got %q", got)
+	}
+}
+
+func TestFormatToolInput_KeepsRelativePathInput(t *testing.T) {
+	got := formatToolInput("read_file", map[string]any{"path": "internal/cli/repl/output.go"}, "/tmp/project")
+
+	if got != "path=internal/cli/repl/output.go" {
+		t.Fatalf("expected relative input path to remain unchanged, got %q", got)
+	}
+}
+
+func TestFormatToolInput_WriteFileShowsOnlyRelativePath(t *testing.T) {
+	workingDir := filepath.Join(string(filepath.Separator), "tmp", "project")
+	got := formatToolInput("write_file", map[string]any{
+		"path":    filepath.Join(workingDir, "README.md"),
+		"content": "ignored",
+	}, workingDir)
+
+	if got != "path=README.md" {
+		t.Fatalf("expected write_file UI to show only relative path, got %q", got)
 	}
 }
 

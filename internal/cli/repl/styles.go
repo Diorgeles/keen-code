@@ -83,9 +83,7 @@ var (
 			Bold(true).
 			Foreground(primaryColor).
 			MarginTop(2)
-	inputBorderStyle = lipgloss.NewStyle().
-				BorderStyle(lipgloss.ThickBorder()).
-				BorderForeground(primaryColor)
+	inputRuleStyle = lipgloss.NewStyle().Foreground(primaryColor)
 
 	// ── Info / metadata ─────────────────────────────────────────────────────────
 
@@ -128,7 +126,8 @@ var (
 	diffRemoveStyle  = lipgloss.NewStyle().Foreground(diffRemoveColor)
 	diffContextStyle = lipgloss.NewStyle().Foreground(diffContextColor)
 	diffHunkStyle    = lipgloss.NewStyle().Foreground(diffHunkColor).Bold(true)
-	diffLineNumStyle = lipgloss.NewStyle().Foreground(mutedColor)
+	diffLineNumStyle = lipgloss.NewStyle().Foreground(textDimColor)
+	diffRuleStyle    = lipgloss.NewStyle().Foreground(textDimColor)
 
 	// ── Model selection / user prompt ────────────────────────────────────────────
 
