@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-04-17
+
+### Added
+- Hidden `keen_memory` blocks to preserve durable tool outcomes across turns without showing them in the REPL transcript
+
+### Changed
+- Session picker now constrains its visible list to the current viewport height
+
+### Fixed
+- Only extract trailing dedicated `keen_memory` blocks for logging and compaction-aware handling
+
 ## [0.2.1] - 2026-04-16
 
 ### Changed
@@ -84,7 +95,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/mochow13/keen-code/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/mochow13/keen-code/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mochow13/keen-code/compare/v0.1.7...v0.2.0
 [0.1.7]: https://github.com/mochow13/keen-code/compare/v0.1.6...v0.1.7
