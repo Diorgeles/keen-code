@@ -131,6 +131,15 @@ func TestStreamHandler_HandleChunk_HidesSplitToolMemoryTag(t *testing.T) {
 	if sh.GetRawResponse() != "Visible answer\n<keen_memory>\n- changed repl.go\n</keen_memory>" {
 		t.Fatalf("unexpected raw response %q", sh.GetRawResponse())
 	}
+
+	lines, fullResponse := sh.HandleDone()
+	if fullResponse != "Visible answer\n" {
+		t.Fatalf("expected finalized response without tool memory, got %q", fullResponse)
+	}
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, "keen_memory") || strings.Contains(joined, "changed repl.go") {
+		t.Fatalf("expected tool memory block to be hidden after finalization, got %q", joined)
+	}
 }
 
 func TestStreamHandler_HandleDone_DropsMalformedToolMemoryBlockFromVisibleResponse(t *testing.T) {
@@ -149,6 +158,46 @@ func TestStreamHandler_HandleDone_DropsMalformedToolMemoryBlockFromVisibleRespon
 	joined := strings.Join(lines, "\n")
 	if strings.Contains(joined, "keen_memory") || strings.Contains(joined, "incomplete") {
 		t.Fatalf("expected malformed tool memory to stay hidden, got %q", joined)
+	}
+}
+
+func TestStreamHandler_HandleDone_StripsInlineKeenMemoryMention(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	sh.Start(eventCh, "Loading...")
+
+	raw := "Document the literal tag <keen_memory>...</keen_memory> in the README."
+	sh.HandleChunk(raw)
+
+	lines, fullResponse := sh.HandleDone()
+
+	if fullResponse == raw {
+		t.Fatalf("expected inline keen_memory mention to be stripped during streaming, got %q", fullResponse)
+	}
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, "<keen_memory>...</keen_memory>") {
+		t.Fatalf("expected inline keen_memory mention to be hidden in transcript, got %q", joined)
+	}
+}
+
+func TestExtractTrailingToolMemory(t *testing.T) {
+	raw := "Visible answer\n<keen_memory>\n- changed repl.go\n</keen_memory>"
+
+	memory, ok := extractTrailingToolMemory(raw)
+	if !ok {
+		t.Fatal("expected trailing keen_memory to be detected")
+	}
+	if memory != "- changed repl.go" {
+		t.Fatalf("unexpected extracted memory %q", memory)
+	}
+}
+
+func TestExtractTrailingToolMemory_IgnoresInlineMention(t *testing.T) {
+	raw := "Document the literal tag <keen_memory>...</keen_memory> in the README."
+
+	memory, ok := extractTrailingToolMemory(raw)
+	if ok || memory != "" {
+		t.Fatalf("expected inline mention to not be treated as keen memory, got ok=%v memory=%q", ok, memory)
 	}
 }
 

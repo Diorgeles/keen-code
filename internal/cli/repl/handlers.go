@@ -3,6 +3,7 @@ package repl
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/user/keen-code/internal/llm"
@@ -51,6 +52,7 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 	m.adjustTextareaHeight()
 	responseLines, _ := m.streamHandler.HandleDone()
 	m.appState.AddMessage(llm.RoleAssistant, rawResponse)
+	m.logKeenMemory("agent turn completed", rawResponse)
 	if err := m.sessions.appendAssistantTurn(segments, rawResponse, false, ""); err != nil {
 		m.handleSessionPersistenceError(err)
 	}
@@ -251,6 +253,7 @@ func (m *replModel) interruptStream(message string) {
 	if partialResponse != "" {
 		interruptedMessage = partialResponse + "\n\n[Response interrupted by user]"
 		m.appState.AddMessage(llm.RoleAssistant, interruptedMessage)
+		m.logKeenMemory("agent turn interrupted", interruptedMessage)
 	}
 	if err := m.sessions.appendAssistantTurn(segments, interruptedMessage, true, ""); err != nil {
 		m.handleSessionPersistenceError(err)
@@ -300,6 +303,20 @@ func (m *replModel) handleSessionPickerKeyMsg(msg tea.Msg) (replModel, tea.Cmd) 
 	}
 
 	return *m, nil
+}
+
+func (m *replModel) logKeenMemory(reason string, rawResponse string) {
+	if m == nil {
+		return
+	}
+
+	memory, ok := extractTrailingToolMemory(rawResponse)
+	if !ok {
+		slog.Debug("Keen memory", "reason", reason, "present", false)
+		return
+	}
+
+	slog.Debug("Keen memory", "reason", reason, "present", true, "memory", memory)
 }
 
 func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.Cmd) {

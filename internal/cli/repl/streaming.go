@@ -342,6 +342,56 @@ func trailingPrefixLen(buffer string, target string) int {
 	return 0
 }
 
+func extractTrailingToolMemory(raw string) (string, bool) {
+	memory, malformed, found := trailingToolMemory(raw)
+	if !found {
+		return "", false
+	}
+	if malformed {
+		return strings.TrimSpace(memory), true
+	}
+	return strings.TrimSpace(memory), true
+}
+
+func trailingToolMemory(raw string) (memory string, malformed bool, found bool) {
+	closeIdx := strings.LastIndex(raw, toolMemoryCloseTag)
+	if closeIdx == -1 {
+		openIdx := strings.LastIndex(raw, toolMemoryOpenTag)
+		if openIdx == -1 || !isDedicatedTrailingMemoryStart(raw, openIdx) {
+			return "", false, false
+		}
+		return raw[openIdx+len(toolMemoryOpenTag):], true, true
+	}
+
+	afterClose := raw[closeIdx+len(toolMemoryCloseTag):]
+	if strings.TrimSpace(afterClose) != "" {
+		return "", false, false
+	}
+
+	openIdx := strings.LastIndex(raw[:closeIdx], toolMemoryOpenTag)
+	if openIdx == -1 {
+		return "", false, false
+	}
+
+	if !isDedicatedTrailingMemoryStart(raw, openIdx) {
+		return "", false, false
+	}
+
+	return raw[openIdx+len(toolMemoryOpenTag) : closeIdx], false, true
+}
+
+func isDedicatedTrailingMemoryStart(raw string, openIdx int) bool {
+	if openIdx < 0 || openIdx > len(raw) {
+		return false
+	}
+	if openIdx == 0 {
+		return true
+	}
+
+	prev := raw[openIdx-1]
+	return prev == '\n' || prev == '\r'
+}
+
 func (sh *StreamHandler) View(width int) string {
 	sh.lastWidth = width
 

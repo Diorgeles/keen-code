@@ -29,3 +29,4 @@ Let's create an implementation plan for this feature based on the PRD. Save it i
 
 1. We can simplify the design even further. Just emit the <keen_memory> blocks, and filter them out in REPL.  That's it. Since it's part of the conversation, it naturally gets into the context.
 2. Update the plan to reflect the simplified design.
+3. We have a bug. If <keen_memory> tag appears somewhere in the agent's message and not intended as tool memory, REPL still strips it.
