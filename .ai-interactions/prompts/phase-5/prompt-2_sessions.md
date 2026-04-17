@@ -48,4 +48,4 @@ In this PRD, we will outline the expected behavior of persistent sessions and re
 11. The function replayLoadedSession is too big. Let's refactor it.
 12. We still have AssistantSegment in internal/session/event.go. We don't need it anymore. Let's remove it even though it will break past conversations.
 12. Review the code you have written and make sure we have unit tests for important parts of the code.
-13. 
+13. We don't need to have timestamp in the directory name for sessions. Only UUID is enough. Refactor the code accordingly.

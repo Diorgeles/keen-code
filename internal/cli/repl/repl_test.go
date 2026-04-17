@@ -606,7 +606,7 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	if !strings.Contains(meta, "openai") {
 		t.Fatalf("expected provider text in combined model display, got %q", meta)
 	}
-	if !strings.Contains(meta, "context:") {
+	if !strings.Contains(meta, "context in use:") {
 		t.Fatalf("expected inline context label, got %q", meta)
 	}
 	if !strings.Contains(meta, "50%") {

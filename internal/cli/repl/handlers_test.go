@@ -115,6 +115,38 @@ func TestHandleLLMDone(t *testing.T) {
 	}
 }
 
+func TestHandleLLMDone_StoresRawAssistantMessageWhenToolMemoryIsPresent(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	sh.Start(eventCh, "Loading...")
+
+	raw := "response line 1\n<keen_memory>\n- updated repl.go\n</keen_memory>"
+	sh.HandleChunk(raw)
+
+	m := replModel{
+		streamHandler: sh,
+		showSpinner:   true,
+		width:         80,
+		appState:      NewAppState(nil, t.TempDir()),
+		output:        NewOutputBuilder(80),
+	}
+
+	newM, cmd := m.handleLLMDone()
+
+	if got := m.appState.GetMessages(); len(got) != 1 || got[0].Content != raw {
+		t.Fatalf("expected raw assistant message to be stored, got %#v", got)
+	}
+	if strings.Contains(newM.output.Join(), "keen_memory") || strings.Contains(newM.output.Join(), "updated repl.go") {
+		t.Fatalf("expected tool memory block to stay hidden from visible output, got %q", newM.output.Join())
+	}
+	if !strings.Contains(newM.output.Join(), "response line 1") {
+		t.Fatalf("expected visible assistant content in output, got %q", newM.output.Join())
+	}
+	if cmd != nil {
+		t.Error("expected nil cmd")
+	}
+}
+
 func TestHandleLLMError(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	eventCh := make(chan llm.StreamEvent)

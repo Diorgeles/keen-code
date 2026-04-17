@@ -43,13 +43,15 @@ func (m *replModel) handleLLMReasoningChunk(chunk string) (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
+	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
+	rawResponse := m.streamHandler.GetRawResponse()
 	m.showSpinner = false
 	m.clearStreamCancel()
 	m.adjustTextareaHeight()
-	responseLines, fullResponse := m.streamHandler.HandleDone()
-	m.appState.AddMessage(llm.RoleAssistant, fullResponse)
-	if err := m.sessions.appendAssistantTurn(segments, fullResponse, false, ""); err != nil {
+	responseLines, _ := m.streamHandler.HandleDone()
+	m.appState.AddMessage(llm.RoleAssistant, rawResponse)
+	if err := m.sessions.appendAssistantTurn(segments, rawResponse, false, ""); err != nil {
 		m.handleSessionPersistenceError(err)
 	}
 	m.refreshContextStatus(false)
@@ -65,6 +67,7 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
+	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	m.showSpinner = false
 	m.clearStreamCancel()
@@ -241,6 +244,7 @@ func (m *replModel) interruptStream(message string) {
 
 	m.showSpinner = false
 
+	m.streamHandler.finalizeAssistantContent()
 	partialResponse := m.streamHandler.GetResponse()
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	interruptedMessage := ""

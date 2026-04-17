@@ -344,6 +344,9 @@ func TestAppState_CompactReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
 	if !strings.Contains(capturedMessages[0].Content, "Keep business logic details") {
 		t.Fatalf("expected extra prompt in system prompt, got %q", capturedMessages[0].Content)
 	}
+	if !strings.Contains(capturedMessages[0].Content, "<keen_memory>") {
+		t.Fatalf("expected compaction prompt to mention keen_memory blocks, got %q", capturedMessages[0].Content)
+	}
 	for i, msg := range original {
 		got := capturedMessages[i+1]
 		if got != msg {

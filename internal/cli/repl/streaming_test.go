@@ -19,6 +19,9 @@ func TestStreamHandler_HandleChunk(t *testing.T) {
 	if sh.GetResponse() != "Hello" {
 		t.Errorf("expected response 'Hello', got '%s'", sh.GetResponse())
 	}
+	if sh.GetRawResponse() != "Hello" {
+		t.Errorf("expected raw response 'Hello', got '%s'", sh.GetRawResponse())
+	}
 	if sh.HasContent() != true {
 		t.Error("expected HasContent() to be true")
 	}
@@ -26,6 +29,9 @@ func TestStreamHandler_HandleChunk(t *testing.T) {
 	sh.HandleChunk(" World")
 	if sh.GetResponse() != "Hello World" {
 		t.Errorf("expected response 'Hello World', got '%s'", sh.GetResponse())
+	}
+	if sh.GetRawResponse() != "Hello World" {
+		t.Errorf("expected raw response 'Hello World', got '%s'", sh.GetRawResponse())
 	}
 }
 
@@ -75,6 +81,74 @@ func TestStreamHandler_HandleDone(t *testing.T) {
 	}
 	if sh.HasContent() {
 		t.Error("expected HasContent to be false after HandleDone")
+	}
+}
+
+func TestStreamHandler_HandleDone_HidesToolMemoryBlockFromVisibleResponse(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	sh.Start(eventCh, "Loading...")
+
+	raw := "Visible answer\n<keen_memory>\n- changed repl.go\n</keen_memory>"
+	sh.HandleChunk(raw)
+
+	if sh.GetResponse() != "Visible answer\n" {
+		t.Fatalf("expected visible response without tool memory, got %q", sh.GetResponse())
+	}
+	if sh.GetRawResponse() != raw {
+		t.Fatalf("expected raw response to retain tool memory, got %q", sh.GetRawResponse())
+	}
+
+	lines, fullResponse := sh.HandleDone()
+
+	if fullResponse != "Visible answer\n" {
+		t.Fatalf("expected visible full response, got %q", fullResponse)
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "Visible answer") {
+		t.Fatalf("expected visible answer in transcript, got %q", joined)
+	}
+	if strings.Contains(joined, "keen_memory") || strings.Contains(joined, "changed repl.go") {
+		t.Fatalf("expected tool memory block to be hidden from transcript, got %q", joined)
+	}
+}
+
+func TestStreamHandler_HandleChunk_HidesSplitToolMemoryTag(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+
+	sh.HandleChunk("Visible answer\n<keen_")
+	if sh.GetResponse() != "Visible answer\n" {
+		t.Fatalf("expected partial opening tag to stay hidden, got %q", sh.GetResponse())
+	}
+
+	rawTail := "memory>\n- changed repl.go\n</keen_memory>"
+	sh.HandleChunk(rawTail)
+
+	if sh.GetResponse() != "Visible answer\n" {
+		t.Fatalf("expected visible response without tool memory, got %q", sh.GetResponse())
+	}
+	if sh.GetRawResponse() != "Visible answer\n<keen_memory>\n- changed repl.go\n</keen_memory>" {
+		t.Fatalf("unexpected raw response %q", sh.GetRawResponse())
+	}
+}
+
+func TestStreamHandler_HandleDone_DropsMalformedToolMemoryBlockFromVisibleResponse(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	sh.Start(eventCh, "Loading...")
+
+	raw := "Visible answer\n<keen_memory>\n- incomplete"
+	sh.HandleChunk(raw)
+
+	lines, fullResponse := sh.HandleDone()
+
+	if fullResponse != "Visible answer\n" {
+		t.Fatalf("expected visible response without malformed tool memory, got %q", fullResponse)
+	}
+	joined := strings.Join(lines, "\n")
+	if strings.Contains(joined, "keen_memory") || strings.Contains(joined, "incomplete") {
+		t.Fatalf("expected malformed tool memory to stay hidden, got %q", joined)
 	}
 }
 

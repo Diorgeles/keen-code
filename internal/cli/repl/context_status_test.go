@@ -1,10 +1,12 @@
 package repl
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/tools"
 )
 
 func TestEstimateTokensFromWordCount(t *testing.T) {
@@ -60,6 +62,17 @@ func TestBuildConversationForEstimation(t *testing.T) {
 	}
 }
 
+func TestEstimateToolDefinitionTokens(t *testing.T) {
+	registry := tools.NewRegistry()
+	if err := registry.Register(&contextStatusTestTool{}); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
+
+	if got := estimateToolDefinitionTokens(registry); got <= 0 {
+		t.Fatalf("expected positive token estimate for tool definitions, got %d", got)
+	}
+}
+
 func TestRenderContextStatusUnknown(t *testing.T) {
 	got := renderContextStatus(contextStatus{KnownWindow: false, CurrentTokens: 42})
 	if !strings.Contains(got, "N/A") {
@@ -104,4 +117,28 @@ func TestContextStatus_ShouldSuggestCompaction(t *testing.T) {
 	if (contextStatus{KnownWindow: false, Percent: 90}).ShouldSuggestCompaction() {
 		t.Fatal("did not expect compaction suggestion when context window is unknown")
 	}
+}
+
+type contextStatusTestTool struct{}
+
+func (t *contextStatusTestTool) Name() string { return "context_test_tool" }
+
+func (t *contextStatusTestTool) Description() string {
+	return "Used to verify tool schema estimation"
+}
+
+func (t *contextStatusTestTool) InputSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"path": map[string]any{
+				"type":        "string",
+				"description": "File path to inspect",
+			},
+		},
+	}
+}
+
+func (t *contextStatusTestTool) Execute(_ context.Context, _ any) (any, error) {
+	return nil, nil
 }

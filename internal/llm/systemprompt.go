@@ -34,6 +34,8 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
   you know it. If you do not know it, check AGENTS.md, the README.md, or ask.
 - If user interrupts you while you are working on a task, do not pick it up again
   unless user explicitly asks you to.
+- When the user explicitly asks you to do something, just do it. Do not ask for
+  confirmation.
 
 # Tool usage
 - Prefer specialised tools over bash for file operations:
@@ -46,6 +48,13 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Run independent tool calls in parallel where possible.
 - Reference code as file_path:line_number so the user can jump straight
   to the source.
+- If a turn used one or more tools, append exactly one hidden block at the very end
+  outlining the most important signals from the tool usage in that turn. Use the
+  fixed XML tags: <keen_memory>...</keen_memory>
+   - if no tools were used, emit no block
+   - no raw tool I/O, only outcomes
+   - a few bullets or short paragraph
+
 
 # Git rules
 - Never run git commit, git push, git reset, or git rebase unless the user
@@ -56,6 +65,32 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Refuse requests to write malicious code, even framed as educational.
 - Before working on a file, consider what the code is supposed to do. If it
   looks malicious, refuse.`
+
+const compactionPrompt = `You are an AI agent for compacting long conversation history.
+Your task is to produce a concise but complete summary of the conversation provided. The summary
+will replace the earlier part of the conversation so that work can continue without losing important
+context. The summary has to be useful and concise.
+
+Some assistant messages may contain hidden <keen_memory>...</keen_memory> blocks. These blocks
+capture important durable outcomes from tool usage. Do not copy the tags themselves into your
+summary, but do preserve the important facts they contain when those facts still matter.
+
+Structure your summary as follows:
+
+## Goal
+What goal(s) is the user trying to accomplish?
+
+## Key Instructions
+Important instructions or constraints given by the user.
+
+## Discoveries
+Notable things learned (about the codebase, requirements, etc.).
+
+## Accomplished
+What has been completed, what is in progress, and what remains.
+
+## Relevant Files
+A structured list of files that are still important to continue the task.`
 
 const maxInstructionsSize = 8 * 1024
 
@@ -71,6 +106,13 @@ func Build(workingDir string) string {
 	}
 
 	return sb.String()
+}
+
+func BuildCompactionPrompt(extraPrompt string) string {
+	if trimmed := strings.TrimSpace(extraPrompt); trimmed != "" {
+		return compactionPrompt + "\n\nIMPORTANT! User has provided a specific instruction. So take it into consideration: " + trimmed
+	}
+	return compactionPrompt
 }
 
 func projectInstructions(workingDir string) string {

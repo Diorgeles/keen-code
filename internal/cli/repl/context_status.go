@@ -1,15 +1,17 @@
 package repl
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/tools"
 )
 
 const (
-	contextProgressBarWidth    = 20
 	compactionSuggestThreshold = 70.0
 )
 
@@ -63,6 +65,27 @@ func countWords(text string) int {
 	return len(strings.Fields(text))
 }
 
+func estimateToolDefinitionTokens(registry *tools.Registry) int {
+	if registry == nil || registry.Count() == 0 {
+		return 0
+	}
+
+	totalWords := 0
+	for _, t := range registry.All() {
+		totalWords += countWords(t.Name())
+		totalWords += countWords(t.Description())
+
+		schemaBytes, err := json.Marshal(t.InputSchema())
+		if err != nil {
+			totalWords += countWords(fmt.Sprintf("%v", t.InputSchema()))
+			continue
+		}
+		totalWords += countWords(string(schemaBytes))
+	}
+
+	return estimateTokensFromWordCount(totalWords)
+}
+
 func buildConversationForEstimation(workingDir string, messages []llm.Message, partialAssistant string) string {
 	parts := make([]string, 0, len(messages)+2)
 	if workingDir != "" {
@@ -97,6 +120,11 @@ func (m replModel) computeContextStatus(includePartialAssistant bool) contextSta
 		messages = m.appState.GetMessages()
 	}
 
+	var toolRegistry *tools.Registry
+	if m.appState != nil {
+		toolRegistry = m.appState.GetToolRegistry()
+	}
+
 	partial := ""
 	if includePartialAssistant && m.streamHandler != nil && m.streamHandler.IsActive() {
 		partial = m.streamHandler.GetResponse()
@@ -109,7 +137,7 @@ func (m replModel) computeContextStatus(includePartialAssistant bool) contextSta
 
 	conversation := buildConversationForEstimation(workingDir, messages, partial)
 	wordCount := countWords(conversation)
-	currentTokens := estimateTokensFromWordCount(wordCount)
+	currentTokens := estimateTokensFromWordCount(wordCount) + estimateToolDefinitionTokens(toolRegistry)
 
 	status := contextStatus{
 		CurrentTokens: currentTokens,
@@ -147,7 +175,7 @@ func contextPercentStyle(percent float64) lipgloss.Style {
 }
 
 func renderContextStatus(status contextStatus) string {
-	label := contextStatusLabelStyle.Render("context:")
+	label := contextStatusLabelStyle.Render("context in use:")
 	if !status.KnownWindow || status.ContextWindow <= 0 {
 		return label + " " + contextStatusUnknownStyle.Render("N/A")
 	}

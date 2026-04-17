@@ -7,3 +7,7 @@
 5. Let's also have rules for the input text area instead of a box.
 6. In tools where a path is provided as input, we show the full path in the UI. This is redundant. Let's show only the relative path to the working directory. This is just for the UI.
 7. We currently show provider in secondary color. Let's change that. We will show the model in secondary color only.
+8. Remove the progress bar and icon from the context status UI. Replace it with so
+
+## Context Status
+1. Currently, system prompt + tool schemas aren't fully accounted for in the percentage. The estimate includes llm.Build(workingDir) text but not the tool descriptors Genkit attaches under the hood. Real context pressure is higher than the bar suggests.

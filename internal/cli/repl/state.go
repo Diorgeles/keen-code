@@ -11,35 +11,6 @@ import (
 	"github.com/user/keen-code/internal/tools"
 )
 
-const compactionSystemPrompt = `You are an AI agent for compacting long conversation history.
-Your task is to produce a concise but complete summary of the conversation provided. The summary
-will replace the earlier part of the conversation so that work can continue without losing important
-context. The summary has to be useful and concise.
-
-Structure your summary as follows:
-
-## Goal
-What goal(s) is the user trying to accomplish?
-
-## Key Instructions
-Important instructions or constraints given by the user.
-
-## Discoveries
-Notable things learned (about the codebase, requirements, etc.).
-
-## Accomplished
-What has been completed, what is in progress, and what remains.
-
-## Relevant Files
-A structured list of files that are still important to continue the task.`
-
-func buildCompactionSystemPrompt(extraPrompt string) string {
-	if trimmed := strings.TrimSpace(extraPrompt); trimmed != "" {
-		return compactionSystemPrompt + "\n\nIMPORTANT! User has provided a specific instruction. So take it into consideration: " + trimmed
-	}
-	return compactionSystemPrompt
-}
-
 const compactionUserInstruction = "Please compact this conversation according to the system instructions."
 
 type AppState struct {
@@ -108,7 +79,7 @@ func (s *AppState) Compact(ctx context.Context, cfg *config.ResolvedConfig, extr
 	requestMessages := make([]llm.Message, 0, len(snapshot)+2)
 	requestMessages = append(requestMessages, llm.Message{
 		Role:    llm.RoleSystem,
-		Content: buildCompactionSystemPrompt(extraPrompt),
+		Content: llm.BuildCompactionPrompt(extraPrompt),
 	})
 	requestMessages = append(requestMessages, snapshot...)
 	requestMessages = append(requestMessages, llm.Message{

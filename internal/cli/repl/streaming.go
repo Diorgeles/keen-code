@@ -12,12 +12,15 @@ import (
 type StreamHandler struct {
 	isActive        bool
 	currentResponse string
+	rawResponse     string
 	eventCh         <-chan llm.StreamEvent
 	loadingText     string
 	lastWidth       int
 	workingDir      string
 	mdRenderer      *MarkdownRenderer
 	segments        []streamSegment
+	parserBuffer    string
+	inToolMemory    bool
 }
 
 type streamSegmentType string
@@ -45,6 +48,11 @@ type streamSegment struct {
 	diffLines        []tools.EditDiffLine
 }
 
+const (
+	toolMemoryOpenTag  = "<keen_memory>"
+	toolMemoryCloseTag = "</keen_memory>"
+)
+
 func NewStreamHandler(mdRenderer *MarkdownRenderer) *StreamHandler {
 	return &StreamHandler{
 		mdRenderer: mdRenderer,
@@ -55,10 +63,13 @@ func NewStreamHandler(mdRenderer *MarkdownRenderer) *StreamHandler {
 func (sh *StreamHandler) Start(eventCh <-chan llm.StreamEvent, loadingText string) {
 	sh.isActive = true
 	sh.currentResponse = ""
+	sh.rawResponse = ""
 	sh.eventCh = eventCh
 	sh.loadingText = loadingText
 	sh.lastWidth = 0
 	sh.segments = make([]streamSegment, 0)
+	sh.parserBuffer = ""
+	sh.inToolMemory = false
 }
 
 func (sh *StreamHandler) IsActive() bool {
@@ -67,6 +78,10 @@ func (sh *StreamHandler) IsActive() bool {
 
 func (sh *StreamHandler) GetResponse() string {
 	return sh.currentResponse
+}
+
+func (sh *StreamHandler) GetRawResponse() string {
+	return sh.rawResponse
 }
 
 func (sh *StreamHandler) GetLoadingText() string {
@@ -82,12 +97,9 @@ func (sh *StreamHandler) HasContent() bool {
 }
 
 func (sh *StreamHandler) HandleChunk(chunk string) {
-	sh.currentResponse += chunk
-
-	if n := len(sh.segments); n > 0 && sh.segments[n-1].kind == segmentAssistant {
-		sh.segments[n-1].content += chunk
-	} else {
-		sh.segments = append(sh.segments, streamSegment{kind: segmentAssistant, content: chunk})
+	sh.rawResponse += chunk
+	if visible := sh.consumeAssistantChunk(chunk, false); visible != "" {
+		sh.appendAssistantVisible(visible)
 	}
 }
 
@@ -216,6 +228,7 @@ func (sh *StreamHandler) ResolvePendingPermission(status PermissionStatus) {
 }
 
 func (sh *StreamHandler) HandleDone() ([]string, string) {
+	sh.finalizeAssistantContent()
 	response := sh.currentResponse
 	lines := sh.renderTranscriptLines()
 	sh.resetState()
@@ -223,12 +236,14 @@ func (sh *StreamHandler) HandleDone() ([]string, string) {
 }
 
 func (sh *StreamHandler) HandleError(err error) ([]string, string) {
+	sh.finalizeAssistantContent()
 	lines := sh.renderTranscriptLines()
 	sh.resetState()
 	return lines, err.Error()
 }
 
 func (sh *StreamHandler) HandleInterrupt() []string {
+	sh.finalizeAssistantContent()
 	lines := sh.renderTranscriptLines()
 	sh.resetState()
 	return lines
@@ -241,9 +256,90 @@ func (sh *StreamHandler) Interrupt() {
 func (sh *StreamHandler) resetState() {
 	sh.isActive = false
 	sh.currentResponse = ""
+	sh.rawResponse = ""
 	sh.eventCh = nil
 	sh.loadingText = ""
 	sh.segments = make([]streamSegment, 0)
+	sh.parserBuffer = ""
+	sh.inToolMemory = false
+}
+
+func (sh *StreamHandler) appendAssistantVisible(chunk string) {
+	if chunk == "" {
+		return
+	}
+
+	sh.currentResponse += chunk
+
+	if n := len(sh.segments); n > 0 && sh.segments[n-1].kind == segmentAssistant {
+		sh.segments[n-1].content += chunk
+		return
+	}
+
+	sh.segments = append(sh.segments, streamSegment{kind: segmentAssistant, content: chunk})
+}
+
+func (sh *StreamHandler) finalizeAssistantContent() {
+	if visible := sh.consumeAssistantChunk("", true); visible != "" {
+		sh.appendAssistantVisible(visible)
+	}
+}
+
+func (sh *StreamHandler) consumeAssistantChunk(chunk string, final bool) string {
+	sh.parserBuffer += chunk
+
+	var visible strings.Builder
+
+	for {
+		if sh.inToolMemory {
+			idx := strings.Index(sh.parserBuffer, toolMemoryCloseTag)
+			if idx == -1 {
+				if final {
+					sh.parserBuffer = ""
+				}
+				return visible.String()
+			}
+			sh.parserBuffer = sh.parserBuffer[idx+len(toolMemoryCloseTag):]
+			sh.inToolMemory = false
+			continue
+		}
+
+		idx := strings.Index(sh.parserBuffer, toolMemoryOpenTag)
+		if idx != -1 {
+			visible.WriteString(sh.parserBuffer[:idx])
+			sh.parserBuffer = sh.parserBuffer[idx+len(toolMemoryOpenTag):]
+			sh.inToolMemory = true
+			continue
+		}
+
+		if final {
+			visible.WriteString(sh.parserBuffer)
+			sh.parserBuffer = ""
+			return visible.String()
+		}
+
+		keep := trailingPrefixLen(sh.parserBuffer, toolMemoryOpenTag)
+		if keep > 0 {
+			visible.WriteString(sh.parserBuffer[:len(sh.parserBuffer)-keep])
+			sh.parserBuffer = sh.parserBuffer[len(sh.parserBuffer)-keep:]
+		} else {
+			visible.WriteString(sh.parserBuffer)
+			sh.parserBuffer = ""
+		}
+		return visible.String()
+	}
+}
+
+func trailingPrefixLen(buffer string, target string) int {
+	maxLen := min(len(target)-1, len(buffer))
+
+	for n := maxLen; n > 0; n-- {
+		if strings.HasSuffix(buffer, target[:n]) {
+			return n
+		}
+	}
+
+	return 0
 }
 
 func (sh *StreamHandler) View(width int) string {
