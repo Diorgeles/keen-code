@@ -494,7 +494,7 @@ func (m *replModel) updateViewportContent() {
 	}
 
 	if m.sessionPicker != nil {
-		content.WriteString(formatSessionPickerCard(m.sessionPicker))
+		content.WriteString(formatSessionPickerCard(m.sessionPicker, m.viewport.Width(), m.viewport.Height()))
 	}
 
 	m.viewport.SetContent(content.String())

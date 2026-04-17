@@ -102,7 +102,7 @@ var (
 	reasoningStyle           = lipgloss.NewStyle().Foreground(textDimColor).Faint(true)
 	errorStyle               = lipgloss.NewStyle().Foreground(errorColor)
 	interruptedStyle         = lipgloss.NewStyle().Foreground(primaryColor).Bold(true)
-	loadingTextStyled        = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+	loadingTextStyled        = lipgloss.NewStyle().Foreground(primaryColor)
 	compactionSuccessStyle   = lipgloss.NewStyle().Foreground(secondaryColor)
 	compactionErrorStyle     = lipgloss.NewStyle().Foreground(errorColor)
 	compactionCancelledStyle = lipgloss.NewStyle().Foreground(mutedColor)
@@ -116,8 +116,8 @@ var (
 
 	// ── Bash ────────────────────────────────────────────────────────────────────
 
-	bashCommandStyle = lipgloss.NewStyle().Bold(true).Foreground(secondaryColor)
-	bashOutputStyle  = lipgloss.NewStyle().Foreground(textSecondaryColor)
+	bashCommandStyle = lipgloss.NewStyle().Foreground(secondaryColor)
+	bashOutputStyle  = lipgloss.NewStyle().Foreground(textDimColor)
 	bashSummaryStyle = lipgloss.NewStyle().Foreground(mutedColor)
 
 	// ── Diff ────────────────────────────────────────────────────────────────────

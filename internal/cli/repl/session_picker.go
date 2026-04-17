@@ -12,6 +12,11 @@ type SessionPicker struct {
 	cursor    int
 }
 
+const (
+	sessionPickerLinesPerItem = 3
+	sessionPickerFixedLines   = 3
+)
+
 func NewSessionPicker(summaries []session.Summary) *SessionPicker {
 	return &SessionPicker{summaries: summaries}
 }
@@ -37,16 +42,57 @@ func (p *SessionPicker) Current() *session.Summary {
 	return &p.summaries[p.cursor]
 }
 
-func formatSessionPickerCard(picker *SessionPicker) string {
+func (p *SessionPicker) visibleRange(maxItems int) (int, int) {
+	if p == nil || len(p.summaries) == 0 {
+		return 0, 0
+	}
+	if maxItems <= 0 || maxItems >= len(p.summaries) {
+		return 0, len(p.summaries)
+	}
+
+	start := p.cursor - maxItems/2
+	if start < 0 {
+		start = 0
+	}
+	if start+maxItems > len(p.summaries) {
+		start = len(p.summaries) - maxItems
+	}
+	return start, start + maxItems
+}
+
+func formatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string {
 	if picker == nil {
 		return ""
 	}
 
+	ruleWidth := defaultWidth - 2
+	if width > 0 {
+		ruleWidth = width - 2
+	}
+	if ruleWidth < 1 {
+		ruleWidth = 1
+	}
+	maxItems := len(picker.summaries)
+	if maxHeight > 0 {
+		availableBodyLines := maxHeight - 3
+		if availableBodyLines <= sessionPickerFixedLines {
+			maxItems = 1
+		} else {
+			maxItems = (availableBodyLines - sessionPickerFixedLines) / sessionPickerLinesPerItem
+			if maxItems < 1 {
+				maxItems = 1
+			}
+		}
+	}
+	start, end := picker.visibleRange(maxItems)
+
+	rule := "  " + diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
 	var body strings.Builder
 	body.WriteString(userPromptStyle.Render("Saved Sessions"))
 	body.WriteString("\n\n")
 
-	for i, summary := range picker.summaries {
+	for i := start; i < end; i++ {
+		summary := picker.summaries[i]
 		prefix := "  "
 		style := normalStyle
 		if i == picker.cursor {
@@ -74,13 +120,20 @@ func formatSessionPickerCard(picker *SessionPicker) string {
 
 	body.WriteString(hintStyle.Render("[↑/↓ navigate  Enter to resume  Esc to cancel]"))
 
-	boxed := userPromptCardStyle.Render(body.String())
-	lines := strings.Split(strings.TrimRight(boxed, "\n"), "\n")
+	lines := strings.Split(strings.TrimRight(body.String(), "\n"), "\n")
 
 	var out strings.Builder
 	out.WriteString("\n")
+	out.WriteString(rule)
+	out.WriteString("\n")
 	for _, line := range lines {
+		if line == "" {
+			out.WriteString("\n")
+			continue
+		}
 		out.WriteString("  " + line + "\n")
 	}
+	out.WriteString(rule)
+	out.WriteString("\n")
 	return out.String()
 }
