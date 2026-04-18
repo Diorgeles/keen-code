@@ -105,7 +105,7 @@ var (
 	loadingTextStyled        = lipgloss.NewStyle().Foreground(primaryColor)
 	compactionSuccessStyle   = lipgloss.NewStyle().Foreground(secondaryColor)
 	compactionErrorStyle     = lipgloss.NewStyle().Foreground(errorColor)
-	compactionCancelledStyle = lipgloss.NewStyle().Foreground(mutedColor)
+	compactionCancelledStyle = lipgloss.NewStyle().Foreground(textDimColor)
 
 	// ── Tools ───────────────────────────────────────────────────────────────────
 

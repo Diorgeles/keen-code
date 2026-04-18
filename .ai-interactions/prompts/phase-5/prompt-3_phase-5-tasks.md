@@ -11,3 +11,9 @@
 
 ## Context Status
 1. Currently, system prompt + tool schemas aren't fully accounted for in the percentage. The estimate includes llm.Build(workingDir) text but not the tool descriptors Genkit attaches under the hood. Real context pressure is higher than the bar suggests.
+
+## Compaction
+
+1. Currently, when a compaction happens, the compaction is not shown to client. We want to stream the compaction just like other assistant messages. How to do that?
+2. `handleCompactionDone` and `handleCompactionError` - should they be in repl.go? I think we should put them in handlers.go.
+3. Compacted context is not being replayed correctly in case of session resume. The resumed session only shows the "Context compacted." message but not the actual compactioned context. Figure out how to fix this.

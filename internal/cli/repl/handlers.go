@@ -44,6 +44,9 @@ func (m *replModel) handleLLMReasoningChunk(chunk string) (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
+	if m.isCompacting {
+		return m.handleCompactionDone()
+	}
 	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	rawResponse := m.streamHandler.GetRawResponse()
@@ -69,6 +72,9 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
+	if m.isCompacting {
+		return m.handleCompactionError(err)
+	}
 	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	m.showSpinner = false
@@ -87,6 +93,62 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 	m.output.AddError(errMsg, errorStyle)
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m, nil
+}
+
+func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
+	m.streamHandler.finalizeAssistantContent()
+	segments := cloneStreamSegments(m.streamHandler.segments)
+	responseLines, summary := m.streamHandler.HandleDone()
+	m.isCompacting = false
+	m.showSpinner = false
+	m.compactionCancel = nil
+	m.clearStreamCancel()
+	if err := m.appState.ApplyCompaction(summary); err != nil {
+		return m.handleCompactionError(err)
+	}
+	m.refreshContextStatus(false)
+	for _, line := range responseLines {
+		m.output.AddLine(line)
+	}
+	if len(responseLines) > 0 {
+		m.output.AddEmptyLine()
+	}
+	if err := m.sessions.appendCompaction(segments, m.appState.GetMessages(), "Context compacted."); err != nil {
+		m.handleSessionPersistenceError(err)
+	}
+	m.adjustTextareaHeight()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m, nil
+}
+
+func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
+	if m.streamHandler != nil && m.streamHandler.IsActive() {
+		responseLines, _ := m.streamHandler.HandleError(err)
+		for _, line := range responseLines {
+			m.output.AddLine(line)
+		}
+		if len(responseLines) > 0 {
+			m.output.AddEmptyLine()
+		}
+	}
+	m.isCompacting = false
+	m.showSpinner = false
+	m.compactionCancel = nil
+	m.clearStreamCancel()
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			addCompactionCancelledStatus(m.output, "Compaction cancelled.")
+		} else {
+			status := "Compaction failed: " + err.Error()
+			addCompactionErrorStatus(m.output, status)
+		}
+	}
+	m.adjustTextareaHeight()
+	m.refreshContextStatus(false)
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil

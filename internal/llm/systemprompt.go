@@ -56,6 +56,8 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
     - Keep it short and useful—a few bullets or short paragraph
     - Only include the tool memory if it is useful and unique, meaning it is not already
 	covered by the other assistant messages in the turn
+	- Never include these tags in any other part of the assistant messsages. They are only
+	allowed one time at the very end of the assistant turn for tool memory
 - Raw tool outputs are not retained across turns, they are only available for the current turn.
   Trust your memory and re-run a tool only when you need fresh state, exact content, or detail
   not captured in memory
@@ -76,7 +78,7 @@ will replace the earlier part of the conversation so that work can continue with
 context. The summary has to be useful and concise.
 
 Some assistant messages may contain hidden <keen_memory>...</keen_memory> blocks. These blocks
-capture important durable outcomes from tool usage. Do not copy the tags themselves into your
+capture important durable outcomes from tool usage. Do not copy the tags themselves into your compacted
 summary, but do preserve the important facts they contain when those facts still matter.
 
 Structure your summary as follows:

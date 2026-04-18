@@ -295,7 +295,7 @@ func TestAppState_GetClient_Nil(t *testing.T) {
 	}
 }
 
-func TestAppState_CompactReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
+func TestAppState_StreamCompactBuildsCompactionRequest(t *testing.T) {
 	var capturedMessages []llm.Message
 	var capturedRegistry *tools.Registry
 
@@ -324,12 +324,15 @@ func TestAppState_CompactReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
 		state.AddMessage(role, msg.Content)
 	}
 
-	err := state.Compact(context.Background(), &config.ResolvedConfig{
+	eventCh, err := state.StreamCompact(context.Background(), &config.ResolvedConfig{
 		APIKey: "key",
 		Model:  "model",
 	}, "Keep business logic details")
 	if err != nil {
-		t.Fatalf("Compact() returned error: %v", err)
+		t.Fatalf("StreamCompact() returned error: %v", err)
+	}
+	if eventCh == nil {
+		t.Fatal("expected compaction stream")
 	}
 
 	if capturedRegistry != nil {
@@ -360,6 +363,16 @@ func TestAppState_CompactReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
 	if last.Content != compactionUserInstruction {
 		t.Fatalf("unexpected final compaction instruction: %q", last.Content)
 	}
+}
+
+func TestAppState_ApplyCompactionReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
+	state := NewAppState(&mockLLMClient{}, t.TempDir())
+	state.AddMessage(llm.RoleUser, "hello")
+	state.AddMessage(llm.RoleAssistant, "world")
+
+	if err := state.ApplyCompaction("  compacted summary  "); err != nil {
+		t.Fatalf("ApplyCompaction() returned error: %v", err)
+	}
 
 	compacted := state.GetMessages()
 	if len(compacted) != 1 {
@@ -370,27 +383,15 @@ func TestAppState_CompactReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
 	}
 }
 
-func TestAppState_CompactLeavesMessagesUntouchedOnError(t *testing.T) {
-	client := &mockLLMClient{
-		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
-			ch := make(chan llm.StreamEvent, 1)
-			ch <- llm.StreamEvent{Type: llm.StreamEventTypeError, Error: errors.New("boom")}
-			close(ch)
-			return ch, nil
-		},
-	}
-
-	state := NewAppState(client, t.TempDir())
+func TestAppState_ApplyCompactionLeavesMessagesUntouchedOnError(t *testing.T) {
+	state := NewAppState(&mockLLMClient{}, t.TempDir())
 	state.AddMessage(llm.RoleUser, "hello")
 	state.AddMessage(llm.RoleAssistant, "world")
 	original := state.GetMessages()
 
-	err := state.Compact(context.Background(), &config.ResolvedConfig{
-		APIKey: "key",
-		Model:  "model",
-	}, "")
-	if err == nil || err.Error() != "boom" {
-		t.Fatalf("expected boom error, got %v", err)
+	err := state.ApplyCompaction(" \n\t ")
+	if err == nil || err.Error() != "compaction returned empty summary" {
+		t.Fatalf("expected empty summary error, got %v", err)
 	}
 
 	if got := state.GetMessages(); len(got) != len(original) || got[0] != original[0] || got[1] != original[1] {
@@ -398,30 +399,22 @@ func TestAppState_CompactLeavesMessagesUntouchedOnError(t *testing.T) {
 	}
 }
 
-func TestAppState_CompactLeavesMessagesUntouchedOnCancel(t *testing.T) {
-	client := &mockLLMClient{
-		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
-			ch := make(chan llm.StreamEvent)
-			go func() {
-				<-ctx.Done()
-				close(ch)
-			}()
-			return ch, nil
-		},
-	}
-
-	state := NewAppState(client, t.TempDir())
+func TestAppState_StreamCompactLeavesMessagesUntouchedOnCancel(t *testing.T) {
+	state := NewAppState(&mockLLMClient{}, t.TempDir())
 	state.AddMessage(llm.RoleUser, "hello")
 	original := state.GetMessages()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := state.Compact(ctx, &config.ResolvedConfig{
+	eventCh, err := state.StreamCompact(ctx, &config.ResolvedConfig{
 		APIKey: "key",
 		Model:  "model",
 	}, "")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("expected context.Canceled, got %v", err)
+	if err != nil {
+		t.Fatalf("expected nil error from StreamCompact, got %v", err)
+	}
+	if eventCh == nil {
+		t.Fatal("expected compaction stream")
 	}
 
 	if got := state.GetMessages(); len(got) != len(original) || got[0] != original[0] {

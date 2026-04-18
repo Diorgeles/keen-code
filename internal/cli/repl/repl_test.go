@@ -188,6 +188,7 @@ func TestHandleEnterKey_CompactCommandStartsCompaction(t *testing.T) {
 	m := newTestModel()
 	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
 	m.appState = NewAppState(&mockLLMClient{}, "")
+	m.appState.AddMessage(llm.RoleUser, "hello")
 	m.textarea.SetValue("/compact Keep business logic details")
 
 	newM, cmd := m.handleEnterKey()
@@ -206,6 +207,9 @@ func TestHandleEnterKey_CompactCommandStartsCompaction(t *testing.T) {
 	}
 	if newM.compactionCancel == nil {
 		t.Fatal("expected compaction cancel func to be set")
+	}
+	if !newM.streamHandler.IsActive() {
+		t.Fatal("expected compaction to use the stream handler")
 	}
 	if cmd == nil {
 		t.Fatal("expected async compaction command")
@@ -546,6 +550,12 @@ func TestReplayLoadedSession_RebuildsOutputAndConversation(t *testing.T) {
 				Kind: session.KindCompactionApplied,
 				CompactionApplied: &session.CompactionAppliedPayload{
 					Status: "Context compacted.",
+					Transcript: []session.TranscriptItem{
+						{
+							Kind:    session.TranscriptItemText,
+							Content: "summary",
+						},
+					},
 					Messages: []llm.Message{
 						{Role: llm.RoleUser, Content: "summary"},
 					},
@@ -565,8 +575,8 @@ func TestReplayLoadedSession_RebuildsOutputAndConversation(t *testing.T) {
 	if !strings.Contains(m.output.Join(), "world") {
 		t.Fatalf("expected replayed assistant, got %q", m.output.Join())
 	}
-	if !strings.Contains(m.output.Join(), "Context compacted.") {
-		t.Fatalf("expected replayed compaction status, got %q", m.output.Join())
+	if !strings.Contains(m.output.Join(), "summary") {
+		t.Fatalf("expected replayed compaction transcript, got %q", m.output.Join())
 	}
 
 	messages := m.appState.GetMessages()
@@ -671,6 +681,8 @@ func TestHandleCompactionDone_StopsCompactionAndRefreshesOutput(t *testing.T) {
 	m.showSpinner = true
 	m.compactionCancel = func() {}
 	m.contextStatus = contextStatus{KnownWindow: true, Percent: 10}
+	m.streamHandler.Start(make(chan llm.StreamEvent), "Compacting...")
+	m.streamHandler.HandleChunk("compacted summary")
 
 	newM, cmd := m.handleCompactionDone()
 
@@ -680,8 +692,12 @@ func TestHandleCompactionDone_StopsCompactionAndRefreshesOutput(t *testing.T) {
 	if newM.compactionCancel != nil {
 		t.Fatal("expected compaction cancel func to be cleared")
 	}
-	if !strings.Contains(newM.output.Join(), "✓ Context compacted.") {
-		t.Fatalf("expected completion message, got %q", newM.output.Join())
+	if !strings.Contains(newM.output.Join(), "compacted summary") {
+		t.Fatalf("expected streamed compaction summary, got %q", newM.output.Join())
+	}
+	compacted := newM.appState.GetMessages()
+	if len(compacted) != 1 || compacted[0].Role != llm.RoleUser || compacted[0].Content != "compacted summary" {
+		t.Fatalf("expected compacted state to keep summary as single user message, got %#v", compacted)
 	}
 	if cmd != nil {
 		t.Fatal("expected nil cmd")

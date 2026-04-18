@@ -42,10 +42,7 @@ func (r *sessionReplay) applyEvent(event session.Event) {
 	case session.KindAssistantTurn:
 		r.applyAssistantTurn(event.AssistantTurn)
 	case session.KindCompactionApplied:
-		r.flushDone()
-		if event.CompactionApplied != nil {
-			addCompactionSuccessStatus(r.output, event.CompactionApplied.Status)
-		}
+		r.applyCompaction(event.CompactionApplied)
 	}
 }
 
@@ -54,7 +51,7 @@ func (r *sessionReplay) applyAssistantTurn(turn *session.AssistantTurnPayload) {
 		return
 	}
 
-	replayAssistantTurn(r.handler, turn)
+	replayTranscript(r.handler, turn.Transcript)
 
 	switch {
 	case turn.Interrupted:
@@ -63,6 +60,23 @@ func (r *sessionReplay) applyAssistantTurn(turn *session.AssistantTurnPayload) {
 		r.flushError(turn.Error)
 	default:
 		r.flushDone()
+	}
+}
+
+func (r *sessionReplay) applyCompaction(compaction *session.CompactionAppliedPayload) {
+	r.flushDone()
+	if compaction == nil {
+		return
+	}
+
+	if len(compaction.Transcript) > 0 {
+		replayTranscript(r.handler, compaction.Transcript)
+		r.flushDone()
+		return
+	}
+
+	if compaction.Status != "" {
+		addCompactionSuccessStatus(r.output, compaction.Status)
 	}
 }
 
@@ -100,12 +114,12 @@ func (r *sessionReplay) flushError(errText string) {
 	}
 }
 
-func replayAssistantTurn(handler *StreamHandler, turn *session.AssistantTurnPayload) {
-	if handler == nil || turn == nil {
+func replayTranscript(handler *StreamHandler, transcript []session.TranscriptItem) {
+	if handler == nil {
 		return
 	}
 
-	for _, item := range turn.Transcript {
+	for _, item := range transcript {
 		switch item.Kind {
 		case session.TranscriptItemText:
 			handler.HandleChunk(item.Content)

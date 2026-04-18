@@ -89,8 +89,9 @@ type DiffPayload struct {
 }
 
 type CompactionAppliedPayload struct {
-	Status   string        `json:"status"`
-	Messages []llm.Message `json:"messages"`
+	Status     string           `json:"status"`
+	Transcript []TranscriptItem `json:"transcript,omitempty"`
+	Messages   []llm.Message    `json:"messages"`
 }
 
 type Summary struct {

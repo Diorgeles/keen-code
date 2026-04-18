@@ -61,15 +61,16 @@ func (s *replSessionState) appendAssistantTurn(
 	return s.store.Append(s.current, buildAssistantTurnEvent(segments, message, interrupted, errText))
 }
 
-func (s *replSessionState) appendCompaction(messages []llm.Message, status string) error {
+func (s *replSessionState) appendCompaction(segments []streamSegment, messages []llm.Message, status string) error {
 	if s == nil || s.current == nil {
 		return nil
 	}
 	return s.store.Append(s.current, session.Event{
 		Kind: session.KindCompactionApplied,
 		CompactionApplied: &session.CompactionAppliedPayload{
-			Status:   status,
-			Messages: cloneLLMMessages(messages),
+			Status:     status,
+			Transcript: buildAssistantTurnTranscript(segments),
+			Messages:   cloneLLMMessages(messages),
 		},
 	})
 }

@@ -2,7 +2,6 @@ package repl
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -63,19 +62,18 @@ func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig) (
 	return s.llmClient.StreamChat(ctx, messages, s.toolRegistry)
 }
 
-func (s *AppState) Compact(ctx context.Context, cfg *config.ResolvedConfig, extraPrompt string) error {
+func (s *AppState) buildCompactionRequest(cfg *config.ResolvedConfig, extraPrompt string) ([]llm.Message, error) {
 	if len(s.messages) == 0 {
-		return nil
+		return nil, nil
 	}
 	if s.llmClient == nil {
-		return fmt.Errorf("LLM client not initialized")
+		return nil, fmt.Errorf("LLM client not initialized")
 	}
 	if cfg == nil || cfg.APIKey == "" || cfg.Model == "" {
-		return fmt.Errorf("LLM client not initialized")
+		return nil, fmt.Errorf("LLM client not initialized")
 	}
 
 	snapshot := s.GetMessages()
-
 	requestMessages := make([]llm.Message, 0, len(snapshot)+2)
 	requestMessages = append(requestMessages, llm.Message{
 		Role:    llm.RoleSystem,
@@ -86,43 +84,27 @@ func (s *AppState) Compact(ctx context.Context, cfg *config.ResolvedConfig, extr
 		Role:    llm.RoleUser,
 		Content: compactionUserInstruction,
 	})
+	return requestMessages, nil
+}
 
-	eventCh, err := s.llmClient.StreamChat(ctx, requestMessages, nil)
-	if err != nil {
-		return err
+func (s *AppState) StreamCompact(ctx context.Context, cfg *config.ResolvedConfig, extraPrompt string) (<-chan llm.StreamEvent, error) {
+	requestMessages, err := s.buildCompactionRequest(cfg, extraPrompt)
+	if err != nil || requestMessages == nil {
+		return nil, err
 	}
-	if eventCh == nil {
-		return fmt.Errorf("compaction stream unavailable")
-	}
+	return s.llmClient.StreamChat(ctx, requestMessages, nil)
+}
 
-	var summary strings.Builder
-	for event := range eventCh {
-		switch event.Type {
-		case llm.StreamEventTypeChunk:
-			summary.WriteString(event.Content)
-		case llm.StreamEventTypeError:
-			if event.Error != nil {
-				return event.Error
-			}
-			return fmt.Errorf("compaction failed")
-		case llm.StreamEventTypeDone:
-			compacted := strings.TrimSpace(summary.String())
-			if compacted == "" {
-				return fmt.Errorf("compaction returned empty summary")
-			}
-			s.messages = []llm.Message{{
-				Role:    llm.RoleUser,
-				Content: compacted,
-			}}
-			return nil
-		}
+func (s *AppState) ApplyCompaction(summary string) error {
+	compacted := strings.TrimSpace(summary)
+	if compacted == "" {
+		return fmt.Errorf("compaction returned empty summary")
 	}
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	return errors.New("compaction ended without completion")
+	s.messages = []llm.Message{{
+		Role:    llm.RoleUser,
+		Content: compacted,
+	}}
+	return nil
 }
 
 func (s *AppState) IsClientReady(cfg *config.ResolvedConfig) bool {

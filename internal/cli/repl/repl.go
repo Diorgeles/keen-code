@@ -2,7 +2,6 @@ package repl
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -434,25 +433,34 @@ func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	eventCh, err := m.appState.StreamCompact(ctx, m.ctx.cfg, extraPrompt)
+	if err != nil {
+		cancel()
+		m.output.AddError(err.Error(), errorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+	if eventCh == nil {
+		cancel()
+		m.output.AddError("compaction stream unavailable", errorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
 	m.compactionCancel = cancel
 	m.isCompacting = true
 	m.showSpinner = true
 	m.spinner.Spinner = nextLoadingSpinner()
 	m.loadingText = "Compacting..."
+	m.streamHandler.Start(eventCh, m.loadingText)
 	m.userScrolled = false
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 
-	runCompaction := func() tea.Msg {
-		err := m.appState.Compact(ctx, m.ctx.cfg, extraPrompt)
-		if err != nil {
-			return compactionErrMsg{err: err}
-		}
-		return compactionDoneMsg{}
-	}
-
-	return *m, tea.Batch(m.spinner.Tick, runCompaction)
+	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
 }
 
 func (m *replModel) startStreamContext() context.Context {
@@ -845,40 +853,6 @@ func (m *replModel) handleClear() replModel {
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m
-}
-
-func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
-	m.isCompacting = false
-	m.showSpinner = false
-	m.compactionCancel = nil
-	m.refreshContextStatus(false)
-	addCompactionSuccessStatus(m.output, "Context compacted.")
-	if err := m.sessions.appendCompaction(m.appState.GetMessages(), "Context compacted."); err != nil {
-		m.handleSessionPersistenceError(err)
-	}
-	m.adjustTextareaHeight()
-	m.updateViewportContent()
-	m.viewport.GotoBottom()
-	return *m, nil
-}
-
-func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
-	m.isCompacting = false
-	m.showSpinner = false
-	m.compactionCancel = nil
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			addCompactionCancelledStatus(m.output, "Compaction cancelled.")
-		} else {
-			status := "Compaction failed: " + err.Error()
-			addCompactionErrorStatus(m.output, status)
-		}
-	}
-	m.adjustTextareaHeight()
-	m.refreshContextStatus(false)
-	m.updateViewportContent()
-	m.viewport.GotoBottom()
-	return *m, nil
 }
 
 func (m *replModel) updateLLMClient() error {
