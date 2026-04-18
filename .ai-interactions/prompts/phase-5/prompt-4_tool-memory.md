@@ -30,3 +30,20 @@ Let's create an implementation plan for this feature based on the PRD. Save it i
 1. We can simplify the design even further. Just emit the <keen_memory> blocks, and filter them out in REPL.  That's it. Since it's part of the conversation, it naturally gets into the context.
 2. Update the plan to reflect the simplified design.
 3. We have a bug. If <keen_memory> tag appears somewhere in the agent's message and not intended as tool memory, REPL still strips it.
+4. `Right now, we are using <keen_memory> to emit tool memory from LLM in its turn for the whole turn so that the memory can be retained for later turns. The problem with this approach is that it is behaving very bad whenever any part of the LLM messages have <keen_memory> tag.
+5. Where does it happen:  Persistence treats it as memory only when it is a dedicated trailing block
+6. We should go for the long-term reliable solution. The one you proposed, explain more.
+7. How can we deterministically create summary for tool usages, given that we need to be careful to retain the most important detail concisely?
+8. This is too complex.
+9. There can be many many tool calls, no?
+10. Should we rather only retain memory for write_file, edit_file, and bash tool? Other tools are read-only, model can use them again if needed without side-effects.
+11. Figuring out what bash facts to store will be complex. There can be so many different bash commands. I am thinking to leverage the \isDangerous` argument. If LLM marks a command as `isDangerous`, we can store it in the TurnMemory.`
+12. Okay so based on our discussion, this is what we want to retain:
+    - After every turn, we will create a tool memory object for the turn
+    - The object will have all the written or edited files, deduplicated in the turn
+    - It will also have bash command that failed with exit_code != 0
+    - Bash commands will also have the associated exit_code retained, but not the output
+    - We will store the TurnMemory in the session history in AppState.messages
+    - While converting internal Message objects to OpenAI or Genkit messages, we will put it as a part of the assistant message content
+What do you think of these requirements?
+13. Ok now let's create an implementation plan and save it in .ai-interactions/outputs/phase-5 as output-4_tool-memory-redesign.md

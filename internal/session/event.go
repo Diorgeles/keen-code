@@ -50,6 +50,7 @@ const (
 type AssistantTurnPayload struct {
 	Transcript  []TranscriptItem `json:"transcript,omitempty"`
 	Message     string           `json:"message,omitempty"`
+	TurnMemory  *llm.TurnMemory  `json:"turn_memory,omitempty"`
 	Interrupted bool             `json:"interrupted,omitempty"`
 	Error       string           `json:"error,omitempty"`
 }
@@ -105,7 +106,5 @@ type Summary struct {
 }
 
 func cloneMessages(messages []llm.Message) []llm.Message {
-	result := make([]llm.Message, len(messages))
-	copy(result, messages)
-	return result
+	return llm.CloneMessages(messages)
 }

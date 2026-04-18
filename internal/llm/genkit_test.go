@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"iter"
+	"strings"
 	"testing"
 
 	"github.com/firebase/genkit/go/ai"
@@ -214,6 +215,25 @@ func TestGenkitClient_StreamChat_MultipleMessages(t *testing.T) {
 
 	if !doneReceived {
 		t.Error("expected done event")
+	}
+}
+
+func TestToGenkitMessages_RendersTurnMemoryForAssistant(t *testing.T) {
+	messages := toGenkitMessages([]Message{
+		{
+			Role:    RoleAssistant,
+			Content: "done",
+			TurnMemory: &TurnMemory{
+				FilesChanged: []string{"a.go"},
+			},
+		},
+	})
+
+	if len(messages) != 1 || len(messages[0].Content) != 1 {
+		t.Fatalf("unexpected genkit messages %#v", messages)
+	}
+	if !strings.Contains(messages[0].Content[0].Text, "Tool memory:") || !strings.Contains(messages[0].Content[0].Text, "Files changed: a.go") {
+		t.Fatalf("expected rendered turn memory in Genkit payload, got %q", messages[0].Content[0].Text)
 	}
 }
 

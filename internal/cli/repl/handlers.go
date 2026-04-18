@@ -2,6 +2,7 @@ package repl
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 
@@ -49,14 +50,18 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 	}
 	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
-	rawResponse := m.streamHandler.GetRawResponse()
 	m.showSpinner = false
 	m.clearStreamCancel()
 	m.adjustTextareaHeight()
-	responseLines, _ := m.streamHandler.HandleDone()
-	m.appState.AddMessage(llm.RoleAssistant, rawResponse)
-	m.logKeenMemory("agent turn completed", rawResponse)
-	if err := m.sessions.appendAssistantTurn(segments, rawResponse, false, ""); err != nil {
+	responseLines, response := m.streamHandler.HandleDone()
+	assistantMessage := llm.Message{
+		Role:       llm.RoleAssistant,
+		Content:    response,
+		TurnMemory: m.consumeTurnMemory(),
+	}
+	m.appState.AppendMessage(assistantMessage)
+	// m.logAppStateMessages("assistant_turn_completed")
+	if err := m.sessions.appendAssistantTurn(segments, assistantMessage, false, ""); err != nil {
 		m.handleSessionPersistenceError(err)
 	}
 	m.refreshContextStatus(false)
@@ -79,9 +84,10 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	m.showSpinner = false
 	m.clearStreamCancel()
+	m.clearTurnMemory()
 	m.adjustTextareaHeight()
 	pendingLines, errMsg := m.streamHandler.HandleError(err)
-	if persistErr := m.sessions.appendAssistantTurn(segments, "", false, errMsg); persistErr != nil {
+	if persistErr := m.sessions.appendAssistantTurn(segments, llm.Message{}, false, errMsg); persistErr != nil {
 		m.handleSessionPersistenceError(persistErr)
 	}
 	for _, line := range pendingLines {
@@ -170,6 +176,7 @@ func (m *replModel) handleToolStart(toolCall *llm.ToolCall) (replModel, tea.Cmd)
 }
 
 func (m *replModel) handleToolEnd(toolCall *llm.ToolCall) (replModel, tea.Cmd) {
+	m.recordToolMemory(toolCall)
 	if toolCall.Name == "bash" {
 		m.streamHandler.HandleBashEnd(toolCall)
 	} else {
@@ -314,12 +321,19 @@ func (m *replModel) interruptStream(message string) {
 	interruptedMessage := ""
 	if partialResponse != "" {
 		interruptedMessage = partialResponse + "\n\n[Response interrupted by user]"
-		m.appState.AddMessage(llm.RoleAssistant, interruptedMessage)
-		m.logKeenMemory("agent turn interrupted", interruptedMessage)
+		m.appState.AppendMessage(llm.Message{
+			Role:    llm.RoleAssistant,
+			Content: interruptedMessage,
+		})
+		// m.logAppStateMessages("assistant_turn_interrupted")
 	}
-	if err := m.sessions.appendAssistantTurn(segments, interruptedMessage, true, ""); err != nil {
+	if err := m.sessions.appendAssistantTurn(segments, llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: interruptedMessage,
+	}, true, ""); err != nil {
 		m.handleSessionPersistenceError(err)
 	}
+	m.clearTurnMemory()
 
 	for _, line := range m.streamHandler.HandleInterrupt() {
 		m.output.AddLine(line)
@@ -329,6 +343,20 @@ func (m *replModel) interruptStream(message string) {
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
+}
+
+func (m *replModel) logAppStateMessages(reason string) {
+	if m == nil || m.appState == nil {
+		return
+	}
+
+	payload, err := json.MarshalIndent(m.appState.GetMessages(), "", "  ")
+	if err != nil {
+		slog.Debug("AppState messages", "reason", reason, "marshal_error", err.Error())
+		return
+	}
+
+	slog.Debug("AppState messages", "reason", reason, "messages", string(payload))
 }
 
 func (m *replModel) handleSessionPickerKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
@@ -365,20 +393,6 @@ func (m *replModel) handleSessionPickerKeyMsg(msg tea.Msg) (replModel, tea.Cmd) 
 	}
 
 	return *m, nil
-}
-
-func (m *replModel) logKeenMemory(reason string, rawResponse string) {
-	if m == nil {
-		return
-	}
-
-	memory, ok := extractTrailingToolMemory(rawResponse)
-	if !ok {
-		slog.Debug("Keen memory", "reason", reason, "present", false)
-		return
-	}
-
-	slog.Debug("Keen memory", "reason", reason, "present", true, "memory", memory)
 }
 
 func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.Cmd) {

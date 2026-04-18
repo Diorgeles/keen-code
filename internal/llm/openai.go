@@ -93,14 +93,15 @@ func openAICompatibleBaseURL(provider Provider) (string, error) {
 func toOpenAIMessages(messages []Message) []openai.ChatCompletionMessageParamUnion {
 	result := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
 	for _, m := range messages {
+		content := FormatMessageForProvider(m)
 		switch m.Role {
 		case RoleSystem:
-			result = append(result, openai.SystemMessage(m.Content))
+			result = append(result, openai.SystemMessage(content))
 		case RoleUser:
-			result = append(result, openai.UserMessage(m.Content))
+			result = append(result, openai.UserMessage(content))
 		case RoleAssistant:
 			am := openai.ChatCompletionAssistantMessageParam{}
-			am.Content.OfString = openai.String(m.Content)
+			am.Content.OfString = openai.String(content)
 			result = append(result, openai.ChatCompletionMessageParamUnion{
 				OfAssistant: &am,
 			})
@@ -270,6 +271,9 @@ func (c *OpenAICompatibleClient) StreamChat(
 		defer close(eventCh)
 
 		oaiMessages := toOpenAIMessages(messages)
+		if prettyJSON, err := json.MarshalIndent(oaiMessages, "", "  "); err == nil {
+			slog.Debug("OpenAI messages", "messages", string(prettyJSON))
+		}
 		oaiTools := toOpenAITools(toolRegistry)
 
 		for range maxToolTurns {

@@ -52,7 +52,7 @@ func (g *Guard) CheckPath(path string, operation string) Permission {
 
 	resolved, err := g.ResolvePath(path)
 	if err != nil {
-		slog.Info("path resolution failed", "path", path, "error", err)
+		slog.Debug("path resolution failed", "path", path, "error", err)
 		return PermissionDenied
 	}
 

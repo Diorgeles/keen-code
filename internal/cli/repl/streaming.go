@@ -19,8 +19,6 @@ type StreamHandler struct {
 	workingDir      string
 	mdRenderer      *MarkdownRenderer
 	segments        []streamSegment
-	parserBuffer    string
-	inToolMemory    bool
 }
 
 type streamSegmentType string
@@ -48,11 +46,6 @@ type streamSegment struct {
 	diffLines        []tools.EditDiffLine
 }
 
-const (
-	toolMemoryOpenTag  = "<keen_memory>"
-	toolMemoryCloseTag = "</keen_memory>"
-)
-
 func NewStreamHandler(mdRenderer *MarkdownRenderer) *StreamHandler {
 	return &StreamHandler{
 		mdRenderer: mdRenderer,
@@ -68,8 +61,6 @@ func (sh *StreamHandler) Start(eventCh <-chan llm.StreamEvent, loadingText strin
 	sh.loadingText = loadingText
 	sh.lastWidth = 0
 	sh.segments = make([]streamSegment, 0)
-	sh.parserBuffer = ""
-	sh.inToolMemory = false
 }
 
 func (sh *StreamHandler) IsActive() bool {
@@ -98,9 +89,7 @@ func (sh *StreamHandler) HasContent() bool {
 
 func (sh *StreamHandler) HandleChunk(chunk string) {
 	sh.rawResponse += chunk
-	if visible := sh.consumeAssistantChunk(chunk, false); visible != "" {
-		sh.appendAssistantVisible(visible)
-	}
+	sh.appendAssistantVisible(chunk)
 }
 
 func (sh *StreamHandler) HandleReasoningChunk(chunk string) {
@@ -260,8 +249,6 @@ func (sh *StreamHandler) resetState() {
 	sh.eventCh = nil
 	sh.loadingText = ""
 	sh.segments = make([]streamSegment, 0)
-	sh.parserBuffer = ""
-	sh.inToolMemory = false
 }
 
 func (sh *StreamHandler) appendAssistantVisible(chunk string) {
@@ -280,116 +267,6 @@ func (sh *StreamHandler) appendAssistantVisible(chunk string) {
 }
 
 func (sh *StreamHandler) finalizeAssistantContent() {
-	if visible := sh.consumeAssistantChunk("", true); visible != "" {
-		sh.appendAssistantVisible(visible)
-	}
-}
-
-func (sh *StreamHandler) consumeAssistantChunk(chunk string, final bool) string {
-	sh.parserBuffer += chunk
-
-	var visible strings.Builder
-
-	for {
-		if sh.inToolMemory {
-			idx := strings.Index(sh.parserBuffer, toolMemoryCloseTag)
-			if idx == -1 {
-				if final {
-					sh.parserBuffer = ""
-				}
-				return visible.String()
-			}
-			sh.parserBuffer = sh.parserBuffer[idx+len(toolMemoryCloseTag):]
-			sh.inToolMemory = false
-			continue
-		}
-
-		idx := strings.Index(sh.parserBuffer, toolMemoryOpenTag)
-		if idx != -1 {
-			visible.WriteString(sh.parserBuffer[:idx])
-			sh.parserBuffer = sh.parserBuffer[idx+len(toolMemoryOpenTag):]
-			sh.inToolMemory = true
-			continue
-		}
-
-		if final {
-			visible.WriteString(sh.parserBuffer)
-			sh.parserBuffer = ""
-			return visible.String()
-		}
-
-		keep := trailingPrefixLen(sh.parserBuffer, toolMemoryOpenTag)
-		if keep > 0 {
-			visible.WriteString(sh.parserBuffer[:len(sh.parserBuffer)-keep])
-			sh.parserBuffer = sh.parserBuffer[len(sh.parserBuffer)-keep:]
-		} else {
-			visible.WriteString(sh.parserBuffer)
-			sh.parserBuffer = ""
-		}
-		return visible.String()
-	}
-}
-
-func trailingPrefixLen(buffer string, target string) int {
-	maxLen := min(len(target)-1, len(buffer))
-
-	for n := maxLen; n > 0; n-- {
-		if strings.HasSuffix(buffer, target[:n]) {
-			return n
-		}
-	}
-
-	return 0
-}
-
-func extractTrailingToolMemory(raw string) (string, bool) {
-	memory, malformed, found := trailingToolMemory(raw)
-	if !found {
-		return "", false
-	}
-	if malformed {
-		return strings.TrimSpace(memory), true
-	}
-	return strings.TrimSpace(memory), true
-}
-
-func trailingToolMemory(raw string) (memory string, malformed bool, found bool) {
-	closeIdx := strings.LastIndex(raw, toolMemoryCloseTag)
-	if closeIdx == -1 {
-		openIdx := strings.LastIndex(raw, toolMemoryOpenTag)
-		if openIdx == -1 || !isDedicatedTrailingMemoryStart(raw, openIdx) {
-			return "", false, false
-		}
-		return raw[openIdx+len(toolMemoryOpenTag):], true, true
-	}
-
-	afterClose := raw[closeIdx+len(toolMemoryCloseTag):]
-	if strings.TrimSpace(afterClose) != "" {
-		return "", false, false
-	}
-
-	openIdx := strings.LastIndex(raw[:closeIdx], toolMemoryOpenTag)
-	if openIdx == -1 {
-		return "", false, false
-	}
-
-	if !isDedicatedTrailingMemoryStart(raw, openIdx) {
-		return "", false, false
-	}
-
-	return raw[openIdx+len(toolMemoryOpenTag) : closeIdx], false, true
-}
-
-func isDedicatedTrailingMemoryStart(raw string, openIdx int) bool {
-	if openIdx < 0 || openIdx > len(raw) {
-		return false
-	}
-	if openIdx == 0 {
-		return true
-	}
-
-	prev := raw[openIdx-1]
-	return prev == '\n' || prev == '\r'
 }
 
 func (sh *StreamHandler) View(width int) string {

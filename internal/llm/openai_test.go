@@ -219,6 +219,26 @@ func TestOpenAICompatibleClient_StreamChat_InjectsReasoningContentAcrossToolTurn
 	}
 }
 
+func TestToOpenAIMessages_RendersTurnMemoryForAssistant(t *testing.T) {
+	messages := toOpenAIMessages([]Message{
+		{
+			Role:    RoleAssistant,
+			Content: "done",
+			TurnMemory: &TurnMemory{
+				FilesChanged: []string{"a.go"},
+			},
+		},
+	})
+
+	body, err := json.Marshal(messages)
+	if err != nil {
+		t.Fatalf("marshal messages: %v", err)
+	}
+	if !strings.Contains(string(body), "Tool memory:") || !strings.Contains(string(body), "Files changed: a.go") {
+		t.Fatalf("expected rendered turn memory in OpenAI message payload, got %s", string(body))
+	}
+}
+
 func TestOpenAICompatibleClient_buildAssistantMessage_AttachesReasoningWithoutToolCalls(t *testing.T) {
 	client := &OpenAICompatibleClient{}
 

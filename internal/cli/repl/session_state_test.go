@@ -42,7 +42,13 @@ func TestBuildAssistantTurnEvent_MixedTranscript(t *testing.T) {
 		{kind: segmentDiff, diffLines: diffLines},
 	}
 
-	event := buildAssistantTurnEvent(segments, "final answer", false, "")
+	event := buildAssistantTurnEvent(segments, llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: "final answer",
+		TurnMemory: &llm.TurnMemory{
+			FilesChanged: []string{"a.go"},
+		},
+	}, false, "")
 
 	if event.Kind != session.KindAssistantTurn {
 		t.Fatalf("expected assistant turn event, got %q", event.Kind)
@@ -52,6 +58,9 @@ func TestBuildAssistantTurnEvent_MixedTranscript(t *testing.T) {
 	}
 	if event.AssistantTurn.Message != "final answer" {
 		t.Fatalf("unexpected assistant message %q", event.AssistantTurn.Message)
+	}
+	if event.AssistantTurn.TurnMemory == nil || len(event.AssistantTurn.TurnMemory.FilesChanged) != 1 || event.AssistantTurn.TurnMemory.FilesChanged[0] != "a.go" {
+		t.Fatalf("expected turn memory to be preserved, got %#v", event.AssistantTurn.TurnMemory)
 	}
 	if len(event.AssistantTurn.Transcript) != 6 {
 		t.Fatalf("expected 6 transcript items, got %d", len(event.AssistantTurn.Transcript))

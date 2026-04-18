@@ -230,3 +230,25 @@ func TestOpenAIResponsesClient_StreamChat_ErrorEventEmptyMessage(t *testing.T) {
 		t.Fatalf("expected default error message, got %q", errorMsg)
 	}
 }
+
+func TestToOpenAIResponseInput_RendersTurnMemoryForAssistant(t *testing.T) {
+	input := toOpenAIResponseInput([]Message{
+		{
+			Role:    RoleAssistant,
+			Content: "done",
+			TurnMemory: &TurnMemory{
+				FailedBash: []FailedBashCommand{
+					{Command: "go test ./...", ExitCode: 1},
+				},
+			},
+		},
+	})
+
+	body, err := json.Marshal(input)
+	if err != nil {
+		t.Fatalf("marshal input: %v", err)
+	}
+	if !strings.Contains(string(body), "Tool memory:") || !strings.Contains(string(body), "Failed bash: go test ./... (exit 1)") {
+		t.Fatalf("expected rendered turn memory in Responses payload, got %s", string(body))
+	}
+}

@@ -95,10 +95,11 @@ func toGenkitRole(role Role) ai.Role {
 func toGenkitMessages(messages []Message) []*ai.Message {
 	aiMessages := make([]*ai.Message, len(messages))
 	for i, m := range messages {
+		content := FormatMessageForProvider(m)
 		aiMessages[i] = &ai.Message{
 			Role: toGenkitRole(m.Role),
 			Content: []*ai.Part{
-				ai.NewTextPart(m.Content),
+				ai.NewTextPart(content),
 			},
 		}
 	}

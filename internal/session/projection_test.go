@@ -15,7 +15,10 @@ func TestBuildConversation_AppendsAssistantTurnMessages(t *testing.T) {
 		{
 			Kind: KindAssistantTurn,
 			AssistantTurn: &AssistantTurnPayload{
-				Message:     "assistant",
+				Message: "assistant",
+				TurnMemory: &llm.TurnMemory{
+					FilesChanged: []string{"a.go"},
+				},
 				Interrupted: true,
 				Error:       "ignored for conversation projection",
 			},
@@ -31,6 +34,9 @@ func TestBuildConversation_AppendsAssistantTurnMessages(t *testing.T) {
 	}
 	if got[1].Role != llm.RoleAssistant || got[1].Content != "assistant" {
 		t.Fatalf("unexpected assistant message: %#v", got[1])
+	}
+	if got[1].TurnMemory == nil || len(got[1].TurnMemory.FilesChanged) != 1 || got[1].TurnMemory.FilesChanged[0] != "a.go" {
+		t.Fatalf("expected assistant turn memory to be preserved, got %#v", got[1].TurnMemory)
 	}
 }
 

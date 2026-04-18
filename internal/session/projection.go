@@ -17,8 +17,9 @@ func BuildConversation(events []Event) []llm.Message {
 		case KindAssistantTurn:
 			if event.AssistantTurn != nil && event.AssistantTurn.Message != "" {
 				messages = append(messages, llm.Message{
-					Role:    llm.RoleAssistant,
-					Content: event.AssistantTurn.Message,
+					Role:       llm.RoleAssistant,
+					Content:    event.AssistantTurn.Message,
+					TurnMemory: llm.CloneTurnMemory(event.AssistantTurn.TurnMemory),
 				})
 			}
 		case KindCompactionApplied:

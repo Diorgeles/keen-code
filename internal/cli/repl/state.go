@@ -29,16 +29,18 @@ func NewAppState(client llm.LLMClient, workingDir string) *AppState {
 }
 
 func (s *AppState) AddMessage(role llm.Role, content string) {
-	s.messages = append(s.messages, llm.Message{
+	s.AppendMessage(llm.Message{
 		Role:    role,
 		Content: content,
 	})
 }
 
+func (s *AppState) AppendMessage(message llm.Message) {
+	s.messages = append(s.messages, llm.CloneMessage(message))
+}
+
 func (s *AppState) GetMessages() []llm.Message {
-	result := make([]llm.Message, len(s.messages))
-	copy(result, s.messages)
-	return result
+	return llm.CloneMessages(s.messages)
 }
 
 func (s *AppState) ClearMessages() {
@@ -46,8 +48,7 @@ func (s *AppState) ClearMessages() {
 }
 
 func (s *AppState) ReplaceMessages(messages []llm.Message) {
-	s.messages = make([]llm.Message, len(messages))
-	copy(s.messages, messages)
+	s.messages = llm.CloneMessages(messages)
 }
 
 func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig) (<-chan llm.StreamEvent, error) {

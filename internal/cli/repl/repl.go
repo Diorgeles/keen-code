@@ -130,6 +130,7 @@ type replModel struct {
 	loadingText         string
 	userScrolled        bool
 	streamCancel        context.CancelFunc
+	turnMemory          *turnMemoryAccumulator
 	isCompacting        bool
 	compactionCancel    context.CancelFunc
 	contextStatus       contextStatus
@@ -417,6 +418,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	m.showSpinner = true
 	m.spinner.Spinner = nextLoadingSpinner()
 	m.loadingText = nextLoadingText()
+	m.startAssistantTurnMemory()
 	m.streamHandler.Start(eventCh, m.loadingText)
 	m.textarea.Reset()
 	m.userScrolled = false
@@ -454,6 +456,7 @@ func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
 	m.showSpinner = true
 	m.spinner.Spinner = nextLoadingSpinner()
 	m.loadingText = "Compacting..."
+	m.clearTurnMemory()
 	m.streamHandler.Start(eventCh, m.loadingText)
 	m.userScrolled = false
 	m.adjustTextareaHeight()

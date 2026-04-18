@@ -93,14 +93,24 @@ func TestAppState_GetMessages(t *testing.T) {
 
 func TestAppState_GetMessages_ReturnsCopy(t *testing.T) {
 	state := NewAppState(nil, t.TempDir())
-	state.AddMessage(llm.RoleUser, "Original")
+	state.AppendMessage(llm.Message{
+		Role:    llm.RoleAssistant,
+		Content: "Original",
+		TurnMemory: &llm.TurnMemory{
+			FilesChanged: []string{"a.go"},
+		},
+	})
 
 	messages := state.GetMessages()
 	messages[0].Content = "Modified"
+	messages[0].TurnMemory.FilesChanged[0] = "b.go"
 
 	original := state.GetMessages()
 	if original[0].Content != "Original" {
 		t.Error("GetMessages should return a copy, but original was modified")
+	}
+	if original[0].TurnMemory.FilesChanged[0] != "a.go" {
+		t.Error("GetMessages should deep-clone turn memory, but original was modified")
 	}
 }
 
@@ -346,9 +356,6 @@ func TestAppState_StreamCompactBuildsCompactionRequest(t *testing.T) {
 	}
 	if !strings.Contains(capturedMessages[0].Content, "Keep business logic details") {
 		t.Fatalf("expected extra prompt in system prompt, got %q", capturedMessages[0].Content)
-	}
-	if !strings.Contains(capturedMessages[0].Content, "<keen_memory>") {
-		t.Fatalf("expected compaction prompt to mention keen_memory blocks, got %q", capturedMessages[0].Content)
 	}
 	for i, msg := range original {
 		got := capturedMessages[i+1]

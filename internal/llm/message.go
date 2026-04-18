@@ -11,8 +11,52 @@ const (
 )
 
 type Message struct {
-	Role    Role
-	Content string
+	Role       Role
+	Content    string
+	TurnMemory *TurnMemory
+}
+
+type TurnMemory struct {
+	FilesChanged []string            `json:"files_changed,omitempty"`
+	FailedBash   []FailedBashCommand `json:"failed_bash,omitempty"`
+}
+
+type FailedBashCommand struct {
+	Command  string `json:"command"`
+	ExitCode int    `json:"exit_code"`
+}
+
+func CloneMessage(message Message) Message {
+	cloned := message
+	cloned.TurnMemory = CloneTurnMemory(message.TurnMemory)
+	return cloned
+}
+
+func CloneMessages(messages []Message) []Message {
+	result := make([]Message, len(messages))
+	for i, message := range messages {
+		result[i] = CloneMessage(message)
+	}
+	return result
+}
+
+func CloneTurnMemory(memory *TurnMemory) *TurnMemory {
+	if memory == nil {
+		return nil
+	}
+
+	cloned := &TurnMemory{}
+	if len(memory.FilesChanged) > 0 {
+		cloned.FilesChanged = append([]string(nil), memory.FilesChanged...)
+	}
+	if len(memory.FailedBash) > 0 {
+		cloned.FailedBash = append([]FailedBashCommand(nil), memory.FailedBash...)
+	}
+	return cloned
+}
+
+func (m *TurnMemory) IsEmpty() bool {
+	return m == nil || (len(m.FilesChanged) == 0 && len(m.FailedBash) == 0)
 }
 
 type StreamEventType string

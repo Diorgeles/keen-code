@@ -51,7 +51,7 @@ func (s *replSessionState) appendUserMessage(content string) error {
 
 func (s *replSessionState) appendAssistantTurn(
 	segments []streamSegment,
-	message string,
+	message llm.Message,
 	interrupted bool,
 	errText string,
 ) error {
@@ -105,7 +105,7 @@ func (s *replSessionState) load(summary session.Summary) (*session.LoadedSession
 
 func buildAssistantTurnEvent(
 	segments []streamSegment,
-	message string,
+	message llm.Message,
 	interrupted bool,
 	errText string,
 ) session.Event {
@@ -113,7 +113,8 @@ func buildAssistantTurnEvent(
 		Kind: session.KindAssistantTurn,
 		AssistantTurn: &session.AssistantTurnPayload{
 			Transcript:  buildAssistantTurnTranscript(segments),
-			Message:     message,
+			Message:     message.Content,
+			TurnMemory:  llm.CloneTurnMemory(message.TurnMemory),
 			Interrupted: interrupted,
 			Error:       errText,
 		},
@@ -207,9 +208,7 @@ func cloneInput(input map[string]any) map[string]any {
 }
 
 func cloneLLMMessages(messages []llm.Message) []llm.Message {
-	result := make([]llm.Message, len(messages))
-	copy(result, messages)
-	return result
+	return llm.CloneMessages(messages)
 }
 
 func cloneStreamSegments(segments []streamSegment) []streamSegment {
