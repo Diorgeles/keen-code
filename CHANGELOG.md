@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-04-19
+
+### Added
+- Structured `TurnMemory` system to replace in-band XML tags for tracking durable tool outcomes
+- `turnMemoryAccumulator` in REPL to automatically capture file changes and failed bash commands
+
+### Changed
+- Refactored LLM provider interface to deterministically append tool memory metadata
+- Simplified system and compaction prompts by removing manual memory tag instructions
+- Improved session persistence to support structured tool outcomes
+
+### Removed
+- Legacy `<keen_memory>` tag parsing and stripping logic
+
 ## [0.2.2] - 2026-04-17
 
 ### Added
@@ -95,7 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/mochow13/keen-code/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/mochow13/keen-code/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/mochow13/keen-code/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mochow13/keen-code/compare/v0.1.7...v0.2.0
