@@ -222,35 +222,42 @@ in request building (these providers have always-on reasoning).
 
 ## Step 4: Model selection — add `StepThinking`
 
-**File:** `internal/cli/repl/model_selection.go`
+**File:** `internal/cli/repl/widgets/model_selection.go`
 
 Current: `StepProvider → StepModel → StepAPIKey`
 New: `StepProvider → StepModel → StepThinking (if the selected model has registry-defined thinking efforts) → StepAPIKey`
 
 Changes:
-- Add `StepThinking` constant
-- Add fields to `Model`: `ThinkingCursor int`, `ThinkingOptions []string`, `SelectedThinking string`
-- After `StepModel` confirm: call `registry.GetModel(provider, model)` — if `SupportsThinkingEffort()` → build `ThinkingOptions` as `append([]string{"off"}, model.ThinkingEfforts...)` and go to `StepThinking`; else go to `StepAPIKey`
+- Add `StepThinking` constant to the existing `StepProvider / StepModel / StepAPIKey` enum
+- Add fields to `widgets.Model`: `ThinkingCursor int`, `ThinkingOptions []string`, `SelectedThinking string`
+- Update `handleKeyMsg()`:
+  - after `StepModel` confirm, call `registry.GetModel(provider, model)`
+  - if `SupportsThinkingEffort()` is true, build `ThinkingOptions` as `append([]string{"off"}, model.ThinkingEfforts...)` and advance to `StepThinking`
+  - otherwise continue directly to `StepAPIKey`
 - Initial selection logic:
   - if current saved `resolvedCfg.ThinkingEffort == ""`, preselect `off`
   - else if current saved `resolvedCfg.ThinkingEffort` is in `ThinkingOptions`, preselect it
   - else if `medium` is supported, preselect `medium`
   - else preselect `off`
-- Add `renderThinkingSelection()` view (same list-selector style as provider/model steps)
+- Add `renderThinkingSelection()` and route it from `ViewString()`
+- `handlePasteMsg()` remains API-key-only; no change needed for thinking selection
 - In `complete()`:
   - store the selected provider-native effort in `GlobalConfig` / `ResolvedConfig`
   - map UI choice `off` to `""`
   - if the chosen model does not support configurable effort, clear `ThinkingEffort` to `""` so stale incompatible values do not carry across model switches
+  - keep the existing `onComplete(...)` callback pattern; `repl.startModelSelection()` already reinitializes the LLM client through `updateLLMClient()`
 
 ---
 
 ## Step 5: `/thinking` command
 
-**File:** `internal/cli/repl/commands.go`
+**File:** `internal/cli/repl/commands/commands.go`
 
 ```go
 {"/thinking", "Change thinking effort for the current model"},
 ```
+
+This updates slash-command suggestions only. The help text is defined separately in `internal/cli/repl/repl.go`, so add `/thinking` to both places.
 
 **File:** `internal/cli/repl/repl.go`
 
@@ -313,9 +320,41 @@ No new message type or UI selection flow required.
 | `internal/llm/genkit.go` | Map `low|medium|high` to Gemini `ThinkingBudget`; omit config when effort is empty |
 | `internal/llm/openai_responses.go` | Set `params.Reasoning.Effort` from `low|medium|high|xhigh`; omit when effort is empty |
 | `internal/llm/openai.go` | Store field; no-op |
-| `internal/cli/repl/model_selection.go` | StepThinking in full `/model` flow using per-model option lists |
-| `internal/cli/repl/commands.go` | Register `/thinking` |
-| `internal/cli/repl/repl.go` | Handle `/thinking <effort>` against current model's option list; status display |
+| `internal/cli/repl/widgets/model_selection.go` | StepThinking in full `/model` flow using per-model option lists |
+| `internal/cli/repl/commands/commands.go` | Register `/thinking` for slash-command suggestions |
+| `internal/cli/repl/repl.go` | Handle `/thinking <effort>` against current model's option list; update help text and status display |
+
+---
+
+## Test Updates
+
+Because the REPL package is now split into subpackages, the test work should be split the same way instead of being treated as a single monolithic `repl` change:
+
+- `providers/loader_test.go`
+  - verify `thinking_efforts` load from YAML
+  - verify `GetModel(provider, model)` and `SupportsThinkingEffort()`
+- `internal/config/config_test.go` and `internal/config/loader_test.go`
+  - verify `ThinkingEffort` survives save/load
+  - verify `Resolve()` copies `ThinkingEffort`
+- `internal/llm/models_test.go`
+  - verify `ThinkingEffort` is threaded into the constructed client structs
+- `internal/llm/anthropic_test.go`
+  - verify `off`/empty disables thinking and restores `anthropicMaxTokens`
+  - verify `low|medium|high|max` set the expected Anthropics params
+- `internal/llm/openai_responses_test.go`
+  - verify non-empty effort populates `params.Reasoning`
+  - verify `xhigh` is passed as the raw string-backed enum value
+- `internal/llm/openai_test.go`
+  - verify OpenAI-compatible clients ignore `ThinkingEffort`
+- `internal/llm/genkit_test.go` or existing Genkit tests
+  - verify the Google client maps labels to budgets only when effort is non-empty
+- `internal/cli/repl/widgets/model_selection_test.go`
+  - add focused widget tests for `StepThinking` transitions, defaults, and persistence into `resolvedCfg/globalCfg`
+- `internal/cli/repl/repl_test.go`
+  - add `/thinking` command tests
+  - add `inputMetaView()` / `buildInitialScreen()` coverage for thinking display
+- `internal/cli/repl/widgets/suggestion_test.go`
+  - update command-count and command-order expectations for the extra `/thinking` slash command
 
 ---
 
@@ -379,3 +418,4 @@ ai.WithConfig(&genai.GenerateContentConfig{
 9. Cold start: quit and relaunch `keen` → `ThinkingEffort` still applied (proves root.go fix)
 10. Status line shows `thinking:max`, `thinking:xhigh`, etc. using the actual stored provider-native value
 11. `claude-haiku-4-5`: `/model` skips thinking step; `/thinking` shows error
+12. Slash suggestions (`/`) and `/help` both show `/thinking`
