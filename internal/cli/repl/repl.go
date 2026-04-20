@@ -259,7 +259,7 @@ func buildInitialScreen(ctx *replContext) []string {
 	}
 
 	colors := []string{
-		"#00F2FE", "#05E5FE", "#10D3FE", "#1ABFFE", "#25ACFE", "#4FACFE", "#6696FE", "#7C3AED",
+		"#9FA8DA", "#7986CB", "#5C6BC0", "#3F51B5", "#3949AB", "#303F9F", "#283593",
 	}
 
 	lines = append(lines, "")
@@ -799,7 +799,7 @@ func (m replModel) inputMetaView() string {
 	modelText := repltheme.MetaLabelStyle.Render("model:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model)
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
 		if modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
-			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render("thinking:") + repltheme.InfoValueStyle.Render(m.ctx.cfg.ThinkingEffort)
+			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render("thinking:") + " " + repltheme.HighlightStyle.Render(m.ctx.cfg.ThinkingEffort)
 		}
 	}
 	contextText := renderContextStatus(m.contextStatus)

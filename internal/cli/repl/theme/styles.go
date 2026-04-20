@@ -74,7 +74,7 @@ var (
 	InputRuleStyle = lipgloss.NewStyle().Foreground(PrimaryColor)
 
 	InfoLabelStyle = lipgloss.NewStyle().Foreground(MutedColor).Width(18)
-	InfoValueStyle = lipgloss.NewStyle().Foreground(TextSecondaryColor)
+	InfoValueStyle = lipgloss.NewStyle().Foreground(TextDimColor)
 
 	HelpCmdStyle   = lipgloss.NewStyle().Foreground(SecondaryColor).Bold(true).Width(12)
 	HelpDescStyle  = lipgloss.NewStyle().Foreground(TextSecondaryColor)
