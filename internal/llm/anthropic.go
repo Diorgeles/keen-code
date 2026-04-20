@@ -245,6 +245,9 @@ func (c *AnthropicClient) StreamChat(
 				Model:     c.model,
 				MaxTokens: anthropicMaxTokens,
 				Messages:  msgParams,
+				CacheControl: anthropic.CacheControlEphemeralParam{
+					TTL: anthropic.CacheControlEphemeralTTLTTL5m,
+				},
 				Thinking: anthropic.ThinkingConfigParamUnion{
 					OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
 				},
@@ -270,10 +273,8 @@ func (c *AnthropicClient) StreamChat(
 				return
 			}
 
-			// Append assistant message with all blocks (text + tool_use)
 			msgParams = append(msgParams, anthropic.NewAssistantMessage(assistantBlocks...))
 
-			// Execute tools and collect results
 			toolResultBlocks := c.executeTools(ctx, toolUses, toolRegistry, eventCh)
 			msgParams = append(msgParams, anthropic.NewUserMessage(toolResultBlocks...))
 		}

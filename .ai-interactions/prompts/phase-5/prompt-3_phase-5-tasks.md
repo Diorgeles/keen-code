@@ -35,4 +35,14 @@ Use the AskUserQuestion tool to clarify further requirements.
 ## Migrating to `anthropic-sdk-go`
 
 1. Currently, we are using genkit for anthropic models. Let's change that. We should use the official anthropic-sdk-go for those models. We already have the go module added to the project. But it's not the latest. We should migrate those models using the latest sdk.
-2. 
+2. It seems first chunk of thinking blocks are getting printed twice. Figure out why and fix it.
+
+## KV Cache
+1. We don't retain tool calls and their outputs beyond a single agent turn. For example, in internal/llm/openai.go, tool calls are apended to the openai messages within a single turn. But when the turn finishes, we don't retain the tool calls and outputs. Rather, we have only TurnMemory that's materliased at the end of each turn. Now the question is, how does it impact the KV cache, hence the cost?
+2. What if we enable prompt caching for anthropic?
+3. Looking at the code, where should we put the cache_control? Let's update the code accordingly.
+
+## Refactoring
+
+1. Repl package is full of files. How would you reorganise it? Save the plan in @.ai-interactions/outputs/phase-5/output-8_refactor.md
+2. How can we make sure we don't break anything while doing this?

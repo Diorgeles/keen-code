@@ -215,6 +215,7 @@ func TestAnthropicClient_StreamChat_StreamError(t *testing.T) {
 
 func TestAnthropicClient_StreamChat_ToolInvocation(t *testing.T) {
 	callCount := 0
+	var seenParams []anthropic.MessageNewParams
 
 	firstEvents := []anthropic.MessageStreamEventUnion{
 		makeTextDeltaEvent(0, "using tool"),
@@ -232,6 +233,7 @@ func TestAnthropicClient_StreamChat_ToolInvocation(t *testing.T) {
 	c := &AnthropicClient{model: "claude-3-haiku-20240307"}
 	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
 		callCount++
+		seenParams = append(seenParams, params)
 		if callCount == 1 {
 			return &mockAnthropicStream{events: firstEvents}
 		}
@@ -282,6 +284,14 @@ func TestAnthropicClient_StreamChat_ToolInvocation(t *testing.T) {
 	}
 	if callCount != 2 {
 		t.Errorf("expected 2 stream calls, got %d", callCount)
+	}
+	if len(seenParams) != 2 {
+		t.Fatalf("expected 2 captured params, got %d", len(seenParams))
+	}
+	for i, params := range seenParams {
+		if params.CacheControl.TTL != anthropic.CacheControlEphemeralTTLTTL5m {
+			t.Errorf("params %d: expected cache_control ttl 5m, got %q", i, params.CacheControl.TTL)
+		}
 	}
 	// "using tool" from first turn, "done" from second
 	if len(textChunks) != 2 {
