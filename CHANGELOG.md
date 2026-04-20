@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-21
+
+### Added
+- Configurable thinking effort selection in model setup and via the `/thinking` runtime command
+- Direct Anthropic SDK client with expanded Anthropic streaming and tool-loop test coverage
+- Refactored REPL helper packages for app state, output, permissions, theme, tooling, widgets, and streaming
+
+### Changed
+- Thread thinking effort configuration through OpenAI Responses, Anthropic, and Genkit clients
+- Added Anthropic prompt caching support in the REPL streaming path
+- Refreshed phase-5 design notes and removed stale scratch artifacts
+
 ## [0.2.3] - 2026-04-19
 
 ### Added
@@ -109,7 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mochow13/keen-code/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/mochow13/keen-code/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/mochow13/keen-code/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/mochow13/keen-code/compare/v0.2.0...v0.2.1
