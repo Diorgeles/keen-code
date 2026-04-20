@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -34,6 +35,7 @@ const (
 	resumeCommand   = "/resume"
 	clearCommand    = "/clear"
 	newCommand      = "/new"
+	thinkingCommand = "/thinking"
 
 	defaultWidth = 120
 	maxHeight    = 3
@@ -274,6 +276,11 @@ func buildInitialScreen(ctx *replContext) []string {
 	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Directory:")+" "+repltheme.InfoValueStyle.Render(displayDir))
 	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Provider:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.Provider))
 	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Model:")+" "+repltheme.HighlightStyle.Render(ctx.cfg.Model))
+	if ctx.cfg.ThinkingEffort != "" && ctx.registry != nil {
+		if modelMeta, ok := ctx.registry.GetModel(ctx.cfg.Provider, ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
+			lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Thinking:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.ThinkingEffort))
+		}
+	}
 	lines = append(lines, "")
 
 	tips := []string{
@@ -392,6 +399,11 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	if input == clearCommand || input == newCommand {
 		m.textarea.Reset()
 		return m.handleClear(), nil
+	}
+
+	if input == thinkingCommand || strings.HasPrefix(input, thinkingCommand+" ") {
+		m.textarea.Reset()
+		return m.handleThinkingCommand(input)
 	}
 
 	if input == compactCommand || strings.HasPrefix(input, compactCommand+" ") {
@@ -785,6 +797,11 @@ func (m replModel) inputMetaView() string {
 	}
 
 	modelText := repltheme.MetaLabelStyle.Render("model:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model)
+	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
+		if modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
+			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render("thinking:") + repltheme.InfoValueStyle.Render(m.ctx.cfg.ThinkingEffort)
+		}
+	}
 	contextText := renderContextStatus(m.contextStatus)
 	separator := repltheme.MetaLabelStyle.Render("·")
 	left := modelText + " " + separator + " " + contextText
@@ -843,6 +860,7 @@ func getHelpText() string {
 		{"/new", "Start a new session (also /clear)"},
 		{"/resume", "Open the session picker"},
 		{"/sessions", "List saved sessions for this directory"},
+		{"/thinking", "Change thinking effort for the current model"},
 		{"/exit", "Quit Keen"},
 	}
 
@@ -854,6 +872,57 @@ func getHelpText() string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
+	effort := strings.TrimSpace(strings.TrimPrefix(input, thinkingCommand))
+
+	modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model)
+	if !ok || !modelMeta.SupportsThinkingEffort() {
+		m.output.AddError("Current model does not support configurable thinking", repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	allowed := append([]string{"off"}, modelMeta.ThinkingEfforts...)
+	if !slices.Contains(allowed, effort) {
+		m.output.AddError("Usage: /thinking "+strings.Join(allowed, "|"), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	storedEffort := effort
+	if effort == "off" {
+		storedEffort = ""
+	}
+
+	m.ctx.cfg.ThinkingEffort = storedEffort
+	m.ctx.globalCfg.ThinkingEffort = storedEffort
+	if err := m.ctx.loader.Save(m.ctx.globalCfg); err != nil {
+		m.output.AddError("Failed to save config: "+err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	if err := m.updateLLMClient(); err != nil {
+		m.output.AddError("Failed to reinitialize LLM client: "+err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	display := effort
+	if display == "off" {
+		display = "off (disabled)"
+	}
+	m.output.AddStyledLine("  ✓ Thinking effort set to: "+display, repltheme.HighlightStyle)
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m, nil
 }
 
 func (m *replModel) handleClear() replModel {

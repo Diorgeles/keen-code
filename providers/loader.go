@@ -20,9 +20,14 @@ type Provider struct {
 }
 
 type Model struct {
-	ID            string `yaml:"id"`
-	Name          string `yaml:"name"`
-	ContextWindow int    `yaml:"context_window"`
+	ID              string   `yaml:"id"`
+	Name            string   `yaml:"name"`
+	ContextWindow   int      `yaml:"context_window"`
+	ThinkingEfforts []string `yaml:"thinking_efforts"`
+}
+
+func (m Model) SupportsThinkingEffort() bool {
+	return len(m.ThinkingEfforts) > 0
 }
 
 func Load() (*Registry, error) {
@@ -45,6 +50,19 @@ func (r *Registry) GetProvider(id string) (Provider, bool) {
 		}
 	}
 	return Provider{}, false
+}
+
+func (r *Registry) GetModel(providerID, modelID string) (Model, bool) {
+	p, ok := r.GetProvider(providerID)
+	if !ok {
+		return Model{}, false
+	}
+	for _, m := range p.Models {
+		if m.ID == modelID {
+			return m, true
+		}
+	}
+	return Model{}, false
 }
 
 func (r *Registry) GetModelContextWindow(providerID, modelID string) (int, bool) {

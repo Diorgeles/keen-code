@@ -47,9 +47,10 @@ func (s *sdkAnthropicStream) Close() error {
 }
 
 type AnthropicClient struct {
-	client     anthropic.Client
-	model      string
-	streamImpl anthropicStreamFactory
+	client         anthropic.Client
+	model          string
+	thinkingEffort string
+	streamImpl     anthropicStreamFactory
 }
 
 func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
@@ -66,8 +67,9 @@ func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
 	client := anthropic.NewClient(opts...)
 
 	c := &AnthropicClient{
-		client: client,
-		model:  cfg.Model,
+		client:         client,
+		model:          cfg.Model,
+		thinkingEffort: cfg.ThinkingEffort,
 	}
 	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
 		return &sdkAnthropicStream{stream: c.client.Messages.NewStreaming(ctx, params)}
@@ -200,7 +202,6 @@ func (c *AnthropicClient) collectTurn(
 		return nil, nil, fmt.Errorf("stream error: %w", err)
 	}
 
-	// Collect tool use entries for execution
 	var toolUses []toolUseEntry
 	for _, block := range assistantBlocks {
 		if block.OfToolUse == nil {
@@ -227,6 +228,24 @@ type toolUseEntry struct {
 	input map[string]any
 }
 
+func anthropicThinkingParams(effort string) (anthropic.ThinkingConfigParamUnion, anthropic.OutputConfigParam, int64) {
+	switch effort {
+	case "low", "medium", "high", "max":
+		thinking := anthropic.ThinkingConfigParamUnion{
+			OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+		}
+		outCfg := anthropic.OutputConfigParam{
+			Effort: anthropic.OutputConfigEffort(effort),
+		}
+		return thinking, outCfg, 32768
+	default:
+		thinking := anthropic.ThinkingConfigParamUnion{
+			OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
+		}
+		return thinking, anthropic.OutputConfigParam{}, anthropicMaxTokens
+	}
+}
+
 func (c *AnthropicClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
@@ -241,19 +260,13 @@ func (c *AnthropicClient) StreamChat(
 		anthropicTools := toAnthropicTools(toolRegistry)
 
 		for range maxToolTurns {
+			thinking, outCfg, maxTok := anthropicThinkingParams(c.thinkingEffort)
 			params := anthropic.MessageNewParams{
-				Model:     c.model,
-				MaxTokens: anthropicMaxTokens,
-				Messages:  msgParams,
-				CacheControl: anthropic.CacheControlEphemeralParam{
-					TTL: anthropic.CacheControlEphemeralTTLTTL5m,
-				},
-				Thinking: anthropic.ThinkingConfigParamUnion{
-					OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
-				},
-				OutputConfig: anthropic.OutputConfigParam{
-					Effort: anthropic.OutputConfigEffortHigh,
-				},
+				Model:        c.model,
+				MaxTokens:    maxTok,
+				Messages:     msgParams,
+				Thinking:     thinking,
+				OutputConfig: outCfg,
 			}
 			if len(systemBlocks) > 0 {
 				params.System = systemBlocks

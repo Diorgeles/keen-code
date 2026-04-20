@@ -9,9 +9,10 @@ import (
 type Provider string
 
 type ClientConfig struct {
-	Provider Provider
-	APIKey   string
-	Model    string
+	Provider       Provider
+	APIKey         string
+	Model          string
+	ThinkingEffort string
 }
 
 func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
@@ -25,28 +26,32 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 	switch cfg.Provider {
 	case config.ProviderAnthropic:
 		return NewAnthropicClient(&ClientConfig{
-			Provider: Provider(cfg.Provider),
-			APIKey:   cfg.APIKey,
-			Model:    cfg.Model,
+			Provider:       Provider(cfg.Provider),
+			APIKey:         cfg.APIKey,
+			Model:          cfg.Model,
+			ThinkingEffort: cfg.ThinkingEffort,
 		})
 	case config.ProviderGoogleAI:
 		return NewGenkitClient(&ClientConfig{
-			Provider: Provider(cfg.Provider),
-			APIKey:   cfg.APIKey,
-			Model:    cfg.Model,
+			Provider:       Provider(cfg.Provider),
+			APIKey:         cfg.APIKey,
+			Model:          cfg.Model,
+			ThinkingEffort: cfg.ThinkingEffort,
 		})
 	case config.ProviderOpenAI:
 		return NewOpenAIResponsesClient(&ClientConfig{
-			Provider: Provider(cfg.Provider),
-			APIKey:   cfg.APIKey,
-			Model:    cfg.Model,
+			Provider:       Provider(cfg.Provider),
+			APIKey:         cfg.APIKey,
+			Model:          cfg.Model,
+			ThinkingEffort: cfg.ThinkingEffort,
 		})
 	case config.ProviderDeepSeek,
 		config.ProviderMoonshotAI:
 		return NewOpenAICompatibleClient(&ClientConfig{
-			Provider: Provider(cfg.Provider),
-			APIKey:   cfg.APIKey,
-			Model:    cfg.Model,
+			Provider:       Provider(cfg.Provider),
+			APIKey:         cfg.APIKey,
+			Model:          cfg.Model,
+			ThinkingEffort: cfg.ThinkingEffort,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)

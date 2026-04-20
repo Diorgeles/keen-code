@@ -8,6 +8,7 @@ import (
 
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/responses"
+	"github.com/openai/openai-go/shared"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
 )
@@ -228,6 +229,88 @@ func TestOpenAIResponsesClient_StreamChat_ErrorEventEmptyMessage(t *testing.T) {
 	}
 	if !strings.Contains(errorMsg, "responses stream error") {
 		t.Fatalf("expected default error message, got %q", errorMsg)
+	}
+}
+
+func TestOpenAIResponsesClient_ThinkingEffort_SetsReasoning(t *testing.T) {
+	client := &OpenAIResponsesClient{
+		provider:       Provider(config.ProviderOpenAI),
+		model:          "gpt-5.4",
+		thinkingEffort: "high",
+	}
+
+	var capturedParams responses.ResponseNewParams
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		capturedParams = params
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":1,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "hi"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if capturedParams.Reasoning.Effort != shared.ReasoningEffortHigh {
+		t.Errorf("expected Reasoning.Effort 'high', got %q", capturedParams.Reasoning.Effort)
+	}
+}
+
+func TestOpenAIResponsesClient_NoThinkingEffort_OmitsReasoning(t *testing.T) {
+	client := &OpenAIResponsesClient{
+		provider:       Provider(config.ProviderOpenAI),
+		model:          "gpt-5.4",
+		thinkingEffort: "",
+	}
+
+	var capturedParams responses.ResponseNewParams
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		capturedParams = params
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":1,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "hi"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if capturedParams.Reasoning.Effort != "" {
+		t.Errorf("expected empty Reasoning.Effort when thinkingEffort is empty, got %q", capturedParams.Reasoning.Effort)
+	}
+}
+
+func TestReasoningEffortForLevel(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected shared.ReasoningEffort
+	}{
+		{"low", shared.ReasoningEffortLow},
+		{"medium", shared.ReasoningEffortMedium},
+		{"high", shared.ReasoningEffortHigh},
+		{"xhigh", shared.ReasoningEffort("xhigh")},
+		{"", ""},
+		{"invalid", ""},
+	}
+	for _, tc := range cases {
+		got := reasoningEffortForLevel(tc.input)
+		if got != tc.expected {
+			t.Errorf("reasoningEffortForLevel(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
 	}
 }
 

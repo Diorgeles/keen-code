@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -15,6 +16,7 @@ type Step int
 const (
 	StepProvider Step = iota
 	StepModel
+	StepThinking
 	StepAPIKey
 )
 
@@ -28,6 +30,9 @@ type Model struct {
 	APIKeyInput      string
 	ProviderCursor   int
 	ModelCursor      int
+	ThinkingCursor   int
+	ThinkingOptions  []string
+	SelectedThinking string
 	ProviderList     []providers.Provider
 	ModelList        []providers.Model
 	ErrorMessage     string
@@ -86,6 +91,26 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.ModelCursor = (m.ModelCursor + 1) % len(m.ModelList)
 		case "enter":
 			m.SelectedModel = m.ModelList[m.ModelCursor].ID
+			modelMeta, ok := m.registry.GetModel(m.SelectedProvider, m.SelectedModel)
+			if ok && modelMeta.SupportsThinkingEffort() {
+				m.ThinkingOptions = append([]string{"off"}, modelMeta.ThinkingEfforts...)
+				m.ThinkingCursor = m.resolveThinkingCursor(m.ThinkingOptions)
+				m.Step = StepThinking
+			} else {
+				m.Step = StepAPIKey
+			}
+		case "esc":
+			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
+		}
+
+	case StepThinking:
+		switch msg.String() {
+		case "up", "k":
+			m.ThinkingCursor = (m.ThinkingCursor - 1 + len(m.ThinkingOptions)) % len(m.ThinkingOptions)
+		case "down", "j":
+			m.ThinkingCursor = (m.ThinkingCursor + 1) % len(m.ThinkingOptions)
+		case "enter":
+			m.SelectedThinking = m.ThinkingOptions[m.ThinkingCursor]
 			m.Step = StepAPIKey
 		case "esc":
 			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
@@ -111,6 +136,28 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *Model) resolveThinkingCursor(options []string) int {
+	currentEffort := ""
+	if m.resolvedCfg != nil {
+		currentEffort = m.resolvedCfg.ThinkingEffort
+	}
+	if currentEffort == "" {
+		// Try "medium" default, else "off"
+		if idx := slices.Index(options, "medium"); idx >= 0 {
+			return idx
+		}
+		return 0 // "off"
+	}
+	if idx := slices.Index(options, currentEffort); idx >= 0 {
+		return idx
+	}
+	// Saved value not compatible — prefer medium
+	if idx := slices.Index(options, "medium"); idx >= 0 {
+		return idx
+	}
+	return 0 // "off"
+}
+
 func (m *Model) handlePasteMsg(msg tea.PasteMsg) (*Model, tea.Cmd) {
 	if m.Step == StepAPIKey && msg.Content != "" {
 		m.APIKeyInput += msg.Content
@@ -134,8 +181,21 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Resolve the stored effort value ("off" → "")
+	storedEffort := m.SelectedThinking
+	if storedEffort == "off" {
+		storedEffort = ""
+	}
+
+	// If model doesn't support configurable effort, clear any stale value
+	modelMeta, ok := m.registry.GetModel(m.SelectedProvider, m.SelectedModel)
+	if !ok || !modelMeta.SupportsThinkingEffort() {
+		storedEffort = ""
+	}
+
 	m.globalCfg.ActiveProvider = m.SelectedProvider
 	m.globalCfg.ActiveModel = m.SelectedModel
+	m.globalCfg.ThinkingEffort = storedEffort
 
 	providerCfg := config.ProviderConfig{
 		APIKey: apiKey,
@@ -151,6 +211,7 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 	m.resolvedCfg.Provider = m.SelectedProvider
 	m.resolvedCfg.Model = m.SelectedModel
 	m.resolvedCfg.APIKey = apiKey
+	m.resolvedCfg.ThinkingEffort = storedEffort
 
 	if err := m.onComplete(m.SelectedProvider, m.SelectedModel, apiKey); err != nil {
 		m.ErrorMessage = fmt.Sprintf("Failed to initialize LLM client: %v", err)
@@ -166,6 +227,8 @@ func (m *Model) ViewString() string {
 		return m.renderProviderSelection()
 	case StepModel:
 		return m.renderModelSelection()
+	case StepThinking:
+		return m.renderThinkingSelection()
 	case StepAPIKey:
 		return m.renderAPIKeyInput()
 	}
@@ -187,6 +250,15 @@ func (m *Model) renderModelSelection() string {
 	view.WriteString(repltheme.UserPromptStyle.Render(fmt.Sprintf("Select a model for %s:", providerName)))
 	view.WriteString("\n\n")
 	view.WriteString(m.renderList(m.ModelCursor, func(i int) string { return m.ModelList[i].Name }, len(m.ModelList)))
+	view.WriteString("\n" + repltheme.HintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
+	return view.String()
+}
+
+func (m *Model) renderThinkingSelection() string {
+	var view strings.Builder
+	view.WriteString(repltheme.UserPromptStyle.Render("Select thinking effort:"))
+	view.WriteString("\n\n")
+	view.WriteString(m.renderList(m.ThinkingCursor, func(i int) string { return m.ThinkingOptions[i] }, len(m.ThinkingOptions)))
 	view.WriteString("\n" + repltheme.HintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
 	return view.String()
 }

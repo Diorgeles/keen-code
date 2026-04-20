@@ -42,9 +42,10 @@ func NewRootCommand(version string) *cobra.Command {
 					return fmt.Errorf("failed to get provider config for %q", globalCfg.ActiveProvider)
 				}
 				resolvedCfg = &config.ResolvedConfig{
-					Provider: globalCfg.ActiveProvider,
-					Model:    globalCfg.ActiveModel,
-					APIKey:   providerCfg.APIKey,
+					Provider:       globalCfg.ActiveProvider,
+					Model:          globalCfg.ActiveModel,
+					APIKey:         providerCfg.APIKey,
+					ThinkingEffort: globalCfg.ThinkingEffort,
 				}
 			}
 

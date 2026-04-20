@@ -219,6 +219,22 @@ func TestOpenAICompatibleClient_StreamChat_InjectsReasoningContentAcrossToolTurn
 	}
 }
 
+func TestOpenAICompatibleClient_IgnoresThinkingEffort(t *testing.T) {
+	// DeepSeek/Moonshot compatible clients store but ignore thinkingEffort
+	client, err := NewOpenAICompatibleClient(&ClientConfig{
+		Provider:       Provider(config.ProviderDeepSeek),
+		APIKey:         "test-key",
+		Model:          "deepseek-chat",
+		ThinkingEffort: "high",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client.thinkingEffort != "high" {
+		t.Errorf("expected thinkingEffort 'high' stored, got %q", client.thinkingEffort)
+	}
+}
+
 func TestToOpenAIMessages_RendersTurnMemoryForAssistant(t *testing.T) {
 	messages := toOpenAIMessages([]Message{
 		{

@@ -288,11 +288,6 @@ func TestAnthropicClient_StreamChat_ToolInvocation(t *testing.T) {
 	if len(seenParams) != 2 {
 		t.Fatalf("expected 2 captured params, got %d", len(seenParams))
 	}
-	for i, params := range seenParams {
-		if params.CacheControl.TTL != anthropic.CacheControlEphemeralTTLTTL5m {
-			t.Errorf("params %d: expected cache_control ttl 5m, got %q", i, params.CacheControl.TTL)
-		}
-	}
 	// "using tool" from first turn, "done" from second
 	if len(textChunks) != 2 {
 		t.Errorf("expected 2 text chunks, got %d: %v", len(textChunks), textChunks)
@@ -408,5 +403,102 @@ func TestToAnthropicTools(t *testing.T) {
 	}
 	if result[0].OfTool.Name != "success_tool" {
 		t.Errorf("expected tool name 'success_tool', got %q", result[0].OfTool.Name)
+	}
+}
+
+func TestAnthropicThinkingParams_OffByDefault(t *testing.T) {
+	thinking, outCfg, maxTok := anthropicThinkingParams("")
+	if thinking.OfDisabled == nil {
+		t.Error("expected OfDisabled to be set when effort is empty")
+	}
+	if thinking.OfAdaptive != nil {
+		t.Error("expected OfAdaptive to be nil when effort is empty")
+	}
+	if outCfg.Effort != "" {
+		t.Errorf("expected empty effort in OutputConfig, got %q", outCfg.Effort)
+	}
+	if maxTok != anthropicMaxTokens {
+		t.Errorf("expected anthropicMaxTokens %d, got %d", anthropicMaxTokens, maxTok)
+	}
+}
+
+func TestAnthropicThinkingParams_EnabledEfforts(t *testing.T) {
+	for _, effort := range []string{"low", "medium", "high", "max"} {
+		thinking, outCfg, maxTok := anthropicThinkingParams(effort)
+		if thinking.OfAdaptive == nil {
+			t.Errorf("effort %q: expected OfAdaptive to be set", effort)
+		}
+		if thinking.OfDisabled != nil {
+			t.Errorf("effort %q: expected OfDisabled to be nil", effort)
+		}
+		if string(outCfg.Effort) != effort {
+			t.Errorf("effort %q: expected OutputConfig.Effort %q, got %q", effort, effort, outCfg.Effort)
+		}
+		if maxTok != 32768 {
+			t.Errorf("effort %q: expected maxTok 32768, got %d", effort, maxTok)
+		}
+	}
+}
+
+func TestAnthropicClient_ThinkingEffort_UsedInParams(t *testing.T) {
+	var capturedParams anthropic.MessageNewParams
+
+	c := &AnthropicClient{
+		model:          "claude-sonnet-4-6",
+		thinkingEffort: "high",
+	}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		capturedParams = params
+		return &mockAnthropicStream{events: []anthropic.MessageStreamEventUnion{
+			makeTextDeltaEvent(0, "ok"),
+			makeContentBlockStopEvent(0),
+		}}
+	}
+
+	eventCh, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if capturedParams.Thinking.OfAdaptive == nil {
+		t.Error("expected OfAdaptive to be set for effort 'high'")
+	}
+	if string(capturedParams.OutputConfig.Effort) != "high" {
+		t.Errorf("expected OutputConfig.Effort 'high', got %q", capturedParams.OutputConfig.Effort)
+	}
+	if capturedParams.MaxTokens != 32768 {
+		t.Errorf("expected MaxTokens 32768, got %d", capturedParams.MaxTokens)
+	}
+}
+
+func TestAnthropicClient_NoThinkingEffort_DisablesThinking(t *testing.T) {
+	var capturedParams anthropic.MessageNewParams
+
+	c := &AnthropicClient{
+		model:          "claude-sonnet-4-6",
+		thinkingEffort: "",
+	}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		capturedParams = params
+		return &mockAnthropicStream{events: []anthropic.MessageStreamEventUnion{
+			makeTextDeltaEvent(0, "ok"),
+			makeContentBlockStopEvent(0),
+		}}
+	}
+
+	eventCh, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if capturedParams.Thinking.OfDisabled == nil {
+		t.Error("expected OfDisabled to be set when thinkingEffort is empty")
+	}
+	if capturedParams.MaxTokens != anthropicMaxTokens {
+		t.Errorf("expected anthropicMaxTokens %d, got %d", anthropicMaxTokens, capturedParams.MaxTokens)
 	}
 }

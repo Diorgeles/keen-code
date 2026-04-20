@@ -13,6 +13,7 @@ import (
 	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/packages/ssestream"
 	"github.com/openai/openai-go/responses"
+	"github.com/openai/openai-go/shared"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
 )
@@ -49,6 +50,7 @@ func (s *sdkResponseStream) Close() error {
 type OpenAIResponsesClient struct {
 	provider           Provider
 	model              string
+	thinkingEffort     string
 	client             openai.Client
 	responseStreamImpl responseStreamFactory
 }
@@ -63,9 +65,10 @@ func NewOpenAIResponsesClient(cfg *ClientConfig) (*OpenAIResponsesClient, error)
 	)
 
 	c := &OpenAIResponsesClient{
-		provider: cfg.Provider,
-		model:    cfg.Model,
-		client:   client,
+		provider:       cfg.Provider,
+		model:          cfg.Model,
+		thinkingEffort: cfg.ThinkingEffort,
+		client:         client,
 	}
 	c.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
 		return &sdkResponseStream{stream: c.client.Responses.NewStreaming(ctx, params, opts...)}
@@ -114,6 +117,21 @@ func toOpenAIResponseTools(registry *tools.Registry) []responses.ToolUnionParam 
 	return result
 }
 
+func reasoningEffortForLevel(effort string) shared.ReasoningEffort {
+	switch effort {
+	case "low":
+		return shared.ReasoningEffortLow
+	case "medium":
+		return shared.ReasoningEffortMedium
+	case "high":
+		return shared.ReasoningEffortHigh
+	case "xhigh":
+		return shared.ReasoningEffort("xhigh")
+	default:
+		return ""
+	}
+}
+
 func (c *OpenAIResponsesClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
@@ -134,6 +152,11 @@ func (c *OpenAIResponsesClient) StreamChat(
 				Input: responses.ResponseNewParamsInputUnion{
 					OfInputItemList: input,
 				},
+			}
+			if c.thinkingEffort != "" {
+				params.Reasoning = shared.ReasoningParam{
+					Effort: reasoningEffortForLevel(c.thinkingEffort),
+				}
 			}
 			if len(responseTools) > 0 {
 				params.Tools = responseTools

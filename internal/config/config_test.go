@@ -110,6 +110,7 @@ func TestProviderConfig_hasModel(t *testing.T) {
 func TestResolve(t *testing.T) {
 	global := &GlobalConfig{
 		ActiveProvider: ProviderAnthropic,
+		ThinkingEffort: "high",
 		Providers: map[string]ProviderConfig{
 			ProviderAnthropic: {Models: []string{"claude-3-sonnet"}, APIKey: "sk-ant-test"},
 		},
@@ -128,6 +129,9 @@ func TestResolve(t *testing.T) {
 	}
 	if resolved.Model != "claude-3-sonnet" {
 		t.Errorf("expected model 'claude-3-sonnet', got %q", resolved.Model)
+	}
+	if resolved.ThinkingEffort != "high" {
+		t.Errorf("expected thinking effort 'high', got %q", resolved.ThinkingEffort)
 	}
 }
 

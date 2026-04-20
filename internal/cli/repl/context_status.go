@@ -49,19 +49,6 @@ func usagePercent(currentTokens, contextWindow int) float64 {
 	return percent
 }
 
-func progressFillWidth(percent float64, total int) int {
-	if total <= 0 {
-		return 0
-	}
-	if percent <= 0 {
-		return 0
-	}
-	if percent >= 100 {
-		return total
-	}
-	return int((float64(total) * percent) / 100.0)
-}
-
 func countWords(text string) int {
 	return len(strings.Fields(text))
 }

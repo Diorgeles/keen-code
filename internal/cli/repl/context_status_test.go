@@ -39,18 +39,6 @@ func TestUsagePercent(t *testing.T) {
 	}
 }
 
-func TestProgressFillWidth(t *testing.T) {
-	if got := progressFillWidth(50.0, 20); got != 10 {
-		t.Fatalf("progressFillWidth(50, 20) = %d, want 10", got)
-	}
-	if got := progressFillWidth(100.0, 20); got != 20 {
-		t.Fatalf("progressFillWidth(100, 20) = %d, want 20", got)
-	}
-	if got := progressFillWidth(0.0, 20); got != 0 {
-		t.Fatalf("progressFillWidth(0, 20) = %d, want 0", got)
-	}
-}
-
 func TestBuildConversationForEstimation(t *testing.T) {
 	messages := []llm.Message{
 		{Role: llm.RoleUser, Content: "hello world"},

@@ -50,10 +50,11 @@ func (s *sdkChatStream) Close() error {
 }
 
 type OpenAICompatibleClient struct {
-	provider   Provider
-	model      string
-	client     openai.Client
-	streamImpl streamFactory
+	provider       Provider
+	model          string
+	thinkingEffort string
+	client         openai.Client
+	streamImpl     streamFactory
 }
 
 func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, error) {
@@ -68,9 +69,10 @@ func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, erro
 	)
 
 	c := &OpenAICompatibleClient{
-		provider: cfg.Provider,
-		model:    cfg.Model,
-		client:   client,
+		provider:       cfg.Provider,
+		model:          cfg.Model,
+		thinkingEffort: cfg.ThinkingEffort,
+		client:         client,
 	}
 	c.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
 		return &sdkChatStream{stream: c.client.Chat.Completions.NewStreaming(ctx, params, opts...)}

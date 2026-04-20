@@ -19,6 +19,7 @@ const (
 type GlobalConfig struct {
 	ActiveProvider string                    `json:"active_provider"`
 	ActiveModel    string                    `json:"active_model"`
+	ThinkingEffort string                    `json:"thinking_effort,omitempty"`
 	Providers      map[string]ProviderConfig `json:"providers"`
 }
 
@@ -38,9 +39,10 @@ type SessionConfig struct {
 }
 
 type ResolvedConfig struct {
-	Provider string
-	APIKey   string
-	Model    string
+	Provider       string
+	APIKey         string
+	Model          string
+	ThinkingEffort string
 }
 
 func (g *GlobalConfig) GetProviderConfig(provider string) (ProviderConfig, bool) {
@@ -106,9 +108,10 @@ func Resolve(global *GlobalConfig, session *SessionConfig) (*ResolvedConfig, err
 	)
 
 	resolved := &ResolvedConfig{
-		Provider: provider,
-		APIKey:   apiKey,
-		Model:    model,
+		Provider:       provider,
+		APIKey:         apiKey,
+		Model:          model,
+		ThinkingEffort: global.ThinkingEffort,
 	}
 
 	slog.Debug("config resolved", "provider", resolved.Provider, "model", resolved.Model)

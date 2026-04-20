@@ -14,10 +14,10 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := replcommands.Filter("/")
-	if len(got) != 8 {
-		t.Fatalf("expected 8 commands, got %d", len(got))
+	if len(got) != 9 {
+		t.Fatalf("expected 9 commands, got %d", len(got))
 	}
-	if got[0].Name != "/clear" || got[1].Name != "/compact" || got[2].Name != "/exit" || got[3].Name != "/help" || got[4].Name != "/model" || got[5].Name != "/new" || got[6].Name != "/resume" || got[7].Name != "/sessions" {
+	if got[0].Name != "/clear" || got[1].Name != "/compact" || got[2].Name != "/exit" || got[3].Name != "/help" || got[4].Name != "/model" || got[5].Name != "/new" || got[6].Name != "/resume" || got[7].Name != "/sessions" || got[8].Name != "/thinking" {
 		t.Errorf("unexpected order: %v", got)
 	}
 }

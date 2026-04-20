@@ -44,5 +44,18 @@ Use the AskUserQuestion tool to clarify further requirements.
 
 ## Refactoring
 
-1. Repl package is full of files. How would you reorganise it? Save the plan in @.ai-interactions/outputs/phase-5/output-8_refactor.md
-2. How can we make sure we don't break anything while doing this?
+1. Check the repl package and identify files that can be organized into subfolders/subpackages without introducing dependency cycles.
+2. Go ahead and do that reorganization.
+3. Review internal/cli/repl/turn_memory.go.
+4. Explain why the alias files existed.
+5. Remove internal/cli/repl/commands_aliases.go.
+6. Remove internal/cli/repl/appstate_aliases.go.
+7. Remove internal/cli/repl/theme_aliases.go.
+8. Reassess what other files could be grouped into packages safely.
+9. Remove the remaining aliases first.
+10. Move the widget-related code into a widgets package.
+11. Move the tooling-related code into a tooling package.
+12. Before moving tooling, verify it would not introduce cyclic dependencies, and if there were a risk, explain the solution first.
+13. Review the current package layout and identify the next safe move.
+14. Evaluate whether compaction_status.go should go into widgets.
+15. Create an output package with output.go and compaction_status.go.

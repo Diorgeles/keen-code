@@ -16,6 +16,7 @@ var all = []SlashCommand{
 	{"/new", "Start a new session (also /clear)"},
 	{"/resume", "Open the session picker"},
 	{"/sessions", "List saved sessions for this directory"},
+	{"/thinking", "Change thinking effort for the current model"},
 }
 
 func Filter(input string) []SlashCommand {

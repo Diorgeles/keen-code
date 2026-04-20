@@ -14,6 +14,7 @@ import (
 	"github.com/firebase/genkit/go/plugins/googlegenai"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
+	"google.golang.org/genai"
 )
 
 const maxToolTurns = 2000
@@ -21,10 +22,11 @@ const maxToolTurns = 2000
 type streamFunc func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error]
 
 type GenkitClient struct {
-	g          *genkit.Genkit
-	provider   Provider
-	model      string
-	streamImpl streamFunc
+	g              *genkit.Genkit
+	provider       Provider
+	model          string
+	thinkingEffort string
+	streamImpl     streamFunc
 }
 
 func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
@@ -54,10 +56,11 @@ func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
 	}
 
 	return &GenkitClient{
-		g:          g,
-		provider:   cfg.Provider,
-		model:      modelName,
-		streamImpl: genkit.GenerateStream,
+		g:              g,
+		provider:       cfg.Provider,
+		model:          modelName,
+		thinkingEffort: cfg.ThinkingEffort,
+		streamImpl:     genkit.GenerateStream,
 	}, nil
 }
 
@@ -88,6 +91,21 @@ func toGenkitMessages(messages []Message) []*ai.Message {
 	return aiMessages
 }
 
+func budgetForEffort(effort string) *int32 {
+	var b int32
+	switch effort {
+	case "low":
+		b = 1024
+	case "medium":
+		b = 8192
+	case "high":
+		b = 24576
+	default:
+		return nil
+	}
+	return &b
+}
+
 func (c *GenkitClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
@@ -109,6 +127,18 @@ func (c *GenkitClient) StreamChat(
 			opts := []ai.GenerateOption{
 				ai.WithModelName(c.model),
 				ai.WithMessages(aiMessages...),
+			}
+
+			if c.thinkingEffort != "" && c.provider == Provider(config.ProviderGoogleAI) {
+				budget := budgetForEffort(c.thinkingEffort)
+				if budget != nil {
+					opts = append(opts, ai.WithConfig(&genai.GenerateContentConfig{
+						ThinkingConfig: &genai.ThinkingConfig{
+							IncludeThoughts: true,
+							ThinkingBudget:  budget,
+						},
+					}))
+				}
 			}
 
 			if len(genkitTools) > 0 {

@@ -75,3 +75,89 @@ func TestRegistry_GetModelContextWindow(t *testing.T) {
 		t.Fatal("expected unknown provider lookup to fail")
 	}
 }
+
+func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
+	reg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	// claude-opus-4-6 should have thinking efforts
+	m, ok := reg.GetModel("anthropic", "claude-opus-4-6")
+	if !ok {
+		t.Fatal("expected to find claude-opus-4-6")
+	}
+	if !m.SupportsThinkingEffort() {
+		t.Error("expected claude-opus-4-6 to support thinking effort")
+	}
+	if len(m.ThinkingEfforts) != 4 {
+		t.Errorf("expected 4 efforts for claude-opus-4-6, got %d: %v", len(m.ThinkingEfforts), m.ThinkingEfforts)
+	}
+
+	// claude-haiku-4-5 should NOT have thinking efforts
+	haiku, ok := reg.GetModel("anthropic", "claude-haiku-4-5")
+	if !ok {
+		t.Fatal("expected to find claude-haiku-4-5")
+	}
+	if haiku.SupportsThinkingEffort() {
+		t.Error("expected claude-haiku-4-5 to NOT support thinking effort")
+	}
+
+	// gpt-5.4 should have xhigh
+	gpt, ok := reg.GetModel("openai", "gpt-5.4")
+	if !ok {
+		t.Fatal("expected to find gpt-5.4")
+	}
+	if !gpt.SupportsThinkingEffort() {
+		t.Error("expected gpt-5.4 to support thinking effort")
+	}
+	found := false
+	for _, e := range gpt.ThinkingEfforts {
+		if e == "xhigh" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected gpt-5.4 to have xhigh effort, got %v", gpt.ThinkingEfforts)
+	}
+}
+
+func TestRegistry_GetModel(t *testing.T) {
+	reg := &Registry{
+		Providers: []Provider{
+			{
+				ID: "anthropic",
+				Models: []Model{
+					{ID: "claude-opus-4-6", ThinkingEfforts: []string{"low", "medium", "high", "max"}},
+					{ID: "claude-haiku-4-5"},
+				},
+			},
+		},
+	}
+
+	m, ok := reg.GetModel("anthropic", "claude-opus-4-6")
+	if !ok {
+		t.Fatal("expected to find claude-opus-4-6")
+	}
+	if !m.SupportsThinkingEffort() {
+		t.Error("expected SupportsThinkingEffort() true")
+	}
+
+	haiku, ok := reg.GetModel("anthropic", "claude-haiku-4-5")
+	if !ok {
+		t.Fatal("expected to find claude-haiku-4-5")
+	}
+	if haiku.SupportsThinkingEffort() {
+		t.Error("expected SupportsThinkingEffort() false for haiku")
+	}
+
+	_, ok = reg.GetModel("anthropic", "unknown")
+	if ok {
+		t.Error("expected GetModel to return false for unknown model")
+	}
+
+	_, ok = reg.GetModel("unknown", "claude-opus-4-6")
+	if ok {
+		t.Error("expected GetModel to return false for unknown provider")
+	}
+}
