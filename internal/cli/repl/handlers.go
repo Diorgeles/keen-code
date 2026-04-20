@@ -7,6 +7,9 @@ import (
 	"log/slog"
 
 	tea "charm.land/bubbletea/v2"
+	reploutput "github.com/user/keen-code/internal/cli/repl/output"
+	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/llm"
 )
 
@@ -98,7 +101,7 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 		m.viewport.GotoBottom()
 		return *m, nil
 	}
-	m.output.AddError(errMsg, errorStyle)
+	m.output.AddError(errMsg, repltheme.ErrorStyle)
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil
@@ -147,10 +150,10 @@ func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
 	m.clearStreamCancel()
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			addCompactionCancelledStatus(m.output, "Compaction cancelled.")
+			reploutput.AddCompactionCancelledStatus(m.output, "Compaction cancelled.")
 		} else {
 			status := "Compaction failed: " + err.Error()
-			addCompactionErrorStatus(m.output, status)
+			reploutput.AddCompactionErrorStatus(m.output, status)
 		}
 	}
 	m.adjustTextareaHeight()
@@ -223,30 +226,30 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		}
 	}
 
-	if m.suggestion.visible {
+	if m.suggestion.Visible() {
 		switch keyMsg.String() {
 		case keyEnter, keyTab:
-			if cur := m.suggestion.current(); cur != nil {
+			if cur := m.suggestion.Current(); cur != nil {
 				m.textarea.SetValue(cur.Name)
-			} else if len(m.suggestion.items) > 0 {
-				m.textarea.SetValue(m.suggestion.items[0].Name)
+			} else if first := m.suggestion.First(); first != nil {
+				m.textarea.SetValue(first.Name)
 			}
 			if keyMsg.String() == keyEnter {
-				m.suggestion.refresh("")
+				m.suggestion.Refresh("")
 			} else {
-				m.suggestion.refresh(m.textarea.Value())
+				m.suggestion.Refresh(m.textarea.Value())
 			}
 			m.adjustTextareaHeight()
 			return *m, nil
 		case keyUp, keyShiftUp:
-			m.suggestion.moveUp()
+			m.suggestion.MoveUp()
 			return *m, nil
 		case keyDown, keyShiftDown:
-			m.suggestion.moveDown()
+			m.suggestion.MoveDown()
 			return *m, nil
 		case keyEsc:
 			if m.streamHandler == nil || !m.streamHandler.IsActive() {
-				m.suggestion.refresh("")
+				m.suggestion.Refresh("")
 				return *m, nil
 			}
 		}
@@ -302,7 +305,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.textarea, cmd = m.textarea.Update(keyMsg)
-	m.suggestion.refresh(m.textarea.Value())
+	m.suggestion.Refresh(m.textarea.Value())
 	m.adjustTextareaHeight()
 	return *m, cmd
 }
@@ -338,7 +341,7 @@ func (m *replModel) interruptStream(message string) {
 	for _, line := range m.streamHandler.HandleInterrupt() {
 		m.output.AddLine(line)
 	}
-	m.output.AddStyledLine("\n  "+message, interruptedStyle)
+	m.output.AddStyledLine("\n  "+message, repltheme.InterruptedStyle)
 	m.output.AddEmptyLine()
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
@@ -415,14 +418,14 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 			return *m, nil
 		}
 		choice := m.streamHandler.GetPendingChoice()
-		var status PermissionStatus
+		var status replpermissions.Status
 		switch choice {
-		case PermissionChoiceAllow:
-			status = PermissionStatusAllowed
-		case PermissionChoiceAllowSession:
-			status = PermissionStatusAllowedSession
-		case PermissionChoiceDeny:
-			status = PermissionStatusDenied
+		case replpermissions.ChoiceAllow:
+			status = replpermissions.StatusAllowed
+		case replpermissions.ChoiceAllowSession:
+			status = replpermissions.StatusAllowedSession
+		case replpermissions.ChoiceDeny:
+			status = replpermissions.StatusDenied
 		}
 		m.streamHandler.ResolvePendingPermission(status)
 		m.permissionRequester.SendResponse(choice, req.ToolName)
@@ -435,8 +438,8 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 		if req == nil {
 			return *m, nil
 		}
-		m.streamHandler.ResolvePendingPermission(PermissionStatusDenied)
-		m.permissionRequester.SendResponse(PermissionChoiceDeny, req.ToolName)
+		m.streamHandler.ResolvePendingPermission(replpermissions.StatusDenied)
+		m.permissionRequester.SendResponse(replpermissions.ChoiceDeny, req.ToolName)
 		m.updateViewportContent()
 		if !m.userScrolled {
 			m.viewport.GotoBottom()

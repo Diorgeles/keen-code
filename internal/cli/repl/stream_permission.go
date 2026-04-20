@@ -5,11 +5,13 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 )
 
 const permissionPreviewMaxLines = 120
 
-func (sh *StreamHandler) HandlePermissionRequest(req *PermissionRequest) {
+func (sh *StreamHandler) HandlePermissionRequest(req *replpermissions.Request) {
 	sh.segments = append(sh.segments, streamSegment{
 		kind:          segmentPermission,
 		permissionReq: req,
@@ -24,7 +26,7 @@ func (sh *StreamHandler) HasPendingPermission() bool {
 	seg := &sh.segments[n-1]
 	return seg.kind == segmentPermission &&
 		seg.permissionReq != nil &&
-		seg.permissionReq.Status == PermissionStatusPending
+		seg.permissionReq.Status == replpermissions.StatusPending
 }
 
 func (sh *StreamHandler) MovePendingCursor(delta int) {
@@ -36,7 +38,7 @@ func (sh *StreamHandler) MovePendingCursor(delta int) {
 	if seg.kind != segmentPermission || seg.permissionReq == nil {
 		return
 	}
-	choices := permissionChoices(seg.permissionReq.IsDangerous)
+	choices := replpermissions.Choices(seg.permissionReq.IsDangerous)
 	newCursor := seg.permissionCursor + delta
 	if newCursor < 0 {
 		newCursor = 0
@@ -47,19 +49,19 @@ func (sh *StreamHandler) MovePendingCursor(delta int) {
 	seg.permissionCursor = newCursor
 }
 
-func (sh *StreamHandler) GetPendingChoice() PermissionChoice {
+func (sh *StreamHandler) GetPendingChoice() replpermissions.Choice {
 	n := len(sh.segments)
 	if n == 0 {
-		return PermissionChoiceDeny
+		return replpermissions.ChoiceDeny
 	}
 	seg := &sh.segments[n-1]
 	if seg.kind != segmentPermission || seg.permissionReq == nil {
-		return PermissionChoiceDeny
+		return replpermissions.ChoiceDeny
 	}
-	return permissionChoiceAt(seg.permissionCursor, seg.permissionReq.IsDangerous)
+	return replpermissions.ChoiceAt(seg.permissionCursor, seg.permissionReq.IsDangerous)
 }
 
-func (sh *StreamHandler) GetPendingPermissionRequest() *PermissionRequest {
+func (sh *StreamHandler) GetPendingPermissionRequest() *replpermissions.Request {
 	n := len(sh.segments)
 	if n == 0 {
 		return nil
@@ -71,7 +73,7 @@ func (sh *StreamHandler) GetPendingPermissionRequest() *PermissionRequest {
 	return seg.permissionReq
 }
 
-func (sh *StreamHandler) ResolvePendingPermission(status PermissionStatus) {
+func (sh *StreamHandler) ResolvePendingPermission(status replpermissions.Status) {
 	n := len(sh.segments)
 	if n == 0 {
 		return
@@ -90,7 +92,7 @@ func renderPermissionCard(seg *streamSegment, width int) []string {
 		return nil
 	}
 
-	if req.Status != PermissionStatusPending {
+	if req.Status != replpermissions.StatusPending {
 		return renderPermissionResolved(req)
 	}
 
@@ -98,13 +100,13 @@ func renderPermissionCard(seg *streamSegment, width int) []string {
 	if cardWidth < 20 {
 		cardWidth = 20
 	}
-	cardStyle := userPromptCardStyle.MaxWidth(cardWidth)
+	cardStyle := repltheme.UserPromptCardStyle.MaxWidth(cardWidth)
 	contentWidth := cardWidth - cardStyle.GetHorizontalFrameSize()
 	if contentWidth < 1 {
 		contentWidth = 1
 	}
 
-	labelWidth := lipgloss.Width(infoLabelStyle.Render("Resolved:"))
+	labelWidth := lipgloss.Width(repltheme.InfoLabelStyle.Render("Resolved:"))
 	if labelWidth < 1 {
 		labelWidth = 1
 	}
@@ -116,9 +118,9 @@ func renderPermissionCard(seg *streamSegment, width int) []string {
 	var sb strings.Builder
 
 	if req.IsDangerous {
-		sb.WriteString(warningTitleStyle.Render("⚠  Allow Dangerous Command?"))
+		sb.WriteString(repltheme.WarningTitleStyle.Render("⚠  Allow Dangerous Command?"))
 	} else {
-		sb.WriteString(userPromptStyle.Render("Permission Required"))
+		sb.WriteString(repltheme.UserPromptStyle.Render("Permission Required"))
 	}
 	sb.WriteString("\n\n")
 
@@ -133,7 +135,7 @@ func renderPermissionCard(seg *streamSegment, width int) []string {
 	}
 
 	if req.Preview != "" {
-		previewStyle := lipgloss.NewStyle().Foreground(mutedColor)
+		previewStyle := lipgloss.NewStyle().Foreground(repltheme.MutedColor)
 		previewLines := strings.Split(req.Preview, "\n")
 		total := len(previewLines)
 		truncated := total > permissionPreviewMaxLines
@@ -146,26 +148,26 @@ func renderPermissionCard(seg *streamSegment, width int) []string {
 			sb.WriteString("\n")
 		}
 		if truncated {
-			sb.WriteString(wrapTextWithStyle(fmt.Sprintf("... %d more preview lines omitted", total-permissionPreviewMaxLines), hintStyle, contentWidth))
+			sb.WriteString(wrapTextWithStyle(fmt.Sprintf("... %d more preview lines omitted", total-permissionPreviewMaxLines), repltheme.HintStyle, contentWidth))
 			sb.WriteString("\n")
 		}
 	}
 
 	sb.WriteString("\n")
 
-	choices := permissionChoices(req.IsDangerous)
+	choices := replpermissions.Choices(req.IsDangerous)
 	for i, choice := range choices {
 		if i == seg.permissionCursor {
-			sb.WriteString(wrapTextWithStyle("> "+choice, userPromptSelectionStyle, contentWidth))
+			sb.WriteString(wrapTextWithStyle("> "+choice, repltheme.UserPromptSelectionStyle, contentWidth))
 			sb.WriteString("\n")
 		} else {
-			sb.WriteString(wrapTextWithStyle("  "+choice, normalStyle, contentWidth))
+			sb.WriteString(wrapTextWithStyle("  "+choice, repltheme.NormalStyle, contentWidth))
 			sb.WriteString("\n")
 		}
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(wrapTextWithStyle("[↑/↓ navigate  Enter confirm  Esc deny]", hintStyle, contentWidth))
+	sb.WriteString(wrapTextWithStyle("[↑/↓ navigate  Enter confirm  Esc deny]", repltheme.HintStyle, contentWidth))
 
 	boxed := cardStyle.Render(sb.String())
 	rawLines := strings.Split(strings.TrimRight(boxed, "\n"), "\n")
@@ -192,13 +194,13 @@ func formatPermissionKeyValue(label, value string, labelWidth, valueWidth int) s
 		valueWidth = 1
 	}
 
-	prefix := infoLabelStyle.Width(labelWidth).Render(label)
+	prefix := repltheme.InfoLabelStyle.Width(labelWidth).Render(label)
 	continuation := strings.Repeat(" ", labelWidth+1)
 	if value == "" {
 		return prefix + " \n"
 	}
 
-	wrapped := wrapTextWithStyle(value, infoValueStyle, valueWidth)
+	wrapped := wrapTextWithStyle(value, repltheme.InfoValueStyle, valueWidth)
 	lines := strings.Split(strings.TrimRight(wrapped, "\n"), "\n")
 	if len(lines) == 0 {
 		return prefix + " \n"
@@ -212,19 +214,19 @@ func formatPermissionKeyValue(label, value string, labelWidth, valueWidth int) s
 	return out.String()
 }
 
-func renderPermissionResolved(req *PermissionRequest) []string {
+func renderPermissionResolved(req *replpermissions.Request) []string {
 	var line string
 	switch req.Status {
-	case PermissionStatusAllowed:
-		line = "  " + highlightStyle.Render("✓ Permission granted for "+req.ToolName)
-	case PermissionStatusAllowedSession:
-		line = "  " + highlightStyle.Render("✓ Permission granted for "+req.ToolName+" (this session)")
-	case PermissionStatusDenied:
-		line = "  " + lipgloss.NewStyle().Foreground(mutedColor).Render("✗ Permission denied for "+req.ToolName)
-	case PermissionStatusAutoAllowedSession:
-		line = "  " + highlightStyle.Render("✓ Auto-approved for "+req.ToolName+" (session)")
+	case replpermissions.StatusAllowed:
+		line = "  " + repltheme.HighlightStyle.Render("✓ Permission granted for "+req.ToolName)
+	case replpermissions.StatusAllowedSession:
+		line = "  " + repltheme.HighlightStyle.Render("✓ Permission granted for "+req.ToolName+" (this session)")
+	case replpermissions.StatusDenied:
+		line = "  " + lipgloss.NewStyle().Foreground(repltheme.MutedColor).Render("✗ Permission denied for "+req.ToolName)
+	case replpermissions.StatusAutoAllowedSession:
+		line = "  " + repltheme.HighlightStyle.Render("✓ Auto-approved for "+req.ToolName+" (session)")
 	default:
-		line = "  " + lipgloss.NewStyle().Foreground(mutedColor).Render("✗ Permission cancelled for "+req.ToolName)
+		line = "  " + lipgloss.NewStyle().Foreground(repltheme.MutedColor).Render("✗ Permission cancelled for "+req.ToolName)
 	}
 	return []string{line}
 }

@@ -1,4 +1,4 @@
-package repl
+package appstate
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type AppState struct {
 	workingDir   string
 }
 
-func NewAppState(client llm.LLMClient, workingDir string) *AppState {
+func New(client llm.LLMClient, workingDir string) *AppState {
 	return &AppState{
 		messages:     []llm.Message{},
 		llmClient:    client,
@@ -126,4 +126,8 @@ func (s *AppState) GetToolRegistry() *tools.Registry {
 
 func (s *AppState) RegisterTool(tool tools.Tool) error {
 	return s.toolRegistry.Register(tool)
+}
+
+func (s *AppState) WorkingDir() string {
+	return s.workingDir
 }

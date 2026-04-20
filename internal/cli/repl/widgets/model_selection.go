@@ -1,10 +1,11 @@
-package repl
+package widgets
 
 import (
 	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/providers"
 )
@@ -173,20 +174,20 @@ func (m *Model) ViewString() string {
 
 func (m *Model) renderProviderSelection() string {
 	var view strings.Builder
-	view.WriteString(userPromptStyle.Render("Select a provider:"))
+	view.WriteString(repltheme.UserPromptStyle.Render("Select a provider:"))
 	view.WriteString("\n\n")
 	view.WriteString(m.renderList(m.ProviderCursor, func(i int) string { return m.ProviderList[i].Name }, len(m.ProviderList)))
-	view.WriteString("\n" + hintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
+	view.WriteString("\n" + repltheme.HintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
 	return view.String()
 }
 
 func (m *Model) renderModelSelection() string {
 	var view strings.Builder
 	providerName := m.getProviderName(m.SelectedProvider)
-	view.WriteString(userPromptStyle.Render(fmt.Sprintf("Select a model for %s:", providerName)))
+	view.WriteString(repltheme.UserPromptStyle.Render(fmt.Sprintf("Select a model for %s:", providerName)))
 	view.WriteString("\n\n")
 	view.WriteString(m.renderList(m.ModelCursor, func(i int) string { return m.ModelList[i].Name }, len(m.ModelList)))
-	view.WriteString("\n" + hintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
+	view.WriteString("\n" + repltheme.HintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
 	return view.String()
 }
 
@@ -197,17 +198,17 @@ func (m *Model) renderAPIKeyInput() string {
 
 	title := fmt.Sprintf("Enter API key for %s", providerName)
 	if existingKey != "" {
-		title += "\n" + hintStyle.Render("(press Enter to keep existing key)")
+		title += "\n" + repltheme.HintStyle.Render("(press Enter to keep existing key)")
 	}
-	view.WriteString(userPromptStyle.Render(title))
+	view.WriteString(repltheme.UserPromptStyle.Render(title))
 	view.WriteString("\n\n")
 
 	maskedKey := strings.Repeat("•", len(m.APIKeyInput))
-	view.WriteString(promptStyle.Render("> ") + maskedKey)
-	view.WriteString("\n\n" + hintStyle.Render("[Enter to confirm, Esc to cancel]"))
+	view.WriteString(repltheme.PromptStyle.Render("> ") + maskedKey)
+	view.WriteString("\n\n" + repltheme.HintStyle.Render("[Enter to confirm, Esc to cancel]"))
 
 	if m.ErrorMessage != "" {
-		view.WriteString("\n" + errorStyle.Render(m.ErrorMessage))
+		view.WriteString("\n" + repltheme.ErrorStyle.Render(m.ErrorMessage))
 	}
 	return view.String()
 }
@@ -216,16 +217,19 @@ func (m *Model) renderList(cursor int, getName func(int) string, count int) stri
 	var view strings.Builder
 	for i := 0; i < count; i++ {
 		if i == cursor {
-			view.WriteString(modelSelectionStyle.Render("> " + getName(i)))
+			view.WriteString(repltheme.ModelSelectionStyle.Render("> " + getName(i)))
 			view.WriteString("\n")
 			continue
 		}
-		view.WriteString("  " + normalStyle.Render(getName(i)) + "\n")
+		view.WriteString("  " + repltheme.NormalStyle.Render(getName(i)) + "\n")
 	}
 	return view.String()
 }
 
 func (m *Model) getProviderName(providerID string) string {
+	if m.registry == nil {
+		return ""
+	}
 	if provider, ok := m.registry.GetProvider(providerID); ok {
 		return provider.Name
 	}
@@ -233,6 +237,9 @@ func (m *Model) getProviderName(providerID string) string {
 }
 
 func (m *Model) getExistingAPIKey(providerID string) string {
+	if m.globalCfg == nil {
+		return ""
+	}
 	if providerCfg, exists := m.globalCfg.GetProviderConfig(providerID); exists {
 		return providerCfg.APIKey
 	}

@@ -8,6 +8,9 @@ import (
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	reploutput "github.com/user/keen-code/internal/cli/repl/output"
+	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/providers"
@@ -55,7 +58,7 @@ func TestContextStatus_UpdatesOnlyOnDone(t *testing.T) {
 			},
 		},
 	}
-	m.appState = NewAppState(nil, t.TempDir())
+	m.appState = replappstate.New(nil, t.TempDir())
 	m.appState.AddMessage(llm.RoleUser, strings.Repeat("word ", 750))
 	m.refreshContextStatus(false)
 	initialPercent := m.contextStatus.Percent
@@ -86,8 +89,8 @@ func TestHandleLLMDone(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		appState:      NewAppState(nil, t.TempDir()),
-		output:        NewOutputBuilder(80),
+		appState:      replappstate.New(nil, t.TempDir()),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, cmd := m.handleLLMDone()
@@ -124,7 +127,7 @@ func TestHandleLLMError(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	testErr := errors.New("stream failed")
@@ -155,7 +158,7 @@ func TestHandleKeyMsg_Enter(t *testing.T) {
 		width:         80,
 		streamHandler: NewStreamHandler(nil),
 		ctx:           &replContext{},
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -269,7 +272,7 @@ func TestHandleKeyMsg_Esc_WhenIdleNoOp(t *testing.T) {
 func TestHandleKeyMsg_Esc_CancelsCompactionBeforeSuggestions(t *testing.T) {
 	m := newTestModel()
 	m.isCompacting = true
-	m.suggestion.refresh("/c")
+	m.suggestion.Refresh("/c")
 	cancelled := false
 	m.compactionCancel = func() {
 		cancelled = true
@@ -283,7 +286,7 @@ func TestHandleKeyMsg_Esc_CancelsCompactionBeforeSuggestions(t *testing.T) {
 	if newM.compactionCancel != nil {
 		t.Fatal("expected cancel func to be cleared after esc")
 	}
-	if !newM.suggestion.visible {
+	if !newM.suggestion.Visible() {
 		t.Fatal("expected suggestions to remain untouched while compaction consumes input")
 	}
 	if cmd != nil {
@@ -328,7 +331,7 @@ func TestHandleKeyMsg_CtrlJ(t *testing.T) {
 func TestHandleKeyMsg_ModelSelectionMode(t *testing.T) {
 	m := replModel{
 		width:          80,
-		modelSelection: &Model{},
+		modelSelection: &replwidgets.Model{},
 	}
 
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: 'a', Text: "a"})
@@ -341,10 +344,8 @@ func TestHandleKeyMsg_ModelSelectionMode(t *testing.T) {
 func TestUpdateNormalMode_ModelSelectionPasteGoesToAPIKeyInput(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("existing prompt")
-	m.modelSelection = &Model{
-		Step:      StepAPIKey,
-		registry:  &providers.Registry{},
-		globalCfg: &config.GlobalConfig{},
+	m.modelSelection = &replwidgets.Model{
+		Step: replwidgets.StepAPIKey,
 	}
 
 	newM, _ := m.updateNormalMode(tea.PasteMsg{Content: "sk-test-123"})
@@ -403,8 +404,8 @@ func TestHandleLLMDone_EmptyResponse(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		appState:      NewAppState(nil, t.TempDir()),
-		output:        NewOutputBuilder(80),
+		appState:      replappstate.New(nil, t.TempDir()),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, _ := m.handleLLMDone()
@@ -428,7 +429,7 @@ func TestHandleLLMError_ResetsHandler(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, _ := m.handleLLMError(errors.New("fail"))
@@ -453,7 +454,7 @@ func TestHandleLLMError_ContextCanceled_DoesNotAddErrorLine(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 		streamCancel:  func() {},
 	}
 
@@ -476,7 +477,7 @@ func TestHandleLLMError_ContextCanceled_DoesNotAddErrorLine(t *testing.T) {
 func TestHandleKeyMsg_SpecialCharacters(t *testing.T) {
 	m := replModel{
 		width:          80,
-		modelSelection: &Model{},
+		modelSelection: &replwidgets.Model{},
 	}
 
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: 'é', Text: "é"})
@@ -493,7 +494,7 @@ func TestHandleToolStart(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{
@@ -533,7 +534,7 @@ func TestHandleToolStart_BashKeepsSpinnerActive(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{
@@ -562,7 +563,7 @@ func TestHandleToolEnd(t *testing.T) {
 	m := replModel{
 		streamHandler: sh,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{
@@ -599,7 +600,7 @@ func TestHandleToolEnd_WithError(t *testing.T) {
 	m := replModel{
 		streamHandler: sh,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{

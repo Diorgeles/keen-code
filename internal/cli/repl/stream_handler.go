@@ -3,6 +3,7 @@ package repl
 import (
 	"strings"
 
+	replmarkdown "github.com/user/keen-code/internal/cli/repl/markdown"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/tools"
 )
@@ -15,11 +16,11 @@ type StreamHandler struct {
 	loadingText     string
 	lastWidth       int
 	workingDir      string
-	mdRenderer      *MarkdownRenderer
+	mdRenderer      *replmarkdown.Renderer
 	segments        []streamSegment
 }
 
-func NewStreamHandler(mdRenderer *MarkdownRenderer) *StreamHandler {
+func NewStreamHandler(mdRenderer *replmarkdown.Renderer) *StreamHandler {
 	return &StreamHandler{
 		mdRenderer: mdRenderer,
 		segments:   make([]streamSegment, 0),

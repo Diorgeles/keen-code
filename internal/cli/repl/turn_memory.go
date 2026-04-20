@@ -141,8 +141,8 @@ func (m *replModel) turnMemoryWorkingDir() string {
 	if m == nil {
 		return ""
 	}
-	if m.appState != nil && m.appState.workingDir != "" {
-		return m.appState.workingDir
+	if m.appState != nil && m.appState.WorkingDir() != "" {
+		return m.appState.WorkingDir()
 	}
 	if m.ctx != nil {
 		return m.ctx.workingDir

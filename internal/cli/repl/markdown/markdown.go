@@ -1,15 +1,13 @@
-package repl
+package markdown
 
-import (
-	"github.com/charmbracelet/glamour"
-)
+import "github.com/charmbracelet/glamour"
 
-type MarkdownRenderer struct {
+type Renderer struct {
 	renderer *glamour.TermRenderer
 	width    int
 }
 
-func NewMarkdownRenderer(width int) (*MarkdownRenderer, error) {
+func New(width int) (*Renderer, error) {
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithStylePath("dark"),
 		glamour.WithWordWrap(width-4),
@@ -18,26 +16,26 @@ func NewMarkdownRenderer(width int) (*MarkdownRenderer, error) {
 		return nil, err
 	}
 
-	return &MarkdownRenderer{
+	return &Renderer{
 		renderer: renderer,
 		width:    width,
 	}, nil
 }
 
-func (mr *MarkdownRenderer) Render(markdown string) string {
+func (r *Renderer) Render(markdown string) string {
 	if markdown == "" {
 		return ""
 	}
 
-	rendered, err := mr.renderer.Render(markdown)
+	rendered, err := r.renderer.Render(markdown)
 	if err != nil {
 		return markdown
 	}
 	return rendered
 }
 
-func (mr *MarkdownRenderer) UpdateWidth(width int) error {
-	if mr.width == width {
+func (r *Renderer) UpdateWidth(width int) error {
+	if r.width == width {
 		return nil
 	}
 
@@ -49,7 +47,7 @@ func (mr *MarkdownRenderer) UpdateWidth(width int) error {
 		return err
 	}
 
-	mr.renderer = renderer
-	mr.width = width
+	r.renderer = renderer
+	r.width = width
 	return nil
 }

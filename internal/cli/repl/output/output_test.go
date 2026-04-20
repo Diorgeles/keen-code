@@ -1,4 +1,4 @@
-package repl
+package output
 
 import (
 	"path/filepath"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewOutputBuilder(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 
 	if ob.width != 80 {
 		t.Errorf("width = %d, want 80", ob.width)
@@ -21,7 +21,7 @@ func TestNewOutputBuilder(t *testing.T) {
 }
 
 func TestOutputBuilder_AddLine(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	ob.AddLine("hello")
 	ob.AddLine("world")
 
@@ -40,7 +40,7 @@ func TestOutputBuilder_AddLine(t *testing.T) {
 }
 
 func TestOutputBuilder_AddEmptyLine(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	ob.AddLine("hello")
 	ob.AddEmptyLine()
 	ob.AddLine("world")
@@ -56,7 +56,7 @@ func TestOutputBuilder_AddEmptyLine(t *testing.T) {
 }
 
 func TestOutputBuilder_SetLines(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	ob.SetLines([]string{"a", "b", "c"})
 
 	lines := ob.GetLines()
@@ -70,7 +70,7 @@ func TestOutputBuilder_SetLines(t *testing.T) {
 }
 
 func TestOutputBuilder_Join_Empty(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 
 	result := ob.Join()
 	if result != "" {
@@ -79,7 +79,7 @@ func TestOutputBuilder_Join_Empty(t *testing.T) {
 }
 
 func TestOutputBuilder_Join(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	ob.AddLine("line1")
 	ob.AddLine("line2")
 	ob.AddLine("line3")
@@ -92,7 +92,7 @@ func TestOutputBuilder_Join(t *testing.T) {
 }
 
 func TestOutputBuilder_IsEmpty(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 
 	if !ob.IsEmpty() {
 		t.Error("IsEmpty() should be true for new builder")
@@ -107,7 +107,7 @@ func TestOutputBuilder_IsEmpty(t *testing.T) {
 
 func TestFormatToolInput_ShowsRelativePathToWorkingDir(t *testing.T) {
 	workingDir := filepath.Join(string(filepath.Separator), "tmp", "project")
-	got := formatToolInput("read_file", map[string]any{
+	got := FormatToolInput("read_file", map[string]any{
 		"path": filepath.Join(workingDir, "internal", "cli", "repl", "output.go"),
 	}, workingDir)
 
@@ -117,7 +117,7 @@ func TestFormatToolInput_ShowsRelativePathToWorkingDir(t *testing.T) {
 }
 
 func TestFormatToolInput_KeepsRelativePathInput(t *testing.T) {
-	got := formatToolInput("read_file", map[string]any{"path": "internal/cli/repl/output.go"}, "/tmp/project")
+	got := FormatToolInput("read_file", map[string]any{"path": "internal/cli/repl/output.go"}, "/tmp/project")
 
 	if got != "path=internal/cli/repl/output.go" {
 		t.Fatalf("expected relative input path to remain unchanged, got %q", got)
@@ -126,7 +126,7 @@ func TestFormatToolInput_KeepsRelativePathInput(t *testing.T) {
 
 func TestFormatToolInput_WriteFileShowsOnlyRelativePath(t *testing.T) {
 	workingDir := filepath.Join(string(filepath.Separator), "tmp", "project")
-	got := formatToolInput("write_file", map[string]any{
+	got := FormatToolInput("write_file", map[string]any{
 		"path":    filepath.Join(workingDir, "README.md"),
 		"content": "ignored",
 	}, workingDir)
@@ -137,7 +137,7 @@ func TestFormatToolInput_WriteFileShowsOnlyRelativePath(t *testing.T) {
 }
 
 func TestOutputBuilder_AddUserInput(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
 
 	ob.AddUserInput("hello", style)
@@ -153,7 +153,7 @@ func TestOutputBuilder_AddUserInput(t *testing.T) {
 }
 
 func TestOutputBuilder_AddUserInput_MultiLine(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
 
 	ob.AddUserInput("line1\nline2", style)
@@ -173,7 +173,7 @@ func TestOutputBuilder_AddUserInput_MultiLine(t *testing.T) {
 }
 
 func TestOutputBuilder_AddAssistantResponse(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
 
 	ob.AddAssistantResponse("response text", style)
@@ -189,7 +189,7 @@ func TestOutputBuilder_AddAssistantResponse(t *testing.T) {
 }
 
 func TestOutputBuilder_AddAssistantResponse_MultiLine(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
 
 	ob.AddAssistantResponse("line1\nline2\nline3", style)
@@ -201,7 +201,7 @@ func TestOutputBuilder_AddAssistantResponse_MultiLine(t *testing.T) {
 }
 
 func TestOutputBuilder_AddError(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
 
 	ob.AddError("something went wrong", style)
@@ -217,7 +217,7 @@ func TestOutputBuilder_AddError(t *testing.T) {
 }
 
 func TestOutputBuilder_AddStyledLine(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
 
 	ob.AddStyledLine("styled content", style)
@@ -233,7 +233,7 @@ func TestOutputBuilder_AddStyledLine(t *testing.T) {
 }
 
 func TestOutputBuilder_MultipleOperations(t *testing.T) {
-	ob := NewOutputBuilder(80)
+	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
 
 	ob.AddLine("header")

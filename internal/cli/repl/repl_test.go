@@ -11,6 +11,12 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	reploutput "github.com/user/keen-code/internal/cli/repl/output"
+	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
+	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
+	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
@@ -29,11 +35,11 @@ func newTestModel() replModel {
 		textarea:            ta,
 		viewport:            vp,
 		ctx:                 &replContext{cfg: &config.ResolvedConfig{}},
-		appState:            NewAppState(nil, ""),
-		output:              NewOutputBuilder(80),
+		appState:            replappstate.New(nil, ""),
+		output:              reploutput.NewOutputBuilder(80, ""),
 		streamHandler:       NewStreamHandler(nil),
-		permissionRequester: NewREPLPermissionRequester(),
-		diffEmitter:         NewREPLDiffEmitter(),
+		permissionRequester: replpermissions.NewRequester(),
+		diffEmitter:         repltooling.NewDiffEmitter(),
 		sessions:            newReplSessionState(""),
 		spinner:             spinner.New(),
 		width:               80,
@@ -46,12 +52,12 @@ func TestUpdate_InlinePermission_AllowsToolStartEvent(t *testing.T) {
 	eventCh := make(chan llm.StreamEvent)
 	sh.Start(eventCh, "Loading...")
 
-	req := &PermissionRequest{
+	req := &replpermissions.Request{
 		RequestID:    "1",
 		ToolName:     "read_file",
 		Path:         "../foo.txt",
 		ResolvedPath: "/tmp/foo.txt",
-		Status:       PermissionStatusPending,
+		Status:       replpermissions.StatusPending,
 		ResponseChan: make(chan bool, 1),
 	}
 	sh.HandlePermissionRequest(req)
@@ -60,7 +66,7 @@ func TestUpdate_InlinePermission_AllowsToolStartEvent(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		output:        NewOutputBuilder(80),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{Name: "read_file", Input: map[string]any{"path": "../foo.txt"}}
@@ -187,7 +193,7 @@ func TestHandleEnterKey_SessionsCommand_EmptyState(t *testing.T) {
 func TestHandleEnterKey_CompactCommandStartsCompaction(t *testing.T) {
 	m := newTestModel()
 	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
-	m.appState = NewAppState(&mockLLMClient{}, "")
+	m.appState = replappstate.New(&mockLLMClient{}, "")
 	m.appState.AddMessage(llm.RoleUser, "hello")
 	m.textarea.SetValue("/compact Keep business logic details")
 
@@ -298,7 +304,7 @@ func TestUpdateNormalMode_WindowResize(t *testing.T) {
 
 func TestUpdateNormalMode_WindowResizeWhileModelSelectionActive(t *testing.T) {
 	m := newTestModel()
-	m.modelSelection = &Model{}
+	m.modelSelection = &replwidgets.Model{}
 
 	resizeMsg := tea.WindowSizeMsg{Width: 100, Height: 40}
 	newM, cmd := m.updateNormalMode(resizeMsg)
@@ -348,10 +354,10 @@ func TestBuildInitialScreen_HighlightsModelOnly(t *testing.T) {
 	lines := buildInitialScreen(ctx)
 	rendered := strings.Join(lines, "\n")
 
-	if strings.Contains(rendered, highlightStyle.Render("openai")) {
+	if strings.Contains(rendered, repltheme.HighlightStyle.Render("openai")) {
 		t.Fatalf("expected provider in initial screen to not use highlight style, got %q", rendered)
 	}
-	if !strings.Contains(rendered, highlightStyle.Render("gpt-5.4")) {
+	if !strings.Contains(rendered, repltheme.HighlightStyle.Render("gpt-5.4")) {
 		t.Fatalf("expected model in initial screen to use highlight style, got %q", rendered)
 	}
 }
@@ -395,12 +401,12 @@ func TestUpdate_RoutesToPermissionHandling(t *testing.T) {
 	eventCh := make(chan llm.StreamEvent)
 	m.streamHandler.Start(eventCh, "Loading...")
 
-	req := &PermissionRequest{
+	req := &replpermissions.Request{
 		RequestID:    "1",
 		ToolName:     "read_file",
 		Path:         "foo.txt",
 		ResolvedPath: "/resolved/foo.txt",
-		Status:       PermissionStatusPending,
+		Status:       replpermissions.StatusPending,
 		ResponseChan: make(chan bool, 1),
 	}
 	m.streamHandler.HandlePermissionRequest(req)
@@ -449,12 +455,12 @@ func TestUpdateNormalMode_PermissionReadyRendersImmediately(t *testing.T) {
 	m.streamHandler.Start(eventCh, "Loading...")
 	m.showSpinner = true
 
-	req := &PermissionRequest{
+	req := &replpermissions.Request{
 		RequestID:    "1",
 		ToolName:     "read_file",
 		Path:         "../foo.txt",
 		ResolvedPath: "/tmp/foo.txt",
-		Status:       PermissionStatusPending,
+		Status:       replpermissions.StatusPending,
 		ResponseChan: make(chan bool, 1),
 	}
 
@@ -477,11 +483,11 @@ func TestUpdateNormalMode_DiffReadyRendersImmediately(t *testing.T) {
 	m.streamHandler.Start(eventCh, "Loading...")
 
 	done := make(chan struct{})
-	req := diffEmitRequest{
-		lines: []tools.EditDiffLine{
+	req := repltooling.DiffRequest{
+		Lines: []tools.EditDiffLine{
 			{Kind: tools.DiffLineAdded, Content: "hello", NewLineNum: 1},
 		},
-		done: done,
+		Done: done,
 	}
 
 	newM, cmd := m.updateNormalMode(diffReadyMsg{req: req})
@@ -605,7 +611,7 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 			},
 		},
 	}
-	m.appState = NewAppState(nil, "")
+	m.appState = replappstate.New(nil, "")
 	m.appState.AddMessage(llm.RoleUser, strings.Repeat("word ", 750))
 	m.refreshContextStatus(false)
 
@@ -622,7 +628,7 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	if !strings.Contains(meta, "50%") {
 		t.Fatalf("expected 50%% context usage, got %q", meta)
 	}
-	if !strings.Contains(meta, highlightStyle.Render("openai/gpt-5.4")) {
+	if !strings.Contains(meta, repltheme.HighlightStyle.Render("openai/gpt-5.4")) {
 		t.Fatalf("expected provider/model to use the same highlight style, got %q", meta)
 	}
 	if !strings.Contains(meta, "·") {
@@ -670,8 +676,46 @@ func TestSpinnerHeight_IncludesCompactionSpinner(t *testing.T) {
 	m.showSpinner = true
 	m.isCompacting = true
 
-	if got := m.spinnerHeight(); got != 1 {
-		t.Fatalf("expected spinner height 1 during compaction, got %d", got)
+	if got := m.spinnerHeight(); got != 2 {
+		t.Fatalf("expected spinner height 2 during compaction, got %d", got)
+	}
+}
+
+func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
+	m := newTestModel()
+	m.showSpinner = true
+	m.loadingText = "Accio..."
+	m.viewport.SetHeight(1)
+	m.viewport.SetContent("assistant output")
+
+	view := m.View().Content
+	lines := strings.Split(view, "\n")
+
+	outputLine := -1
+	spinnerLine := -1
+	for i, line := range lines {
+		if strings.Contains(line, "assistant output") {
+			outputLine = i
+		}
+		if strings.Contains(line, "Accio...") {
+			spinnerLine = i
+		}
+	}
+
+	if outputLine == -1 || spinnerLine == -1 {
+		t.Fatalf("expected view to contain output and spinner text, got %q", view)
+	}
+	if spinnerLine != outputLine+2 {
+		t.Fatalf("expected blank spacer line before spinner, got %q", view)
+	}
+	if strings.TrimSpace(lines[outputLine+1]) != "" {
+		t.Fatalf("expected blank spacer line before spinner, got %q", view)
+	}
+	if !strings.HasPrefix(lines[spinnerLine], " ") {
+		t.Fatalf("expected spinner text to preserve left padding, got %q", lines[spinnerLine])
+	}
+	if !strings.Contains(lines[spinnerLine], "| ") {
+		t.Fatalf("expected spacing after spinner glyph, got %q", lines[spinnerLine])
 	}
 }
 

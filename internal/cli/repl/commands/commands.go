@@ -1,13 +1,13 @@
-package repl
+package commands
 
 import "strings"
 
-type slashCommand struct {
+type SlashCommand struct {
 	Name        string
 	Description string
 }
 
-var allSlashCommands = []slashCommand{
+var all = []SlashCommand{
 	{"/clear", "Clear the session and create a new one (also /new)"},
 	{"/compact", "Compact conversation context"},
 	{"/exit", "Quit Keen"},
@@ -18,13 +18,13 @@ var allSlashCommands = []slashCommand{
 	{"/sessions", "List saved sessions for this directory"},
 }
 
-func filterCommands(input string) []slashCommand {
+func Filter(input string) []SlashCommand {
 	if input == "" || !strings.HasPrefix(input, "/") {
 		return nil
 	}
 	prefix := strings.ToLower(strings.TrimPrefix(input, "/"))
-	var results []slashCommand
-	for _, cmd := range allSlashCommands {
+	var results []SlashCommand
+	for _, cmd := range all {
 		name := strings.TrimPrefix(cmd.Name, "/")
 		if strings.HasPrefix(name, prefix) {
 			results = append(results, cmd)

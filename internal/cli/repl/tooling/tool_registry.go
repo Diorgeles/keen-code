@@ -1,17 +1,19 @@
-package repl
+package tooling
 
 import (
 	"path/filepath"
 
+	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
 	"github.com/user/keen-code/internal/filesystem"
 	"github.com/user/keen-code/internal/tools"
 )
 
-func setupToolRegistry(
+func SetupToolRegistry(
 	workingDir string,
-	appState *AppState,
-	permissionRequester *REPLPermissionRequester,
-	diffEmitter *REPLDiffEmitter,
+	appState *replappstate.AppState,
+	permissionRequester *replpermissions.Requester,
+	diffEmitter *DiffEmitter,
 ) {
 	gitAwareness := filesystem.NewGitAwareness()
 	_ = gitAwareness.LoadGitignore(filepath.Join(workingDir, ".gitignore"))

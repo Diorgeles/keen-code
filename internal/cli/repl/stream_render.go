@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	reploutput "github.com/user/keen-code/internal/cli/repl/output"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -32,14 +34,14 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
 					continue
 				}
-				lines = append(lines, formatToolStart(seg.toolCall, sh.workingDir))
+				lines = append(lines, reploutput.FormatToolStart(seg.toolCall, sh.workingDir))
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
-					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
+					lines = append(lines, reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
 				} else {
-					lines = append(lines, formatToolEnd(seg.toolCall))
+					lines = append(lines, reploutput.FormatToolEnd(seg.toolCall))
 				}
 			}
 		case segmentBash:
@@ -77,14 +79,14 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
 					continue
 				}
-				lines = append(lines, formatToolStart(seg.toolCall, sh.workingDir))
+				lines = append(lines, reploutput.FormatToolStart(seg.toolCall, sh.workingDir))
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
-					lines = append(lines, formatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
+					lines = append(lines, reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
 				} else {
-					lines = append(lines, formatToolEnd(seg.toolCall))
+					lines = append(lines, reploutput.FormatToolEnd(seg.toolCall))
 				}
 			}
 		case segmentBash:
@@ -131,7 +133,7 @@ func (sh *StreamHandler) renderAssistantViewLines(content string, width int) []s
 	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 	formatted := make([]string, 0, len(responseLines))
 	for _, line := range responseLines {
-		formatted = append(formatted, "  "+wrapStyle.Render(assistantStyle.Render(line)))
+		formatted = append(formatted, "  "+wrapStyle.Render(repltheme.AssistantStyle.Render(line)))
 	}
 	return formatted
 }
@@ -170,7 +172,7 @@ func (sh *StreamHandler) renderReasoningViewLines(content string, width int) []s
 	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 	formatted := make([]string, 0, len(responseLines))
 	for _, line := range responseLines {
-		formatted = append(formatted, "  "+wrapStyle.Render(reasoningStyle.Render(line)))
+		formatted = append(formatted, "  "+wrapStyle.Render(repltheme.ReasoningStyle.Render(line)))
 	}
 	return formatted
 }
@@ -189,7 +191,7 @@ func (sh *StreamHandler) renderReasoningTranscriptLines(content string) []string
 
 	result := make([]string, 0, len(lines))
 	for _, line := range lines {
-		result = append(result, "  "+wrapStyle.Render(reasoningStyle.Render(line)))
+		result = append(result, "  "+wrapStyle.Render(repltheme.ReasoningStyle.Render(line)))
 	}
 	return result
 }
@@ -211,16 +213,16 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 	if ruleWidth < 1 {
 		ruleWidth = 1
 	}
-	rule := diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := repltheme.DiffRuleStyle.Render(strings.Repeat("─", ruleWidth))
 
 	lines := make([]string, 0)
 
 	lines = append(lines, "")
 	lines = append(lines, rule)
-	lines = append(lines, bashCommandStyle.Render("  $ "+seg.command))
+	lines = append(lines, repltheme.BashCommandStyle.Render("  $ "+seg.command))
 
 	if seg.summary != "" {
-		lines = append(lines, bashSummaryStyle.Render("  › "+seg.summary))
+		lines = append(lines, repltheme.BashSummaryStyle.Render("  › "+seg.summary))
 	}
 
 	lines = append(lines, "")
@@ -235,13 +237,13 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 		for _, line := range visible {
 			if width > 0 {
 				wrapStyle := lipgloss.NewStyle().Width(width - 4)
-				lines = append(lines, "  "+bashOutputStyle.Render(wrapStyle.Render(line)))
+				lines = append(lines, "  "+repltheme.BashOutputStyle.Render(wrapStyle.Render(line)))
 			} else {
-				lines = append(lines, "  "+bashOutputStyle.Render(line))
+				lines = append(lines, "  "+repltheme.BashOutputStyle.Render(line))
 			}
 		}
 		if total > bashOutputMaxLines {
-			accentStyle := lipgloss.NewStyle().Foreground(accentColor)
+			accentStyle := lipgloss.NewStyle().Foreground(repltheme.AccentColor)
 			lines = append(lines, "  "+accentStyle.Render(fmt.Sprintf("→ %d more lines", total-bashOutputMaxLines)))
 		}
 	}
@@ -254,15 +256,15 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 func renderDiffLine(dl tools.EditDiffLine) string {
 	switch dl.Kind {
 	case tools.DiffLineHunk:
-		return "  " + diffHunkStyle.Render(dl.Content)
+		return "  " + repltheme.DiffHunkStyle.Render(dl.Content)
 	case tools.DiffLineAdded:
 		lineNum := fmt.Sprintf("%4d", dl.NewLineNum)
-		return diffLineNumStyle.Render("     "+lineNum) + " " + diffAddStyle.Render("+ "+dl.Content)
+		return repltheme.DiffLineNumStyle.Render("     "+lineNum) + " " + repltheme.DiffAddStyle.Render("+ "+dl.Content)
 	case tools.DiffLineRemoved:
 		lineNum := fmt.Sprintf("%4d", dl.OldLineNum)
-		return diffLineNumStyle.Render(lineNum+"     ") + " " + diffRemoveStyle.Render("- "+dl.Content)
+		return repltheme.DiffLineNumStyle.Render(lineNum+"     ") + " " + repltheme.DiffRemoveStyle.Render("- "+dl.Content)
 	default:
-		return diffLineNumStyle.Render(fmt.Sprintf("%4d %4d", dl.OldLineNum, dl.NewLineNum)) + " " + diffContextStyle.Render("  "+dl.Content)
+		return repltheme.DiffLineNumStyle.Render(fmt.Sprintf("%4d %4d", dl.OldLineNum, dl.NewLineNum)) + " " + repltheme.DiffContextStyle.Render("  "+dl.Content)
 	}
 }
 
@@ -284,7 +286,7 @@ func renderDiffSegment(seg *streamSegment, width int) []string {
 		ruleWidth = 1
 	}
 
-	rule := "  " + diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := "  " + repltheme.DiffRuleStyle.Render(strings.Repeat("─", ruleWidth))
 	lines := make([]string, 0, len(rendered)+3)
 	lines = append(lines, "")
 	lines = append(lines, rule)

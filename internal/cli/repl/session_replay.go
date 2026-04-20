@@ -4,16 +4,19 @@ import (
 	"errors"
 	"time"
 
+	replmarkdown "github.com/user/keen-code/internal/cli/repl/markdown"
+	reploutput "github.com/user/keen-code/internal/cli/repl/output"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
 )
 
 type sessionReplay struct {
-	output  *OutputBuilder
+	output  *reploutput.OutputBuilder
 	handler *StreamHandler
 }
 
-func newSessionReplay(width int, mdRenderer *MarkdownRenderer, workingDir string) *sessionReplay {
+func newSessionReplay(width int, mdRenderer *replmarkdown.Renderer, workingDir string) *sessionReplay {
 	outputWidth := defaultWidth
 	if width > 0 {
 		outputWidth = width
@@ -27,7 +30,7 @@ func newSessionReplay(width int, mdRenderer *MarkdownRenderer, workingDir string
 	}
 
 	return &sessionReplay{
-		output:  &OutputBuilder{width: outputWidth, lines: []string{}, workingDir: workingDir},
+		output:  reploutput.NewOutputBuilder(outputWidth, workingDir),
 		handler: handler,
 	}
 }
@@ -37,7 +40,7 @@ func (r *sessionReplay) applyEvent(event session.Event) {
 	case session.KindUserMessage:
 		r.flushDone()
 		if event.UserMessage != nil {
-			r.output.AddUserInput(event.UserMessage.Content, promptStyle)
+			r.output.AddUserInput(event.UserMessage.Content, repltheme.PromptStyle)
 		}
 	case session.KindAssistantTurn:
 		r.applyAssistantTurn(event.AssistantTurn)
@@ -76,7 +79,7 @@ func (r *sessionReplay) applyCompaction(compaction *session.CompactionAppliedPay
 	}
 
 	if compaction.Status != "" {
-		addCompactionSuccessStatus(r.output, compaction.Status)
+		reploutput.AddCompactionSuccessStatus(r.output, compaction.Status)
 	}
 }
 
@@ -98,7 +101,7 @@ func (r *sessionReplay) flushInterrupt() {
 			r.output.AddLine(line)
 		}
 	}
-	r.output.AddStyledLine("\n  "+interruptedPromptText, interruptedStyle)
+	r.output.AddStyledLine("\n  "+interruptedPromptText, repltheme.InterruptedStyle)
 	r.output.AddEmptyLine()
 }
 
@@ -110,7 +113,7 @@ func (r *sessionReplay) flushError(errText string) {
 		}
 	}
 	if errText != "" {
-		r.output.AddError(errText, errorStyle)
+		r.output.AddError(errText, repltheme.ErrorStyle)
 	}
 }
 

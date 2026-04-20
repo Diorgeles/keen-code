@@ -1,9 +1,10 @@
-package repl
+package widgets
 
 import (
 	"fmt"
 	"strings"
 
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/session"
 )
 
@@ -15,6 +16,7 @@ type SessionPicker struct {
 const (
 	sessionPickerLinesPerItem = 3
 	sessionPickerFixedLines   = 3
+	defaultCardWidth          = 80
 )
 
 func NewSessionPicker(summaries []session.Summary) *SessionPicker {
@@ -60,12 +62,12 @@ func (p *SessionPicker) visibleRange(maxItems int) (int, int) {
 	return start, start + maxItems
 }
 
-func formatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string {
+func FormatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string {
 	if picker == nil {
 		return ""
 	}
 
-	ruleWidth := defaultWidth - 2
+	ruleWidth := defaultCardWidth - 2
 	if width > 0 {
 		ruleWidth = width - 2
 	}
@@ -86,18 +88,18 @@ func formatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string
 	}
 	start, end := picker.visibleRange(maxItems)
 
-	rule := "  " + diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := "  " + repltheme.DiffRuleStyle.Render(strings.Repeat("─", ruleWidth))
 	var body strings.Builder
-	body.WriteString(userPromptStyle.Render("Saved Sessions"))
+	body.WriteString(repltheme.UserPromptStyle.Render("Saved Sessions"))
 	body.WriteString("\n\n")
 
 	for i := start; i < end; i++ {
 		summary := picker.summaries[i]
 		prefix := "  "
-		style := normalStyle
+		style := repltheme.NormalStyle
 		if i == picker.cursor {
 			prefix = "> "
-			style = userPromptSelectionStyle
+			style = repltheme.UserPromptSelectionStyle
 		}
 
 		preview := strings.TrimSpace(summary.LastUserMessage)
@@ -110,7 +112,7 @@ func formatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string
 
 		body.WriteString(style.Render(prefix + preview))
 		body.WriteString("\n")
-		body.WriteString(timestampStyle.Render(fmt.Sprintf(
+		body.WriteString(repltheme.TimestampStyle.Render(fmt.Sprintf(
 			"    Created: %s   Updated: %s",
 			summary.CreatedAt.Local().Format("2006-01-02 15:04"),
 			summary.UpdatedAt.Local().Format("2006-01-02 15:04"),
@@ -118,7 +120,7 @@ func formatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string
 		body.WriteString("\n\n")
 	}
 
-	body.WriteString(hintStyle.Render("[↑/↓ navigate  Enter to resume  Esc to cancel]"))
+	body.WriteString(repltheme.HintStyle.Render("[↑/↓ navigate  Enter to resume  Esc to cancel]"))
 
 	lines := strings.Split(strings.TrimRight(body.String(), "\n"), "\n")
 

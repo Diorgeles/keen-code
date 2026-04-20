@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	"github.com/user/keen-code/internal/llm"
 )
 
@@ -69,8 +71,8 @@ func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
-		appState:      NewAppState(nil, workingDir),
-		output:        NewOutputBuilder(80),
+		appState:      replappstate.New(nil, workingDir),
+		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 	m.startAssistantTurnMemory()
 	relativeFile := filepath.Join("nested", "a.go")
@@ -103,7 +105,7 @@ func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 func TestRecordToolMemory_UsesRelativePathFromWorkingDir(t *testing.T) {
 	workingDir := t.TempDir()
 	m := replModel{
-		appState: NewAppState(nil, workingDir),
+		appState: replappstate.New(nil, workingDir),
 	}
 	m.startAssistantTurnMemory()
 

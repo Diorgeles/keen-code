@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/tools"
 )
@@ -166,18 +167,18 @@ func formatPercent(percent float64) string {
 
 func contextPercentStyle(percent float64) lipgloss.Style {
 	if percent >= 95 {
-		return contextStatusPercentCriticalStyle
+		return repltheme.ContextStatusPercentCriticalStyle
 	}
 	if percent >= 80 {
-		return contextStatusPercentWarnStyle
+		return repltheme.ContextStatusPercentWarnStyle
 	}
-	return contextStatusPercentStyle
+	return repltheme.ContextStatusPercentStyle
 }
 
 func renderContextStatus(status contextStatus) string {
-	label := contextStatusLabelStyle.Render("context in use:")
+	label := repltheme.ContextStatusLabelStyle.Render("context in use:")
 	if !status.KnownWindow || status.ContextWindow <= 0 {
-		return label + " " + contextStatusUnknownStyle.Render("N/A")
+		return label + " " + repltheme.ContextStatusUnknownStyle.Render("N/A")
 	}
 
 	percent := contextPercentStyle(status.Percent).Render(formatPercent(status.Percent))

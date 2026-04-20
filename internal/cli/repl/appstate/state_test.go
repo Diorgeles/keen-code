@@ -1,4 +1,4 @@
-package repl
+package appstate
 
 import (
 	"context"
@@ -26,7 +26,7 @@ func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, 
 
 func TestNewAppState(t *testing.T) {
 	client := &mockLLMClient{}
-	state := NewAppState(client, t.TempDir())
+	state := New(client, t.TempDir())
 
 	if state == nil {
 		t.Fatal("expected non-nil AppState")
@@ -40,7 +40,7 @@ func TestNewAppState(t *testing.T) {
 }
 
 func TestNewAppState_NilClient(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 
 	if state == nil {
 		t.Fatal("expected non-nil AppState")
@@ -51,7 +51,7 @@ func TestNewAppState_NilClient(t *testing.T) {
 }
 
 func TestAppState_AddMessage(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 
 	state.AddMessage(llm.RoleUser, "Hello")
 	if len(state.messages) != 1 {
@@ -74,7 +74,7 @@ func TestAppState_AddMessage(t *testing.T) {
 }
 
 func TestAppState_GetMessages(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 
 	messages := state.GetMessages()
 	if len(messages) != 0 {
@@ -92,7 +92,7 @@ func TestAppState_GetMessages(t *testing.T) {
 }
 
 func TestAppState_GetMessages_ReturnsCopy(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 	state.AppendMessage(llm.Message{
 		Role:    llm.RoleAssistant,
 		Content: "Original",
@@ -115,7 +115,7 @@ func TestAppState_GetMessages_ReturnsCopy(t *testing.T) {
 }
 
 func TestAppState_ClearMessages(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 
 	state.AddMessage(llm.RoleUser, "Hello")
 	state.AddMessage(llm.RoleAssistant, "Hi")
@@ -130,7 +130,7 @@ func TestAppState_ClearMessages(t *testing.T) {
 }
 
 func TestAppState_ClearMessages_EmptyState(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 
 	state.ClearMessages()
 	if len(state.messages) != 0 {
@@ -157,7 +157,7 @@ func TestAppState_StreamChat_WithClient(t *testing.T) {
 		},
 	}
 
-	state := NewAppState(client, t.TempDir())
+	state := New(client, t.TempDir())
 	state.AddMessage(llm.RoleUser, "Hi")
 
 	cfg := &config.ResolvedConfig{APIKey: "key", Model: "model"}
@@ -177,7 +177,7 @@ func TestAppState_StreamChat_WithClient(t *testing.T) {
 }
 
 func TestAppState_StreamChat_NilClient(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 	state.AddMessage(llm.RoleUser, "Hi")
 
 	cfg := &config.ResolvedConfig{APIKey: "key", Model: "model"}
@@ -198,7 +198,7 @@ func TestAppState_StreamChat_ClientError(t *testing.T) {
 		},
 	}
 
-	state := NewAppState(client, t.TempDir())
+	state := New(client, t.TempDir())
 	cfg := &config.ResolvedConfig{APIKey: "key", Model: "model"}
 
 	_, err := state.StreamChat(context.Background(), cfg)
@@ -250,7 +250,7 @@ func TestAppState_IsClientReady(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			state := NewAppState(tt.client, t.TempDir())
+			state := New(tt.client, t.TempDir())
 			got := state.IsClientReady(tt.cfg)
 			if got != tt.expected {
 				t.Errorf("IsClientReady() = %v, expected %v", got, tt.expected)
@@ -261,7 +261,7 @@ func TestAppState_IsClientReady(t *testing.T) {
 
 func TestAppState_UpdateClient(t *testing.T) {
 	oldClient := &mockLLMClient{}
-	state := NewAppState(oldClient, t.TempDir())
+	state := New(oldClient, t.TempDir())
 
 	if state.llmClient != oldClient {
 		t.Error("expected old client to be set initially")
@@ -277,7 +277,7 @@ func TestAppState_UpdateClient(t *testing.T) {
 
 func TestAppState_UpdateClient_ToNil(t *testing.T) {
 	client := &mockLLMClient{}
-	state := NewAppState(client, t.TempDir())
+	state := New(client, t.TempDir())
 
 	state.UpdateClient(nil)
 
@@ -288,7 +288,7 @@ func TestAppState_UpdateClient_ToNil(t *testing.T) {
 
 func TestAppState_GetClient(t *testing.T) {
 	client := &mockLLMClient{}
-	state := NewAppState(client, t.TempDir())
+	state := New(client, t.TempDir())
 
 	got := state.GetClient()
 	if got != client {
@@ -297,7 +297,7 @@ func TestAppState_GetClient(t *testing.T) {
 }
 
 func TestAppState_GetClient_Nil(t *testing.T) {
-	state := NewAppState(nil, t.TempDir())
+	state := New(nil, t.TempDir())
 
 	got := state.GetClient()
 	if got != nil {
@@ -322,7 +322,7 @@ func TestAppState_StreamCompactBuildsCompactionRequest(t *testing.T) {
 		},
 	}
 
-	state := NewAppState(client, t.TempDir())
+	state := New(client, t.TempDir())
 	original := make([]llm.Message, 0, 25)
 	for i := 0; i < 25; i++ {
 		role := llm.RoleUser
@@ -373,7 +373,7 @@ func TestAppState_StreamCompactBuildsCompactionRequest(t *testing.T) {
 }
 
 func TestAppState_ApplyCompactionReplacesHistoryWithSingleSummaryMessage(t *testing.T) {
-	state := NewAppState(&mockLLMClient{}, t.TempDir())
+	state := New(&mockLLMClient{}, t.TempDir())
 	state.AddMessage(llm.RoleUser, "hello")
 	state.AddMessage(llm.RoleAssistant, "world")
 
@@ -391,7 +391,7 @@ func TestAppState_ApplyCompactionReplacesHistoryWithSingleSummaryMessage(t *test
 }
 
 func TestAppState_ApplyCompactionLeavesMessagesUntouchedOnError(t *testing.T) {
-	state := NewAppState(&mockLLMClient{}, t.TempDir())
+	state := New(&mockLLMClient{}, t.TempDir())
 	state.AddMessage(llm.RoleUser, "hello")
 	state.AddMessage(llm.RoleAssistant, "world")
 	original := state.GetMessages()
@@ -407,7 +407,7 @@ func TestAppState_ApplyCompactionLeavesMessagesUntouchedOnError(t *testing.T) {
 }
 
 func TestAppState_StreamCompactLeavesMessagesUntouchedOnCancel(t *testing.T) {
-	state := NewAppState(&mockLLMClient{}, t.TempDir())
+	state := New(&mockLLMClient{}, t.TempDir())
 	state.AddMessage(llm.RoleUser, "hello")
 	original := state.GetMessages()
 

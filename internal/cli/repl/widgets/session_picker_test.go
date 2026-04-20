@@ -1,4 +1,4 @@
-package repl
+package widgets
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ func TestSessionPickerVisibleRange(t *testing.T) {
 func TestFormatSessionPickerCard_RespectsHeightBudget(t *testing.T) {
 	picker := NewSessionPicker(makeSessionSummaries(10))
 
-	card := formatSessionPickerCard(picker, 80, 12)
+	card := FormatSessionPickerCard(picker, 80, 12)
 	lines := strings.Split(strings.TrimRight(card, "\n"), "\n")
 	if len(lines) > 12 {
 		t.Fatalf("expected picker card to fit height budget, got %d lines", len(lines))
@@ -45,7 +45,7 @@ func TestFormatSessionPickerCard_KeepsSelectedItemVisible(t *testing.T) {
 	picker := NewSessionPicker(makeSessionSummaries(10))
 	picker.cursor = 9
 
-	card := formatSessionPickerCard(picker, 80, 12)
+	card := FormatSessionPickerCard(picker, 80, 12)
 	if !strings.Contains(card, "> session 9") {
 		t.Fatalf("expected selected item to remain visible, got %q", card)
 	}
@@ -55,7 +55,7 @@ func TestFormatSessionPickerCard_LongListFitsWidth(t *testing.T) {
 	picker := NewSessionPicker(makeSessionSummaries(10))
 
 	width := 80
-	card := formatSessionPickerCard(picker, width, 12)
+	card := FormatSessionPickerCard(picker, width, 12)
 	for _, line := range strings.Split(strings.TrimRight(card, "\n"), "\n") {
 		if w := lipgloss.Width(line); w > width {
 			t.Fatalf("line exceeds expected width heuristic (%d > %d): %q", w, width, line)
@@ -66,7 +66,7 @@ func TestFormatSessionPickerCard_LongListFitsWidth(t *testing.T) {
 func TestFormatSessionPickerCard_UsesViewportWidthRules(t *testing.T) {
 	picker := NewSessionPicker(makeSessionSummaries(3))
 
-	card := formatSessionPickerCard(picker, 24, 12)
+	card := FormatSessionPickerCard(picker, 24, 12)
 	lines := strings.Split(strings.TrimRight(card, "\n"), "\n")
 	nonEmpty := make([]string, 0, len(lines))
 	for _, line := range lines {

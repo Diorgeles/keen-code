@@ -12,6 +12,13 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	replmarkdown "github.com/user/keen-code/internal/cli/repl/markdown"
+	reploutput "github.com/user/keen-code/internal/cli/repl/output"
+	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
+	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
+	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
@@ -33,48 +40,66 @@ const (
 )
 
 var loadingTexts = []string{
-	"Cogitating...",
-	"Schemulating...",
-	"Logicrafting...",
-	"Factweaving...",
-	"Signalparsing...",
-	"Mindmapping...",
-	"Codeforging...",
-	"Tasksplicing...",
-	"Datasifting...",
-	"Pathfinding...",
-	"Threadspinning...",
-	"Plansmithing...",
-	"Synthesizing...",
-	"Constraintcrunching...",
-	"Flowtuning...",
-	"Resultshaping...",
-	"Contextfolding...",
-	"Syntaxstitching...",
-	"Hypothesishammering...",
-	"Signaldistilling...",
-	"Threadaligning...",
-	"Contextlathing...",
-	"Promptcalibrating...",
-	"Intentdecoding...",
-	"Plancompiling...",
-	"Tokenjuggling...",
-	"Edgecasemapping...",
-	"Inferencepolishing...",
-	"Tracemining...",
-	"Branchsculpting...",
-	"Outcomeforging...",
-	"Latencytrimming...",
-	"Modelwhispering...",
-	"Heuristicbraiding...",
-	"Difforbiting...",
-	"Semanticssanding...",
-	"Constraintweaving...",
-	"Decisionlinting...",
-	"Querytempering...",
-	"Contextbuffering...",
-	"Pathuntangling...",
-	"Resulthoning...",
+	"Accio...",
+	"Aguamenti...",
+	"Alohomora...",
+	"Anapneo...",
+	"Aparecium...",
+	"Ascendio...",
+	"Avis...",
+	"Bombarda...",
+	"Colloportus...",
+	"Confundo...",
+	"Confringo...",
+	"Defodio...",
+	"Depulso...",
+	"Descendo...",
+	"Diffindo...",
+	"Duro...",
+	"Engorgio...",
+	"Episkey...",
+	"Evanesco...",
+	"Expelliarmus...",
+	"Expulso...",
+	"Ferula...",
+	"Finite...",
+	"Flagrate...",
+	"Flipendo...",
+	"Geminio...",
+	"Homenum Revelio...",
+	"Impedimenta...",
+	"Impervius...",
+	"Incendio...",
+	"Langlock...",
+	"Levicorpus...",
+	"Liberacorpus...",
+	"Locomotor...",
+	"Lumos...",
+	"Muffliato...",
+	"Nox...",
+	"Obliviate...",
+	"Obscuro...",
+	"Oppugno...",
+	"Orchideous...",
+	"Petrificus Totalus...",
+	"Protego...",
+	"Quietus...",
+	"Reducio...",
+	"Reducto...",
+	"Reparo...",
+	"Revelio...",
+	"Rictusempra...",
+	"Ridikulus...",
+	"Scourgify...",
+	"Sectumsempra...",
+	"Serpensortia...",
+	"Silencio...",
+	"Sonorus...",
+	"Stupefy...",
+	"Tarantallegra...",
+	"Tergeo...",
+	"Waddiwasi...",
+	"Wingardium Leviosa...",
 }
 
 var loadingSpinners = []spinner.Spinner{
@@ -86,9 +111,6 @@ var loadingSpinners = []spinner.Spinner{
 	spinner.Points,
 	spinner.Meter,
 	spinner.Hamburger,
-	spinner.Globe,
-	spinner.Moon,
-	spinner.Monkey,
 }
 
 func nextLoadingText() string {
@@ -112,17 +134,17 @@ type replModel struct {
 	textarea            textarea.Model
 	viewport            viewport.Model
 	ctx                 *replContext
-	appState            *AppState
-	output              *OutputBuilder
-	modelSelection      *Model
-	permissionRequester *REPLPermissionRequester
-	diffEmitter         *REPLDiffEmitter
+	appState            *replappstate.AppState
+	output              *reploutput.OutputBuilder
+	modelSelection      *replwidgets.Model
+	permissionRequester *replpermissions.Requester
+	diffEmitter         *repltooling.DiffEmitter
 	sessions            *replSessionState
-	sessionPicker       *SessionPicker
-	suggestion          suggestionModel
+	sessionPicker       *replwidgets.SessionPicker
+	suggestion          replwidgets.SuggestionModel
 	quitting            bool
 	streamHandler       *StreamHandler
-	mdRenderer          *MarkdownRenderer
+	mdRenderer          *replmarkdown.Renderer
 	width               int
 	height              int
 	spinner             spinner.Model
@@ -164,10 +186,10 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	})
 
 	styles := ta.Styles()
-	styles.Focused.Prompt = promptStyle
+	styles.Focused.Prompt = repltheme.PromptStyle
 	styles.Focused.Text = lipgloss.NewStyle()
 	styles.Focused.CursorLine = lipgloss.NewStyle()
-	styles.Blurred.Prompt = promptStyle
+	styles.Blurred.Prompt = repltheme.PromptStyle
 	styles.Blurred.Text = lipgloss.NewStyle()
 	styles.Blurred.CursorLine = lipgloss.NewStyle()
 	ta.SetStyles(styles)
@@ -177,17 +199,17 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 
 	s := spinner.New()
 	s.Spinner = spinner.Pulse
-	s.Style = lipgloss.NewStyle().Foreground(primaryColor)
+	s.Style = lipgloss.NewStyle().Foreground(repltheme.PrimaryColor)
 
 	initialOutput := buildInitialScreen(ctx)
-	appState := NewAppState(llmClient, ctx.workingDir)
+	appState := replappstate.New(llmClient, ctx.workingDir)
 
-	permissionRequester := NewREPLPermissionRequester()
-	diffEmitter := NewREPLDiffEmitter()
+	permissionRequester := replpermissions.NewRequester()
+	diffEmitter := repltooling.NewDiffEmitter()
 	sessions := newReplSessionState(ctx.workingDir)
-	setupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter)
+	repltooling.SetupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter)
 
-	mdRenderer, err := NewMarkdownRenderer(defaultWidth)
+	mdRenderer, err := replmarkdown.New(defaultWidth)
 
 	if err != nil {
 		mdRenderer = nil
@@ -201,21 +223,20 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		viewport:            vp,
 		ctx:                 ctx,
 		appState:            appState,
-		output:              NewOutputBuilder(defaultWidth),
+		output:              reploutput.NewOutputBuilder(defaultWidth, ctx.workingDir),
 		spinner:             s,
 		streamHandler:       NewStreamHandler(mdRenderer),
 		mdRenderer:          mdRenderer,
 		permissionRequester: permissionRequester,
 		diffEmitter:         diffEmitter,
 		sessions:            sessions,
-		suggestion:          newSuggestionModel(),
+		suggestion:          replwidgets.NewSuggestionModel(),
 	}
-	model.output.workingDir = ctx.workingDir
 	model.streamHandler.workingDir = ctx.workingDir
 	model.refreshContextStatus(false)
 
 	if needsSetup {
-		welcomeStyle := lipgloss.NewStyle().Foreground(primaryColor).Bold(true)
+		welcomeStyle := lipgloss.NewStyle().Foreground(repltheme.PrimaryColor).Bold(true)
 		model.output.AddEmptyLine()
 		model.output.AddStyledLine(welcomeStyle.Render("👋 Welcome to Keen!"), lipgloss.NewStyle())
 		model.output.AddEmptyLine()
@@ -246,13 +267,13 @@ func buildInitialScreen(ctx *replContext) []string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, "  "+titleStyle.Render("✦︎ Keen v"+ctx.version+" .✦ ݁˖"))
+	lines = append(lines, "  "+repltheme.TitleStyle.Render("✦︎ Keen v"+ctx.version+" .✦ ݁˖"))
 	lines = append(lines, "")
 
 	displayDir := abbreviateHome(ctx.workingDir)
-	lines = append(lines, "  "+infoLabelStyle.Render("Directory:")+" "+infoValueStyle.Render(displayDir))
-	lines = append(lines, "  "+infoLabelStyle.Render("Provider:")+" "+infoValueStyle.Render(ctx.cfg.Provider))
-	lines = append(lines, "  "+infoLabelStyle.Render("Model:")+" "+highlightStyle.Render(ctx.cfg.Model))
+	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Directory:")+" "+repltheme.InfoValueStyle.Render(displayDir))
+	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Provider:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.Provider))
+	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Model:")+" "+repltheme.HighlightStyle.Render(ctx.cfg.Model))
 	lines = append(lines, "")
 
 	tips := []string{
@@ -261,7 +282,7 @@ func buildInitialScreen(ctx *replContext) []string {
 		"Press Enter to send, Ctrl+Enter for new line",
 		"Shift+click to select and copy text",
 	}
-	tipsBox := boxStyle.Render(tipStyle.Render(strings.Join(tips, "\n")))
+	tipsBox := repltheme.BoxStyle.Render(repltheme.TipStyle.Render(strings.Join(tips, "\n")))
 	lines = append(lines, tipsBox)
 	lines = append(lines, "")
 
@@ -274,7 +295,7 @@ func (m replModel) Init() tea.Cmd {
 
 func (m *replModel) spinnerHeight() int {
 	if m.showSpinner {
-		return 1
+		return 2
 	}
 	return 0
 }
@@ -284,7 +305,7 @@ func (m *replModel) adjustTextareaHeight() {
 		return
 	}
 	m.textarea.SetHeight(maxHeight)
-	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.height())
+	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())
 }
 
 func (m replModel) isAtTopOfInput() bool {
@@ -299,7 +320,7 @@ func (m *replModel) startModelSelection() replModel {
 	onComplete := func(provider, model, apiKey string) error {
 		return m.updateLLMClient()
 	}
-	m.modelSelection = New(
+	m.modelSelection = replwidgets.New(
 		m.ctx.registry,
 		m.ctx.globalCfg,
 		m.ctx.loader,
@@ -325,7 +346,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	m.output.AddUserInput(input, promptStyle)
+	m.output.AddUserInput(input, repltheme.PromptStyle)
 
 	if input == exitCommand {
 		m.quitting = true
@@ -350,19 +371,19 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		m.textarea.Reset()
 		summaries, err := m.sessions.listSessions()
 		if err != nil {
-			m.output.AddError("Failed to load sessions: "+err.Error(), errorStyle)
+			m.output.AddError("Failed to load sessions: "+err.Error(), repltheme.ErrorStyle)
 			m.updateViewportContent()
 			m.viewport.GotoBottom()
 			return *m, nil
 		}
 		if len(summaries) == 0 {
-			m.output.AddStyledLine("  No saved sessions for this directory.", lipgloss.NewStyle().Foreground(mutedColor))
+			m.output.AddStyledLine("  No saved sessions for this directory.", lipgloss.NewStyle().Foreground(repltheme.MutedColor))
 			m.output.AddEmptyLine()
 			m.updateViewportContent()
 			m.viewport.GotoBottom()
 			return *m, nil
 		}
-		m.sessionPicker = NewSessionPicker(summaries)
+		m.sessionPicker = replwidgets.NewSessionPicker(summaries)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return *m, nil
@@ -376,7 +397,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	if input == compactCommand || strings.HasPrefix(input, compactCommand+" ") {
 		extraPrompt := strings.TrimSpace(strings.TrimPrefix(input, compactCommand))
 		if !m.appState.IsClientReady(m.ctx.cfg) {
-			m.output.AddError("LLM client not initialized. Use /model to configure.", errorStyle)
+			m.output.AddError("LLM client not initialized. Use /model to configure.", repltheme.ErrorStyle)
 			m.textarea.Reset()
 			m.updateViewportContent()
 			m.viewport.GotoBottom()
@@ -387,7 +408,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	if !m.appState.IsClientReady(m.ctx.cfg) {
-		m.output.AddError("LLM client not initialized. Use /model to configure.", errorStyle)
+		m.output.AddError("LLM client not initialized. Use /model to configure.", repltheme.ErrorStyle)
 		m.textarea.Reset()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
@@ -395,7 +416,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	if err := m.sessions.appendUserMessage(input); err != nil {
-		m.output.AddError("Session persistence failed: "+err.Error(), errorStyle)
+		m.output.AddError("Session persistence failed: "+err.Error(), repltheme.ErrorStyle)
 		m.textarea.Reset()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
@@ -408,7 +429,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	eventCh, err := m.appState.StreamChat(ctx, m.ctx.cfg)
 	if err != nil {
 		m.clearStreamCancel()
-		m.output.AddError(err.Error(), errorStyle)
+		m.output.AddError(err.Error(), repltheme.ErrorStyle)
 		m.textarea.Reset()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
@@ -438,14 +459,14 @@ func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
 	eventCh, err := m.appState.StreamCompact(ctx, m.ctx.cfg, extraPrompt)
 	if err != nil {
 		cancel()
-		m.output.AddError(err.Error(), errorStyle)
+		m.output.AddError(err.Error(), repltheme.ErrorStyle)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return *m, nil
 	}
 	if eventCh == nil {
 		cancel()
-		m.output.AddError("compaction stream unavailable", errorStyle)
+		m.output.AddError("compaction stream unavailable", repltheme.ErrorStyle)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return *m, nil
@@ -505,7 +526,7 @@ func (m *replModel) updateViewportContent() {
 	}
 
 	if m.sessionPicker != nil {
-		content.WriteString(formatSessionPickerCard(m.sessionPicker, m.viewport.Width(), m.viewport.Height()))
+		content.WriteString(replwidgets.FormatSessionPickerCard(m.sessionPicker, m.viewport.Width(), m.viewport.Height()))
 	}
 
 	m.viewport.SetContent(content.String())
@@ -515,11 +536,11 @@ func (m replModel) waitForAsyncEvent() tea.Cmd {
 	if m.streamHandler == nil || !m.streamHandler.IsActive() || m.streamHandler.eventCh == nil {
 		return nil
 	}
-	var permissionCh <-chan *PermissionRequest
+	var permissionCh <-chan *replpermissions.Request
 	if m.permissionRequester != nil {
 		permissionCh = m.permissionRequester.GetRequestChan()
 	}
-	var diffCh <-chan diffEmitRequest
+	var diffCh <-chan repltooling.DiffRequest
 	if m.diffEmitter != nil {
 		diffCh = m.diffEmitter.GetDiffChan()
 	}
@@ -530,7 +551,7 @@ func (m replModel) waitForAsyncEvent() tea.Cmd {
 	)
 }
 
-func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *PermissionRequest, diffCh <-chan diffEmitRequest) tea.Cmd {
+func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpermissions.Request, diffCh <-chan repltooling.DiffRequest) tea.Cmd {
 	if llmCh == nil {
 		return nil
 	}
@@ -566,8 +587,8 @@ func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *Permis
 	}
 }
 
-func formatModelSelectionCard(ms *Model) string {
-	boxed := userPromptCardStyle.Render(ms.ViewString())
+func formatModelSelectionCard(ms *replwidgets.Model) string {
+	boxed := repltheme.UserPromptCardStyle.Render(ms.ViewString())
 	lines := strings.Split(strings.TrimRight(boxed, "\n"), "\n")
 	var sb strings.Builder
 	sb.WriteString("\n")
@@ -586,7 +607,7 @@ func renderInputArea(content string, width int) string {
 		ruleWidth = 1
 	}
 
-	rule := inputRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := repltheme.InputRuleStyle.Render(strings.Repeat("─", ruleWidth))
 	return rule + "\n" + content + "\n" + rule
 }
 
@@ -598,7 +619,7 @@ func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
 		m.mdRenderer.UpdateWidth(msg.Width)
 	}
 	m.viewport.SetWidth(msg.Width)
-	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.height())
+	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())
 }
 
 func (m replModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -633,8 +654,8 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 	case compactionErrMsg:
 		return m.handleCompactionError(msg.err)
 	case diffReadyMsg:
-		m.streamHandler.HandleDiff(msg.req.lines)
-		close(msg.req.done)
+		m.streamHandler.HandleDiff(msg.req.Lines)
+		close(msg.req.Done)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return m, m.waitForAsyncEvent()
@@ -680,9 +701,9 @@ func (m replModel) consumeModelSelectionResult(msg tea.Msg) (replModel, tea.Cmd,
 		return m, nil, false
 	}
 
-	if IsComplete(msg) {
+	if replwidgets.IsComplete(msg) {
 		successMsg := "✓ Updated to " + m.modelSelection.SelectedProvider + " / " + m.modelSelection.SelectedModel
-		m.output.AddStyledLine("  "+successMsg, highlightStyle)
+		m.output.AddStyledLine("  "+successMsg, repltheme.HighlightStyle)
 		m.output.AddEmptyLine()
 		m.modelSelection = nil
 		m.refreshContextStatus(false)
@@ -691,8 +712,8 @@ func (m replModel) consumeModelSelectionResult(msg tea.Msg) (replModel, tea.Cmd,
 		return m, nil, true
 	}
 
-	if IsCancel(msg) {
-		cancelStyle := lipgloss.NewStyle().Foreground(mutedColor)
+	if replwidgets.IsCancel(msg) {
+		cancelStyle := lipgloss.NewStyle().Foreground(repltheme.MutedColor)
 		m.output.AddStyledLine("  Model selection cancelled", cancelStyle)
 		m.output.AddEmptyLine()
 		m.modelSelection = nil
@@ -719,7 +740,7 @@ func (m replModel) View() tea.View {
 	var content string
 
 	if m.quitting {
-		content = lipgloss.NewStyle().Foreground(mutedColor).Render("\n  Goodbye!\n")
+		content = lipgloss.NewStyle().Foreground(repltheme.MutedColor).Render("\n  Goodbye!\n")
 	} else {
 		var view strings.Builder
 
@@ -727,19 +748,16 @@ func (m replModel) View() tea.View {
 		view.WriteString("\n")
 
 		if m.showSpinner {
-			spinnerText := m.spinner.View() + " " + loadingTextStyled.Render(m.loadingText)
-			padding := m.width - lipgloss.Width(spinnerText) - 1
-			if padding < 0 {
-				padding = 0
-			}
-			view.WriteString(strings.Repeat(" ", padding) + spinnerText)
+			spinnerText := " " + m.spinner.View() + " " + repltheme.LoadingTextStyled.Render(m.loadingText)
+			view.WriteString("\n")
+			view.WriteString(spinnerText)
 			view.WriteString("\n")
 		}
 
 		view.WriteString(renderInputArea(m.textarea.View(), m.width))
 		view.WriteString("\n")
-		if m.suggestion.visible {
-			view.WriteString(m.suggestion.view(m.width))
+		if m.suggestion.Visible() {
+			view.WriteString(m.suggestion.View(m.width))
 			view.WriteString("\n")
 		}
 		view.WriteString(m.inputMetaView())
@@ -766,13 +784,13 @@ func (m replModel) inputMetaView() string {
 		}
 	}
 
-	modelText := metaLabelStyle.Render("model:") + " " + highlightStyle.Render(provider+"/"+model)
+	modelText := repltheme.MetaLabelStyle.Render("model:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model)
 	contextText := renderContextStatus(m.contextStatus)
-	separator := metaLabelStyle.Render("·")
+	separator := repltheme.MetaLabelStyle.Render("·")
 	left := modelText + " " + separator + " " + contextText
 	right := ""
 	if m.contextStatus.ShouldSuggestCompaction() {
-		right = compactionSuggestionStyle.Render("Try /compact")
+		right = repltheme.CompactionSuggestionStyle.Render("Try /compact")
 	}
 
 	const leftPad = "  "
@@ -802,11 +820,11 @@ func (m replModel) inputMetaView() string {
 		return leftPad + left + strings.Repeat(" ", space) + right
 	}
 
-	compactLeft := metaLabelStyle.Render("M:") + " " + highlightStyle.Render(provider+"/"+model) +
-		" " + separator + " " + metaLabelStyle.Render("C:") + " " + contextPercentStyle(m.contextStatus.Percent).Render(formatPercent(m.contextStatus.Percent))
+	compactLeft := repltheme.MetaLabelStyle.Render("M:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model) +
+		" " + separator + " " + repltheme.MetaLabelStyle.Render("C:") + " " + contextPercentStyle(m.contextStatus.Percent).Render(formatPercent(m.contextStatus.Percent))
 	if !m.contextStatus.KnownWindow || m.contextStatus.ContextWindow <= 0 {
-		compactLeft = metaLabelStyle.Render("M:") + " " + highlightStyle.Render(provider+"/"+model) +
-			" " + separator + " " + metaLabelStyle.Render("C:") + " " + contextStatusUnknownStyle.Render("N/A")
+		compactLeft = repltheme.MetaLabelStyle.Render("M:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model) +
+			" " + separator + " " + repltheme.MetaLabelStyle.Render("C:") + " " + repltheme.ContextStatusUnknownStyle.Render("N/A")
 	}
 	space = available - lipgloss.Width(compactLeft) - lipgloss.Width(right)
 	if space >= 1 {
@@ -829,10 +847,10 @@ func getHelpText() string {
 	}
 
 	var lines []string
-	lines = append(lines, titleStyle.Render("Available Commands"))
+	lines = append(lines, repltheme.TitleStyle.Render("Available Commands"))
 	lines = append(lines, "")
 	for _, c := range cmds {
-		lines = append(lines, "  "+helpCmdStyle.Render(c.cmd)+" "+helpDescStyle.Render(c.desc))
+		lines = append(lines, "  "+repltheme.HelpCmdStyle.Render(c.cmd)+" "+repltheme.HelpDescStyle.Render(c.desc))
 	}
 
 	return strings.Join(lines, "\n")
@@ -842,13 +860,12 @@ func (m *replModel) handleClear() replModel {
 	m.appState.ClearMessages()
 	m.sessions.resetSession()
 
-	newOutput := NewOutputBuilder(m.width)
-	newOutput.workingDir = m.ctx.workingDir
+	newOutput := reploutput.NewOutputBuilder(m.width, m.ctx.workingDir)
 	initialLines := buildInitialScreen(m.ctx)
 	for _, line := range initialLines {
 		newOutput.AddLine(line)
 	}
-	newOutput.AddStyledLine("  ✓ New session started", compactionSuccessStyle)
+	newOutput.AddStyledLine("  ✓ New session started", repltheme.CompactionSuccessStyle)
 	newOutput.AddEmptyLine()
 	m.output = newOutput
 
@@ -871,7 +888,7 @@ func (m *replModel) handleSessionPersistenceError(err error) {
 	if err == nil {
 		return
 	}
-	m.output.AddError("Session persistence failed: "+err.Error(), errorStyle)
+	m.output.AddError("Session persistence failed: "+err.Error(), repltheme.ErrorStyle)
 }
 
 func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {

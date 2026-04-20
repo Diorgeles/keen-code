@@ -1,23 +1,25 @@
-package repl
+package widgets
 
 import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	replcommands "github.com/user/keen-code/internal/cli/repl/commands"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 )
 
-type suggestionModel struct {
+type SuggestionModel struct {
 	visible  bool
-	items    []slashCommand
+	items    []replcommands.SlashCommand
 	selected int
 }
 
-func newSuggestionModel() suggestionModel {
-	return suggestionModel{}
+func NewSuggestionModel() SuggestionModel {
+	return SuggestionModel{}
 }
 
-func (s *suggestionModel) refresh(input string) {
-	s.items = filterCommands(input)
+func (s *SuggestionModel) Refresh(input string) {
+	s.items = replcommands.Filter(input)
 	if len(s.items) > 0 {
 		s.visible = true
 		s.selected = 0
@@ -27,35 +29,46 @@ func (s *suggestionModel) refresh(input string) {
 	}
 }
 
-func (s *suggestionModel) moveDown() {
+func (s *SuggestionModel) MoveDown() {
 	if len(s.items) == 0 {
 		return
 	}
 	s.selected = (s.selected + 1) % len(s.items)
 }
 
-func (s *suggestionModel) moveUp() {
+func (s *SuggestionModel) MoveUp() {
 	if len(s.items) == 0 {
 		return
 	}
 	s.selected = (s.selected - 1 + len(s.items)) % len(s.items)
 }
 
-func (s suggestionModel) current() *slashCommand {
+func (s SuggestionModel) Current() *replcommands.SlashCommand {
 	if !s.visible || len(s.items) == 0 {
 		return nil
 	}
 	return &s.items[s.selected]
 }
 
-func (s suggestionModel) height() int {
+func (s SuggestionModel) First() *replcommands.SlashCommand {
+	if len(s.items) == 0 {
+		return nil
+	}
+	return &s.items[0]
+}
+
+func (s SuggestionModel) Height() int {
 	if !s.visible {
 		return 0
 	}
 	return len(s.items) + 2
 }
 
-func (s suggestionModel) view(width int) string {
+func (s SuggestionModel) Visible() bool {
+	return s.visible
+}
+
+func (s SuggestionModel) View(width int) string {
 	if !s.visible {
 		return ""
 	}
@@ -74,11 +87,11 @@ func (s suggestionModel) view(width int) string {
 
 		var cmdStyle, descStyle lipgloss.Style
 		if isSelected {
-			cmdStyle = suggestionSelectedCmdStyle.Width(cmdColWidth)
-			descStyle = suggestionSelectedDescStyle
+			cmdStyle = repltheme.SuggestionSelectedCmdStyle.Width(cmdColWidth)
+			descStyle = repltheme.SuggestionSelectedDescStyle
 		} else {
-			cmdStyle = suggestionCmdStyle.Width(cmdColWidth)
-			descStyle = suggestionDescStyle
+			cmdStyle = repltheme.SuggestionCmdStyle.Width(cmdColWidth)
+			descStyle = repltheme.SuggestionDescStyle
 		}
 
 		row := lipgloss.JoinHorizontal(lipgloss.Left,
@@ -91,9 +104,9 @@ func (s suggestionModel) view(width int) string {
 	inner := strings.Join(rows, "\n")
 
 	hasSelection := s.selected >= 0 && len(s.items) > 0
-	containerStyle := suggestionContainerStyle
+	containerStyle := repltheme.SuggestionContainerStyle
 	if hasSelection {
-		containerStyle = containerStyle.BorderForeground(primaryColor)
+		containerStyle = containerStyle.BorderForeground(repltheme.PrimaryColor)
 	}
 
 	box := containerStyle.Render(inner)

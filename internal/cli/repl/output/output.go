@@ -1,4 +1,4 @@
-package repl
+package output
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/llm"
 )
 
@@ -17,10 +18,11 @@ type OutputBuilder struct {
 	workingDir string
 }
 
-func NewOutputBuilder(width int) *OutputBuilder {
+func NewOutputBuilder(width int, workingDir string) *OutputBuilder {
 	return &OutputBuilder{
-		lines: []string{},
-		width: width,
+		lines:      []string{},
+		width:      width,
+		workingDir: workingDir,
 	}
 }
 
@@ -81,27 +83,27 @@ func (ob *OutputBuilder) IsEmpty() bool {
 }
 
 func (ob *OutputBuilder) AddToolStart(toolCall *llm.ToolCall) {
-	ob.lines = append(ob.lines, formatToolStart(toolCall, ob.workingDir))
+	ob.lines = append(ob.lines, FormatToolStart(toolCall, ob.workingDir))
 }
 
 func (ob *OutputBuilder) AddToolEnd(toolCall *llm.ToolCall) {
-	ob.lines = append(ob.lines, formatToolEnd(toolCall))
+	ob.lines = append(ob.lines, FormatToolEnd(toolCall))
 }
 
-func formatToolStart(toolCall *llm.ToolCall, workingDir string) string {
-	inputDisplay := formatToolInput(toolCall.Name, toolCall.Input, workingDir)
-	return "\n  " + toolStartStyle.Render(fmt.Sprintf("⚙ %s(%s)...", toolCall.Name, inputDisplay))
+func FormatToolStart(toolCall *llm.ToolCall, workingDir string) string {
+	inputDisplay := FormatToolInput(toolCall.Name, toolCall.Input, workingDir)
+	return "\n  " + repltheme.ToolStartStyle.Render(fmt.Sprintf("⚙ %s(%s)...", toolCall.Name, inputDisplay))
 }
 
-func formatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string {
-	inputDisplay := formatToolInput(startCall.Name, startCall.Input, workingDir)
+func FormatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string {
+	inputDisplay := FormatToolInput(startCall.Name, startCall.Input, workingDir)
 	if endCall.Error != "" {
-		return "  " + toolErrorStyle.Render(fmt.Sprintf("✗ %s(%s) failed: %s", startCall.Name, inputDisplay, endCall.Error))
+		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s(%s) failed: %s", startCall.Name, inputDisplay, endCall.Error))
 	}
-	return "  " + toolSuccessStyle.Render(fmt.Sprintf("✓ %s(%s) ➜ [%s]", startCall.Name, inputDisplay, endCall.Duration))
+	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s(%s) ➜ [%s]", startCall.Name, inputDisplay, endCall.Duration))
 }
 
-func formatToolInput(toolName string, input map[string]any, workingDir string) string {
+func FormatToolInput(toolName string, input map[string]any, workingDir string) string {
 	if input == nil {
 		return ""
 	}
@@ -123,11 +125,11 @@ func formatToolInput(toolName string, input map[string]any, workingDir string) s
 	return jsonMarshalCompact(displayInput)
 }
 
-func formatToolEnd(toolCall *llm.ToolCall) string {
+func FormatToolEnd(toolCall *llm.ToolCall) string {
 	if toolCall.Error != "" {
-		return "  " + toolErrorStyle.Render(fmt.Sprintf("✗ %s failed: %s", toolCall.Name, toolCall.Error))
+		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s failed: %s", toolCall.Name, toolCall.Error))
 	}
-	return "  " + toolSuccessStyle.Render(fmt.Sprintf("✓ %s ➜ [%s]", toolCall.Name, toolCall.Duration)) + "\n"
+	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s ➜ [%s]", toolCall.Name, toolCall.Duration)) + "\n"
 }
 
 func jsonMarshalCompact(v map[string]any) string {

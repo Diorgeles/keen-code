@@ -1,6 +1,10 @@
 package repl
 
-import "github.com/user/keen-code/internal/llm"
+import (
+	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
+	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
+	"github.com/user/keen-code/internal/llm"
+)
 
 type llmChunkMsg string
 type llmReasoningChunkMsg string
@@ -15,10 +19,10 @@ type llmToolEndMsg struct {
 	toolCall *llm.ToolCall
 }
 type permissionReadyMsg struct {
-	req *PermissionRequest
+	req *replpermissions.Request
 }
 type diffReadyMsg struct {
-	req diffEmitRequest
+	req repltooling.DiffRequest
 }
 type compactionDoneMsg struct{}
 type compactionErrMsg struct {

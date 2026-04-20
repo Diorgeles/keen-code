@@ -7,6 +7,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
+	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/tools"
 )
@@ -272,7 +274,7 @@ func TestWaitForAsyncEvent_Chunk(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *PermissionRequest), make(chan diffEmitRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd")
 	}
@@ -294,7 +296,7 @@ func TestWaitForAsyncEvent_Done(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *PermissionRequest), make(chan diffEmitRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
 	msg := cmd()
 
 	_, ok := msg.(llmDoneMsg)
@@ -311,7 +313,7 @@ func TestWaitForAsyncEvent_ReasoningChunk(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *PermissionRequest), make(chan diffEmitRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd")
 	}
@@ -335,7 +337,7 @@ func TestWaitForAsyncEvent_Error(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *PermissionRequest), make(chan diffEmitRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
 	msg := cmd()
 
 	errMsg, ok := msg.(llmErrorMsg)
@@ -351,7 +353,7 @@ func TestWaitForAsyncEvent_ChannelClosed(t *testing.T) {
 	eventCh := make(chan llm.StreamEvent)
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *PermissionRequest), make(chan diffEmitRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
 	msg := cmd()
 
 	_, ok := msg.(llmDoneMsg)
@@ -418,11 +420,11 @@ func TestStreamHandler_Start_ResetsPreviousState(t *testing.T) {
 }
 
 func TestWaitForAsyncEvent_Permission(t *testing.T) {
-	permissionCh := make(chan *PermissionRequest, 1)
+	permissionCh := make(chan *replpermissions.Request, 1)
 	req := makeTestPermissionRequest(false)
 	permissionCh <- req
 
-	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), permissionCh, make(chan diffEmitRequest))
+	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), permissionCh, make(chan repltooling.DiffRequest))
 	msg := cmd()
 
 	permissionMsg, ok := msg.(permissionReadyMsg)
@@ -435,18 +437,18 @@ func TestWaitForAsyncEvent_Permission(t *testing.T) {
 }
 
 func TestWaitForAsyncEvent_Diff(t *testing.T) {
-	diffCh := make(chan diffEmitRequest, 1)
-	req := diffEmitRequest{done: make(chan struct{})}
+	diffCh := make(chan repltooling.DiffRequest, 1)
+	req := repltooling.DiffRequest{Done: make(chan struct{})}
 	diffCh <- req
 
-	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), make(chan *PermissionRequest), diffCh)
+	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), make(chan *replpermissions.Request), diffCh)
 	msg := cmd()
 
 	diffMsg, ok := msg.(diffReadyMsg)
 	if !ok {
 		t.Fatalf("expected diffReadyMsg, got %T", msg)
 	}
-	if diffMsg.req.done != req.done {
+	if diffMsg.req.Done != req.Done {
 		t.Fatal("expected diff request payload to round-trip")
 	}
 }
@@ -458,14 +460,14 @@ var _ tea.Msg = llmErrorMsg{}
 var _ tea.Msg = permissionReadyMsg{}
 var _ tea.Msg = diffReadyMsg{}
 
-func makeTestPermissionRequest(isDangerous bool) *PermissionRequest {
-	return &PermissionRequest{
+func makeTestPermissionRequest(isDangerous bool) *replpermissions.Request {
+	return &replpermissions.Request{
 		RequestID:    "test-1",
 		ToolName:     "read_file",
 		Path:         "../secret.txt",
 		ResolvedPath: "/home/user/secret.txt",
 		IsDangerous:  isDangerous,
-		Status:       PermissionStatusPending,
+		Status:       replpermissions.StatusPending,
 		ResponseChan: make(chan bool, 1),
 	}
 }
@@ -506,7 +508,7 @@ func TestStreamHandler_HasPendingPermission_FalseWhenResolved(t *testing.T) {
 
 	req := makeTestPermissionRequest(false)
 	sh.HandlePermissionRequest(req)
-	sh.ResolvePendingPermission(PermissionStatusAllowed)
+	sh.ResolvePendingPermission(replpermissions.StatusAllowed)
 
 	if sh.HasPendingPermission() {
 		t.Error("expected HasPendingPermission to be false after resolution")
@@ -543,17 +545,17 @@ func TestStreamHandler_GetPendingChoice_NonDangerous(t *testing.T) {
 	req := makeTestPermissionRequest(false)
 	sh.HandlePermissionRequest(req)
 
-	if sh.GetPendingChoice() != PermissionChoiceAllow {
+	if sh.GetPendingChoice() != replpermissions.ChoiceAllow {
 		t.Error("expected initial choice to be Allow")
 	}
 
 	sh.MovePendingCursor(1)
-	if sh.GetPendingChoice() != PermissionChoiceAllowSession {
+	if sh.GetPendingChoice() != replpermissions.ChoiceAllowSession {
 		t.Error("expected choice at cursor 1 to be AllowSession")
 	}
 
 	sh.MovePendingCursor(1)
-	if sh.GetPendingChoice() != PermissionChoiceDeny {
+	if sh.GetPendingChoice() != replpermissions.ChoiceDeny {
 		t.Error("expected choice at cursor 2 to be Deny")
 	}
 }
@@ -566,7 +568,7 @@ func TestStreamHandler_GetPendingChoice_Dangerous(t *testing.T) {
 	sh.HandlePermissionRequest(req)
 
 	sh.MovePendingCursor(1)
-	if sh.GetPendingChoice() != PermissionChoiceDeny {
+	if sh.GetPendingChoice() != replpermissions.ChoiceDeny {
 		t.Error("expected cursor 1 to be Deny for dangerous (no AllowSession)")
 	}
 }
@@ -577,9 +579,9 @@ func TestStreamHandler_ResolvePendingPermission(t *testing.T) {
 
 	req := makeTestPermissionRequest(false)
 	sh.HandlePermissionRequest(req)
-	sh.ResolvePendingPermission(PermissionStatusAllowedSession)
+	sh.ResolvePendingPermission(replpermissions.StatusAllowedSession)
 
-	if sh.segments[0].permissionReq.Status != PermissionStatusAllowedSession {
+	if sh.segments[0].permissionReq.Status != replpermissions.StatusAllowedSession {
 		t.Errorf("expected status AllowedSession, got %q", sh.segments[0].permissionReq.Status)
 	}
 }
@@ -630,7 +632,7 @@ func TestRenderPermissionCard_Resolved_Allowed(t *testing.T) {
 
 	req := makeTestPermissionRequest(false)
 	sh.HandlePermissionRequest(req)
-	sh.ResolvePendingPermission(PermissionStatusAllowed)
+	sh.ResolvePendingPermission(replpermissions.StatusAllowed)
 
 	view := sh.View(80)
 
@@ -648,7 +650,7 @@ func TestRenderPermissionCard_Resolved_Denied(t *testing.T) {
 
 	req := makeTestPermissionRequest(false)
 	sh.HandlePermissionRequest(req)
-	sh.ResolvePendingPermission(PermissionStatusDenied)
+	sh.ResolvePendingPermission(replpermissions.StatusDenied)
 
 	view := sh.View(80)
 
@@ -786,7 +788,7 @@ func TestPermissionTranscript_ResolvedBeforeDone(t *testing.T) {
 
 	req := makeTestPermissionRequest(false)
 	sh.HandlePermissionRequest(req)
-	sh.ResolvePendingPermission(PermissionStatusAllowedSession)
+	sh.ResolvePendingPermission(replpermissions.StatusAllowedSession)
 
 	sh.HandleChunk(" after permission")
 
@@ -829,7 +831,7 @@ func TestHandleKeyMsg_PermissionEnter_ResolvesAllowed(t *testing.T) {
 	if newM.streamHandler.HasPendingPermission() {
 		t.Error("expected permission to be resolved after Enter")
 	}
-	if req.Status != PermissionStatusAllowed {
+	if req.Status != replpermissions.StatusAllowed {
 		t.Errorf("expected status Allowed, got %q", req.Status)
 	}
 }
@@ -847,7 +849,7 @@ func TestHandleKeyMsg_PermissionEsc_Denies(t *testing.T) {
 	if newM.streamHandler.HasPendingPermission() {
 		t.Error("expected permission to be resolved after Esc")
 	}
-	if req.Status != PermissionStatusDenied {
+	if req.Status != replpermissions.StatusDenied {
 		t.Errorf("expected status Denied, got %q", req.Status)
 	}
 }
@@ -863,10 +865,10 @@ func TestHandleKeyMsg_PermissionEnter_AllowSession(t *testing.T) {
 	m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	if req.Status != PermissionStatusAllowedSession {
+	if req.Status != replpermissions.StatusAllowedSession {
 		t.Errorf("expected status AllowedSession, got %q", req.Status)
 	}
-	if !newM.permissionRequester.sessionAllowedTools["read_file"] {
+	if !newM.permissionRequester.IsSessionAllowed("read_file") {
 		t.Error("expected read_file to be session-allowed after AllowSession choice")
 	}
 }
