@@ -11,33 +11,47 @@ Effort levels: `off` / `low` / `medium` / `high` (default cursor: `high`)
 
 ---
 
-## Step 0: Upgrade anthropic-sdk-go
+## Step 0: ~~Upgrade anthropic-sdk-go~~ (already done)
 
-`go.mod` currently pins `github.com/anthropics/anthropic-sdk-go v1.19.0`. Upgrade to latest (≥ v1.37.0) to get typed `ThinkingConfigAdaptiveParam`, `ThinkingConfigDisabledParam`, and `OutputConfigParam` with effort enums.
-
-```
-go get github.com/anthropics/anthropic-sdk-go@latest
-go mod tidy
-go test ./...
-```
+`go.mod` already pins `github.com/anthropics/anthropic-sdk-go v1.37.0`, which provides
+`ThinkingConfigAdaptiveParam`, `ThinkingConfigDisabledParam`, `ThinkingConfigParamUnion`,
+`OutputConfigParam`, and `OutputConfigEffort` enums. No upgrade needed.
 
 ---
 
-## Step 1: Registry — add `supports_thinking` per model
+## Step 1: Registry — add per-model `thinking_efforts`
 
 **File:** `providers/registry.yaml`
 
-Add `supports_thinking: true` to:
-- Anthropic: `claude-opus-4-6`, `claude-sonnet-4-6` (not `claude-haiku-4-5`)
-- OpenAI: `gpt-5.4`, `gpt-5.4-mini` (not `gpt-5.3-codex`)
-- Google AI: `gemini-3.1-pro-preview`, `gemini-3-flash-preview`
-- DeepSeek / Moonshot: **omit** (always-on, not user-configurable)
+Replace the boolean `supports_thinking` idea with explicit provider-native effort options:
+
+- Anthropic:
+  - `claude-opus-4-6`: `thinking_efforts: ["low", "medium", "high", "max"]`
+  - `claude-sonnet-4-6`: `thinking_efforts: ["low", "medium", "high", "max"]`
+  - `claude-haiku-4-5`: **omit** (`extended thinking` exists, but Anthropic's `effort` parameter is not supported on Haiku 4.5)
+- OpenAI:
+  - `gpt-5.4`: `thinking_efforts: ["low", "medium", "high", "xhigh"]`
+  - `gpt-5.4-mini`: `thinking_efforts: ["low", "medium", "high", "xhigh"]`
+  - `gpt-5.3-codex`: `thinking_efforts: ["low", "medium", "high", "xhigh"]`
+- Google AI:
+  - `gemini-3.1-pro-preview`: `thinking_efforts: ["low", "medium", "high"]`
+  - `gemini-3-flash-preview`: `thinking_efforts: ["low", "medium", "high"]`
+- DeepSeek / Moonshot: **omit** (always-on or not part of this effort-level work)
+
+Keep the raw provider values in the registry. Do **not** normalize these to a shared `off/low/medium/high` set in the registry layer:
+- Gemini does not get an `off`-equivalent registry value in this plan
+- Anthropic uses `max`
+- OpenAI uses `xhigh`; represent "no extra reasoning" by omitting `params.Reasoning` rather than sending `"none"`
 
 **File:** `providers/loader.go`
 
 ```go
 // Add to Model struct:
-SupportsThinking bool `yaml:"supports_thinking"`
+ThinkingEfforts []string `yaml:"thinking_efforts"`
+
+func (m Model) SupportsThinkingEffort() bool {
+    return len(m.ThinkingEfforts) > 0
+}
 
 // Add helper to *Registry:
 func (r *Registry) GetModel(providerID, modelID string) (Model, bool)
@@ -76,57 +90,132 @@ resolvedCfg = &config.ResolvedConfig{
 
 ## Step 3: LLM clients — thread thinking effort through
 
+### Architecture note
+Anthropic is **not** routed through Genkit. It uses its own `AnthropicClient` backed
+directly by `anthropic-sdk-go`. The routing in `internal/llm/models.go` is:
+
+| Provider          | Client                  |
+|-------------------|-------------------------|
+| `anthropic`       | `AnthropicClient`       |
+| `googleai`        | `GenkitClient`          |
+| `openai`          | `OpenAIResponsesClient` |
+| `deepseek` / `moonshotai` | `OpenAICompatibleClient` (no-op) |
+
 **File:** `internal/llm/models.go`
 
 ```go
 // ClientConfig — add field:
 ThinkingEffort string
 
-// NewClient — pass cfg.ThinkingEffort when constructing each client
+// NewClient — pass cfg.ThinkingEffort into each relevant constructor
 ```
 
-**File:** `internal/llm/genkit.go`
+---
 
-Add `thinkingEffort string` to `GenkitClient`. Replace the hardcoded Anthropic block (~line 132):
+### 3a. Anthropic — `internal/llm/anthropic.go`
+
+Add `thinkingEffort string` to `AnthropicClient`. In `StreamChat`, set
+`params.Thinking` and `params.OutputConfig` / `params.MaxTokens` before each turn:
 
 ```go
-if c.provider == config.ProviderAnthropic {
-    params := &anthropicsdk.MessageNewParams{MaxTokens: 16192}
-    switch c.thinkingEffort {
+// Helper:
+func anthropicThinkingParams(effort string) (anthropic.ThinkingConfigParamUnion, anthropic.OutputConfigParam, int64) {
+    switch effort {
     case "low", "medium", "high":
-        params.Thinking = anthropicsdk.ThinkingConfigAdaptiveParam{}
-        params.OutputConfig = anthropicsdk.OutputConfigParam{
-            Effort: effortEnum(c.thinkingEffort), // maps to OutputConfigEffortLow/Medium/High
+        thinking := anthropic.ThinkingConfigParamUnion{
+            OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
         }
-        params.MaxTokens = 32768
+        outCfg := anthropic.OutputConfigParam{
+            Effort: effortToOutputConfigEffort(effort),
+        }
+        return thinking, outCfg, 32768
     default: // "off" or ""
-        params.Thinking = anthropicsdk.ThinkingConfigDisabledParam{}
+        thinking := anthropic.ThinkingConfigParamUnion{
+            OfDisabled: anthropic.NewThinkingConfigDisabledParam().Ptr(), // or just &anthropic.ThinkingConfigDisabledParam{}
+        }
+        return thinking, anthropic.OutputConfigParam{}, anthropicMaxTokens
     }
-    opts = append(opts, ai.WithConfig(params))
+}
+
+// In StreamChat, when building params:
+thinking, outCfg, maxTok := anthropicThinkingParams(c.thinkingEffort)
+params := anthropic.MessageNewParams{
+    Model:        c.model,
+    MaxTokens:    maxTok,
+    Messages:     msgParams,
+    Thinking:     thinking,
+    OutputConfig: outCfg,
+}
+
+// Effort mapping:
+func effortToOutputConfigEffort(effort string) anthropic.OutputConfigEffort {
+    switch effort {
+    case "low":    return anthropic.OutputConfigEffortLow
+    case "medium": return anthropic.OutputConfigEffortMedium
+    default:       return anthropic.OutputConfigEffortHigh
+    }
 }
 ```
 
-For **Google AI**, map effort to `genai.ThinkingLevel`:
+`ThinkingConfigDisabledParam` can be constructed directly as
+`&anthropic.ThinkingConfigDisabledParam{}` (the `Type` field is a `constant.Disabled`
+which zero-marshals correctly), or via `anthropic.NewThinkingConfigDisabledParam()`.
+
+---
+
+### 3b. Google AI — `internal/llm/genkit.go`
+
+Add `thinkingEffort string` to `GenkitClient`. In `StreamChat`, append a
+`ai.WithConfig(&genai.GenerateContentConfig{...})` option when effort is set:
+
 ```go
-if c.provider == config.ProviderGoogleAI {
-    level := thinkingLevelForEffort(c.thinkingEffort) // OFF/LOW/MEDIUM/HIGH
+import "google.golang.org/genai"
+
+if c.thinkingEffort != "" && c.thinkingEffort != "off" {
+    level := thinkingLevelForEffort(c.thinkingEffort) // maps to genai.ThinkingMode* constants
     opts = append(opts, ai.WithConfig(&genai.GenerateContentConfig{
-        ThinkingConfig: &genai.ThinkingConfig{ThinkingLevel: level},
+        ThinkingConfig: &genai.ThinkingConfig{ThinkingBudget: budgetForLevel(level)},
     }))
 }
+
+// OR use the ThinkingMode enum if the googlegenai plugin exposes it:
+// ThinkingModeEnabled / ThinkingModeDisabled / ThinkingModeDynamic
 ```
 
-**File:** `internal/llm/openai_responses.go`
+Check the exact `google.golang.org/genai` API available in `go.mod` (`v1.41.0`) for
+the correct field name (`ThinkingBudget` vs `ThinkingMode`).
 
-Add `thinkingEffort string` to `OpenAIResponsesClient`. In `StreamChat`, if effort ≠ `""` and ≠ `"off"`:
+---
+
+### 3c. OpenAI — `internal/llm/openai_responses.go`
+
+Add `thinkingEffort string` to `OpenAIResponsesClient`. In `StreamChat`, set
+`params.Reasoning` when effort ≠ `""` and ≠ `"off"`:
+
 ```go
-params.Reasoning = shared.ReasoningParam{Effort: reasoningEffort(c.thinkingEffort)}
-// reasoningEffort maps low/medium/high → ReasoningEffortLow/Medium/High
+import "github.com/openai/openai-go/shared"
+
+if c.thinkingEffort != "" && c.thinkingEffort != "off" {
+    params.Reasoning = shared.ReasoningParam{
+        Effort: reasoningEffortForLevel(c.thinkingEffort),
+    }
+}
+
+func reasoningEffortForLevel(effort string) shared.ReasoningEffort {
+    switch effort {
+    case "low":    return shared.ReasoningEffortLow
+    case "medium": return shared.ReasoningEffortMedium
+    default:       return shared.ReasoningEffortHigh
+    }
+}
 ```
 
-**File:** `internal/llm/openai.go`
+---
 
-Add `thinkingEffort string` field for symmetry; no-op in request building (DeepSeek/Moonshot have always-on reasoning).
+### 3d. OpenAI-compatible (DeepSeek / Moonshot) — `internal/llm/openai.go`
+
+Add `thinkingEffort string` field to `OpenAICompatibleClient` for symmetry; no-op
+in request building (these providers have always-on reasoning).
 
 ---
 
@@ -139,24 +228,11 @@ New: `StepProvider → StepModel → StepThinking (if supports_thinking) → Ste
 
 Changes:
 - Add `StepThinking` constant
-- Add fields to `Model`: `ThinkingCursor int`, `ThinkingOptions []string` (`["off","low","medium","high"]`), `SelectedThinking string`, `thinkingOnly bool`
+- Add fields to `Model`: `ThinkingCursor int`, `ThinkingOptions []string` (`["off","low","medium","high"]`), `SelectedThinking string`
 - After `StepModel` confirm: call `registry.GetModel(provider, model)` — if `SupportsThinking` → `StepThinking`; else → `StepAPIKey`
-- Default cursor on `"high"`
+- Default cursor on `"high"` (index 3)
 - Add `renderThinkingSelection()` view (same list-selector style as provider/model steps)
 - In `complete()`: write `ThinkingEffort` to `GlobalConfig` and `ResolvedConfig`, then save
-- Add `thinkingOnComplete func(effort string)` callback for thinking-only mode
-
-**Thinking-only constructor** (for `/thinking` command):
-```go
-func NewThinkingOnly(
-    cfg *config.ResolvedConfig,
-    reg *providers.Registry,
-    loader *config.Loader,
-    globalCfg *config.GlobalConfig,
-    onComplete func(effort string),
-) *Model
-```
-Starts at `StepThinking`, skips all other steps. On confirm: saves `GlobalConfig.ThinkingEffort`, calls `onComplete(effort)`.
 
 ---
 
@@ -165,31 +241,38 @@ Starts at `StepThinking`, skips all other steps. On confirm: saves `GlobalConfig
 **File:** `internal/cli/repl/commands.go`
 
 ```go
-{"/thinking", "Change thinking effort level"},
+{"/thinking", "Change thinking effort (off|low|medium|high)"},
 ```
 
 **File:** `internal/cli/repl/repl.go`
 
 Add constant `thinkingCommand = "/thinking"`.
 
-In `handleEnterKey` (after existing command cases):
+In `handleEnterKey`, parse the argument from the input line:
 ```go
 case thinkingCommand:
-    m, ok := ctx.registry.GetModel(ctx.cfg.Provider, ctx.cfg.Model)
-    if !ok || !m.SupportsThinking {
-        // show inline error: "Current model does not support configurable thinking"
+    effort := strings.TrimPrefix(strings.TrimSpace(input), "/thinking ")
+    valid := map[string]bool{"off": true, "low": true, "medium": true, "high": true}
+    if !valid[effort] {
+        // show error: "Usage: /thinking off|low|medium|high"
         break
     }
-    return startThinkingSelection(ctx)
+    m, ok := ctx.registry.GetModel(ctx.cfg.Provider, ctx.cfg.Model)
+    if !ok || !m.SupportsThinking {
+        // show error: "Current model does not support configurable thinking"
+        break
+    }
+    // Apply immediately:
+    ctx.cfg.ThinkingEffort = effort
+    ctx.globalCfg.ThinkingEffort = effort
+    ctx.loader.Save(ctx.globalCfg)
+    // Reinitialize LLM client with new effort
+    newClient, err := llm.NewClient(llm.ClientConfig{...cfg fields..., ThinkingEffort: effort})
+    // update appState.llmClient
+    // show confirmation: "Thinking effort set to: EFFORT"
 ```
 
-`startThinkingSelection` creates `NewThinkingOnly(...)` with callback that:
-1. Sets `ctx.cfg.ThinkingEffort = effort`
-2. Saves via `ctx.loader.Save(ctx.globalCfg)`
-3. Reinitializes LLM client via `llm.NewClient(...)` and updates `appState`
-4. Returns `thinkingSelectionCompleteMsg`
-
-Handle `thinkingSelectionCompleteMsg` in `Update()` analogously to `modelSelectionCompleteMsg`.
+No new message type or UI selection flow required.
 
 ---
 
@@ -207,18 +290,61 @@ Handle `thinkingSelectionCompleteMsg` in `Update()` analogously to `modelSelecti
 
 | File | Change |
 |------|--------|
-| `go.mod` | Upgrade anthropic-sdk-go to ≥ v1.37.0 |
 | `providers/registry.yaml` | Add `supports_thinking: true` per model |
 | `providers/loader.go` | `SupportsThinking bool`; `GetModel()` helper |
 | `internal/config/config.go` | `ThinkingEffort` in GlobalConfig + ResolvedConfig; copy in `Resolve()` |
 | `internal/cli/cmd/root.go` | Set `ThinkingEffort` in manual ResolvedConfig construction |
 | `internal/llm/models.go` | `ThinkingEffort` in ClientConfig + NewClient pass-through |
-| `internal/llm/genkit.go` | Anthropic adaptive thinking + OutputConfig.Effort; Google ThinkingLevel; MaxTokens 32768 when thinking on |
-| `internal/llm/openai_responses.go` | Reasoning.Effort when effort ≠ off |
+| `internal/llm/anthropic.go` | Set `params.Thinking` (ThinkingConfigParamUnion) + `params.OutputConfig.Effort` + MaxTokens 32768 when thinking on |
+| `internal/llm/genkit.go` | Google AI ThinkingConfig via `ai.WithConfig`; no Anthropic code here |
+| `internal/llm/openai_responses.go` | `params.Reasoning.Effort` when effort ≠ off |
 | `internal/llm/openai.go` | Store field; no-op |
-| `internal/cli/repl/model_selection.go` | StepThinking; full vs thinking-only constructor |
+| `internal/cli/repl/model_selection.go` | StepThinking in full `/model` flow |
 | `internal/cli/repl/commands.go` | Register `/thinking` |
-| `internal/cli/repl/repl.go` | Handle `/thinking`; status display; `startThinkingSelection()` |
+| `internal/cli/repl/repl.go` | Handle `/thinking <effort>` argument; status display |
+
+---
+
+## SDK API Quick Reference
+
+**anthropic-sdk-go v1.37.0**
+
+```go
+// Enable adaptive thinking with effort level:
+params.Thinking = anthropic.ThinkingConfigParamUnion{
+    OfAdaptive: &anthropic.ThinkingConfigAdaptiveParam{},
+}
+params.OutputConfig = anthropic.OutputConfigParam{
+    Effort: anthropic.OutputConfigEffortHigh, // Low / Medium / High / Xhigh / Max
+}
+params.MaxTokens = 32768
+
+// Disable thinking:
+params.Thinking = anthropic.ThinkingConfigParamUnion{
+    OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
+}
+params.MaxTokens = 16192 // anthropicMaxTokens
+```
+
+**openai-go** (Responses API)
+
+```go
+params.Reasoning = shared.ReasoningParam{
+    Effort: shared.ReasoningEffortHigh, // Low / Medium / High
+}
+```
+
+**google.golang.org/genai v1.41.0** (via Genkit's `googlegenai` plugin)
+
+Verify field names against the installed version before coding; likely:
+```go
+ai.WithConfig(&genai.GenerateContentConfig{
+    ThinkingConfig: &genai.ThinkingConfig{
+        ThinkingBudget: ptr(int32(budgetForEffort(effort))),
+        // or IncludeThoughts: true
+    },
+})
+```
 
 ---
 
@@ -227,8 +353,8 @@ Handle `thinkingSelectionCompleteMsg` in `Update()` analogously to `modelSelecti
 1. `go mod tidy && go test ./...` — all tests pass
 2. `/model` → `claude-sonnet-4-6` → thinking step appears (`off/low/medium/high`, default `high`)
 3. `/model` → `deepseek-chat` → thinking step **skipped**
-4. `/thinking` → shows selector only (no API key prompt); change persists in session + `~/.keen/configs.json`
-5. `/thinking` with `deepseek-chat` active → clear error message
+4. `/thinking high` → change persists in session + `~/.keen/configs.json`; `/thinking bad` → usage error
+5. `/thinking off` with `deepseek-chat` active → clear error message
 6. Cold start: quit and relaunch `keen` → `ThinkingEffort` still applied (proves root.go fix)
 7. Status line shows `thinking:high` when applicable
 8. `claude-haiku-4-5`: `/model` skips thinking step; `/thinking` shows error

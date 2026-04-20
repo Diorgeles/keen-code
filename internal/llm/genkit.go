@@ -8,13 +8,10 @@ import (
 	"log/slog"
 	"time"
 
-	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
-	"github.com/firebase/genkit/go/plugins/anthropic"
 	"github.com/firebase/genkit/go/plugins/compat_oai"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
-	"github.com/joho/godotenv"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
 )
@@ -37,21 +34,6 @@ func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
 	var modelName string
 
 	switch cfg.Provider {
-	case config.ProviderAnthropic:
-		env, _ := godotenv.Read(".env")
-		baseURL := env["ANTHROPIC_BASE_URL"]
-
-		if baseURL == "" {
-			g = genkit.Init(ctx, genkit.WithPlugins(&anthropic.Anthropic{
-				APIKey: cfg.APIKey,
-			}))
-		} else {
-			g = genkit.Init(ctx, genkit.WithPlugins(&anthropic.Anthropic{
-				APIKey:  cfg.APIKey,
-				BaseURL: baseURL,
-			}))
-		}
-		modelName = "anthropic/" + cfg.Model
 	case config.ProviderOpenAI:
 		g = genkit.Init(ctx, genkit.WithPlugins(&compat_oai.OpenAICompatible{
 			APIKey:   cfg.APIKey,
@@ -127,12 +109,6 @@ func (c *GenkitClient) StreamChat(
 			opts := []ai.GenerateOption{
 				ai.WithModelName(c.model),
 				ai.WithMessages(aiMessages...),
-			}
-
-			if c.provider == config.ProviderAnthropic {
-				opts = append(opts, ai.WithConfig(&anthropicsdk.MessageNewParams{
-					MaxTokens: 16192,
-				}))
 			}
 
 			if len(genkitTools) > 0 {

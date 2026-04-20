@@ -23,8 +23,13 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 	}
 
 	switch cfg.Provider {
-	case config.ProviderAnthropic,
-		config.ProviderGoogleAI:
+	case config.ProviderAnthropic:
+		return NewAnthropicClient(&ClientConfig{
+			Provider: Provider(cfg.Provider),
+			APIKey:   cfg.APIKey,
+			Model:    cfg.Model,
+		})
+	case config.ProviderGoogleAI:
 		return NewGenkitClient(&ClientConfig{
 			Provider: Provider(cfg.Provider),
 			APIKey:   cfg.APIKey,

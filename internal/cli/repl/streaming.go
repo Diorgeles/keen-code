@@ -480,14 +480,14 @@ func formatResponseLines(response string) []string {
 }
 
 func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []string {
-	ruleWidth := defaultWidth - 2
+	ruleWidth := defaultWidth
 	if width > 0 {
-		ruleWidth = width - 2
+		ruleWidth = width
 	}
 	if ruleWidth < 1 {
 		ruleWidth = 1
 	}
-	rule := "  " + diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := diffRuleStyle.Render(strings.Repeat("─", ruleWidth))
 
 	lines := make([]string, 0)
 

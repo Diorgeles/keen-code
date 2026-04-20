@@ -74,17 +74,13 @@ func TestNewClient_Anthropic(t *testing.T) {
 		t.Error("expected non-nil client")
 	}
 
-	genkitClient, ok := client.(*GenkitClient)
+	anthropicClient, ok := client.(*AnthropicClient)
 	if !ok {
-		t.Error("expected *GenkitClient type")
+		t.Fatalf("expected *AnthropicClient, got %T", client)
 	}
 
-	if genkitClient.provider != Provider(config.ProviderAnthropic) {
-		t.Errorf("expected provider anthropic, got %s", genkitClient.provider)
-	}
-
-	if genkitClient.model != "anthropic/claude-3-haiku" {
-		t.Errorf("expected model anthropic/claude-3-haiku, got %s", genkitClient.model)
+	if anthropicClient.model != "claude-3-haiku" {
+		t.Errorf("expected model claude-3-haiku, got %s", anthropicClient.model)
 	}
 }
 

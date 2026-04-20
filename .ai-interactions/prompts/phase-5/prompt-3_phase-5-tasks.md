@@ -31,3 +31,8 @@ Use the AskUserQuestion tool to clarify further requirements.
 3. For anthropic, we can by default have adaptive but take the effort as a param. we can still name it as thinking
   param
 4. Save the plan in @.ai-interactions/outputs/phase-5/output-5_thinking-param.md
+
+## Migrating to `anthropic-sdk-go`
+
+1. Currently, we are using genkit for anthropic models. Let's change that. We should use the official anthropic-sdk-go for those models. We already have the go module added to the project. But it's not the latest. We should migrate those models using the latest sdk.
+2. 

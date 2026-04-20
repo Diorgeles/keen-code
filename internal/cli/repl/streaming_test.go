@@ -213,6 +213,9 @@ func TestStreamHandler_View_BashUsesViewportWidthRules(t *testing.T) {
 	if !strings.Contains(wideNonEmpty[0], "─") || !strings.Contains(wideNonEmpty[len(wideNonEmpty)-1], "─") {
 		t.Fatalf("expected top and bottom bash rules, got %q", wideView)
 	}
+	if strings.HasPrefix(wideNonEmpty[0], "  ") || strings.HasPrefix(wideNonEmpty[len(wideNonEmpty)-1], "  ") {
+		t.Fatalf("expected bash rules to span edge-to-edge without left inset, got %q", wideView)
+	}
 	if wideRuleWidth := lipgloss.Width(wideNonEmpty[0]); wideRuleWidth != 80 {
 		t.Fatalf("expected bash rules to match viewport width, got width %d", wideRuleWidth)
 	}
