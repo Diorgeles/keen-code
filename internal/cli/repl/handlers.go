@@ -329,22 +329,24 @@ func (m *replModel) interruptStream(message string) {
 	m.streamHandler.finalizeAssistantContent()
 	partialResponse := m.streamHandler.GetResponse()
 	segments := cloneStreamSegments(m.streamHandler.segments)
-	interruptedMessage := ""
+	interruptedMessage := "[Response interrupted by user]"
+	turnMemory := m.consumeTurnMemory()
+
 	if partialResponse != "" {
 		interruptedMessage = partialResponse + "\n\n[Response interrupted by user]"
-		m.appState.AppendMessage(llm.Message{
-			Role:    llm.RoleAssistant,
-			Content: interruptedMessage,
-		})
-		// m.logAppStateMessages("assistant_turn_interrupted")
 	}
+	m.appState.AppendMessage(llm.Message{
+		Role:       llm.RoleAssistant,
+		Content:    interruptedMessage,
+		TurnMemory: turnMemory,
+	})
 	if err := m.sessions.appendAssistantTurn(segments, llm.Message{
-		Role:    llm.RoleAssistant,
-		Content: interruptedMessage,
+		Role:       llm.RoleAssistant,
+		Content:    interruptedMessage,
+		TurnMemory: turnMemory,
 	}, true, ""); err != nil {
 		m.handleSessionPersistenceError(err)
 	}
-	m.clearTurnMemory()
 
 	for _, line := range m.streamHandler.HandleInterrupt() {
 		m.output.AddLine(line)

@@ -63,7 +63,7 @@ Started with a raw product idea in `prompts/phase-1/prd.md`. From there, an agen
 
 ### Phase 2 — The REPL and LLM Integration
 
-This phase wired up the interactive terminal UI and connected it to a real LLM. There was also a pivot: the project initially considered `langchain-go`, evaluated alternatives, and landed on Firebase Genkit as the LLM framework. Later in this phase, the main REPL file had grown large enough to warrant a full refactor — which was also agent-driven.
+This phase wired up the interactive terminal UI and connected it to a real LLM. There was also a pivot: the project initially considered `langchain-go`, evaluated alternatives, and landed on Firebase Genkit as the LLM framework. Genkit remains in use today, but only for Gemini. As the project matured, dedicated OpenAI and Anthropic SDKs were brought in directly — giving those providers full access to native features like reasoning content and prompt caching that a generic framework could not easily expose. Later in this phase, the main REPL file had grown large enough to warrant a full refactor — which was also agent-driven.
 
 ### Phase 3 — Tools
 
