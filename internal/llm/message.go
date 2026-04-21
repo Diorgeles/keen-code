@@ -68,13 +68,23 @@ const (
 	StreamEventTypeError          StreamEventType = "error"
 	StreamEventTypeToolStart      StreamEventType = "tool_start"
 	StreamEventTypeToolEnd        StreamEventType = "tool_end"
+	StreamEventTypeUsage          StreamEventType = "usage"
 )
+
+type TokenUsage struct {
+	InputTokens     int
+	OutputTokens    int
+	TotalTokens     int
+	ReasoningTokens int
+	CachedTokens    int
+}
 
 type StreamEvent struct {
 	Type     StreamEventType
 	Content  string
 	Error    error
 	ToolCall *ToolCall
+	Usage    *TokenUsage
 }
 
 type ToolCall struct {

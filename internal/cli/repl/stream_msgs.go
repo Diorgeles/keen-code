@@ -18,6 +18,9 @@ type llmToolStartMsg struct {
 type llmToolEndMsg struct {
 	toolCall *llm.ToolCall
 }
+type llmUsageMsg struct {
+	usage *llm.TokenUsage
+}
 type permissionReadyMsg struct {
 	req *replpermissions.Request
 }

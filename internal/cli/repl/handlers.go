@@ -29,6 +29,14 @@ const (
 	keyShiftDown = "shift+down"
 )
 
+func (m *replModel) handleLLMUsage(usage *llm.TokenUsage) (replModel, tea.Cmd) {
+	if m.appState != nil && usage != nil {
+		m.appState.SetLastUsage(usage)
+		m.refreshContextStatus()
+	}
+	return *m, m.waitForAsyncEvent()
+}
+
 func (m *replModel) handleLLMChunk(chunk string) (replModel, tea.Cmd) {
 	m.streamHandler.HandleChunk(chunk)
 	m.updateViewportContent()
@@ -67,7 +75,7 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 	if err := m.sessions.appendAssistantTurn(segments, assistantMessage, false, ""); err != nil {
 		m.handleSessionPersistenceError(err)
 	}
-	m.refreshContextStatus(false)
+	m.refreshContextStatus()
 	for _, line := range responseLines {
 		m.output.AddLine(line)
 	}
@@ -118,7 +126,7 @@ func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
 	if err := m.appState.ApplyCompaction(summary); err != nil {
 		return m.handleCompactionError(err)
 	}
-	m.refreshContextStatus(false)
+	m.refreshContextStatus()
 	for _, line := range responseLines {
 		m.output.AddLine(line)
 	}
@@ -157,7 +165,7 @@ func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
 		}
 	}
 	m.adjustTextareaHeight()
-	m.refreshContextStatus(false)
+	m.refreshContextStatus()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil
@@ -451,12 +459,15 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 	if m.streamHandler == nil || !m.streamHandler.IsActive() {
 		switch msg.(type) {
-		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmErrorMsg, llmToolStartMsg, llmToolEndMsg:
+		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmErrorMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
 			return m, nil, true
 		}
 	}
 
 	switch msg := msg.(type) {
+	case llmUsageMsg:
+		updated, cmd := m.handleLLMUsage(msg.usage)
+		return updated, cmd, true
 	case llmChunkMsg:
 		updated, cmd := m.handleLLMChunk(string(msg))
 		return updated, cmd, true

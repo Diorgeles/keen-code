@@ -133,7 +133,7 @@ func (c *AnthropicClient) collectTurn(
 	ctx context.Context,
 	params anthropic.MessageNewParams,
 	eventCh chan<- StreamEvent,
-) ([]anthropic.ContentBlockParamUnion, []toolUseEntry, error) {
+) ([]anthropic.ContentBlockParamUnion, []toolUseEntry, *TokenUsage, error) {
 	stream := c.streamImpl(ctx, params)
 
 	// track open tool_use blocks by index so we can accumulate partial JSON
@@ -145,11 +145,55 @@ func (c *AnthropicClient) collectTurn(
 	toolStates := map[int64]*toolUseState{}
 
 	var assistantBlocks []anthropic.ContentBlockParamUnion
+	var usage *TokenUsage
 
 	for stream.Next() {
 		ev := stream.Current()
 
 		switch ev.Type {
+		case "message_start":
+			ms := ev.AsMessageStart()
+			slog.Debug(
+				"Anthropic stream usage",
+				"event_type", "message_start",
+				"input_tokens", ms.Message.Usage.InputTokens,
+				"output_tokens", ms.Message.Usage.OutputTokens,
+				"cache_creation_input_tokens", ms.Message.Usage.CacheCreationInputTokens,
+				"cache_read_input_tokens", ms.Message.Usage.CacheReadInputTokens,
+			)
+			if ms.Message.Usage.InputTokens > 0 {
+				totalInputTokens := int(ms.Message.Usage.InputTokens + ms.Message.Usage.CacheCreationInputTokens + ms.Message.Usage.CacheReadInputTokens)
+				cachedTokens := int(ms.Message.Usage.CacheCreationInputTokens + ms.Message.Usage.CacheReadInputTokens)
+				usage = &TokenUsage{
+					InputTokens:  totalInputTokens,
+					OutputTokens: int(ms.Message.Usage.OutputTokens),
+					TotalTokens:  totalInputTokens + int(ms.Message.Usage.OutputTokens),
+					CachedTokens: cachedTokens,
+				}
+			}
+
+		case "message_delta":
+			md := ev.AsMessageDelta()
+			slog.Debug(
+				"Anthropic stream usage",
+				"event_type", "message_delta",
+				"input_tokens", md.Usage.InputTokens,
+				"output_tokens", md.Usage.OutputTokens,
+				"cache_creation_input_tokens", md.Usage.CacheCreationInputTokens,
+				"cache_read_input_tokens", md.Usage.CacheReadInputTokens,
+			)
+			if usage == nil && md.Usage.InputTokens > 0 {
+				usage = &TokenUsage{}
+			}
+			if usage != nil {
+				totalInputTokens := int(md.Usage.InputTokens + md.Usage.CacheCreationInputTokens + md.Usage.CacheReadInputTokens)
+				cachedTokens := int(md.Usage.CacheCreationInputTokens + md.Usage.CacheReadInputTokens)
+				usage.InputTokens = totalInputTokens
+				usage.OutputTokens = int(md.Usage.OutputTokens)
+				usage.CachedTokens = cachedTokens
+				usage.TotalTokens = totalInputTokens + usage.OutputTokens
+			}
+
 		case "content_block_start":
 			cbs := ev.AsContentBlockStart()
 			switch cbs.ContentBlock.Type {
@@ -199,7 +243,7 @@ func (c *AnthropicClient) collectTurn(
 	_ = stream.Close()
 
 	if err := stream.Err(); err != nil {
-		return nil, nil, fmt.Errorf("stream error: %w", err)
+		return nil, nil, nil, fmt.Errorf("stream error: %w", err)
 	}
 
 	var toolUses []toolUseEntry
@@ -219,7 +263,7 @@ func (c *AnthropicClient) collectTurn(
 		})
 	}
 
-	return assistantBlocks, toolUses, nil
+	return assistantBlocks, toolUses, usage, nil
 }
 
 type toolUseEntry struct {
@@ -275,10 +319,23 @@ func (c *AnthropicClient) StreamChat(
 				params.Tools = anthropicTools
 			}
 
-			assistantBlocks, toolUses, err := c.collectTurn(ctx, params, eventCh)
+			assistantBlocks, toolUses, usage, err := c.collectTurn(ctx, params, eventCh)
 			if err != nil {
 				eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
 				return
+			}
+
+			if usage != nil {
+				slog.Debug(
+					"Anthropic usage emitted",
+					"input_tokens", usage.InputTokens,
+					"output_tokens", usage.OutputTokens,
+					"total_tokens", usage.TotalTokens,
+					"cached_tokens", usage.CachedTokens,
+				)
+				eventCh <- StreamEvent{Type: StreamEventTypeUsage, Usage: usage}
+			} else {
+				slog.Debug("Anthropic usage unavailable for turn")
 			}
 
 			if len(toolUses) == 0 {

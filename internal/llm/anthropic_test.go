@@ -62,6 +62,28 @@ func makeThinkingDeltaEvent(index int64, thinking string) anthropic.MessageStrea
 	return ev
 }
 
+func makeMessageStartEvent(inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens int64) anthropic.MessageStreamEventUnion {
+	raw := json.RawMessage(`{"type":"message_start","message":{"usage":{"input_tokens":` +
+		mustMarshalJSON(inputTokens) + `,"output_tokens":` +
+		mustMarshalJSON(outputTokens) + `,"cache_creation_input_tokens":` +
+		mustMarshalJSON(cacheCreationInputTokens) + `,"cache_read_input_tokens":` +
+		mustMarshalJSON(cacheReadInputTokens) + `}}}`)
+	var ev anthropic.MessageStreamEventUnion
+	_ = json.Unmarshal(raw, &ev)
+	return ev
+}
+
+func makeMessageDeltaUsageEvent(inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens int64) anthropic.MessageStreamEventUnion {
+	raw := json.RawMessage(`{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"input_tokens":` +
+		mustMarshalJSON(inputTokens) + `,"output_tokens":` +
+		mustMarshalJSON(outputTokens) + `,"cache_creation_input_tokens":` +
+		mustMarshalJSON(cacheCreationInputTokens) + `,"cache_read_input_tokens":` +
+		mustMarshalJSON(cacheReadInputTokens) + `}}`)
+	var ev anthropic.MessageStreamEventUnion
+	_ = json.Unmarshal(raw, &ev)
+	return ev
+}
+
 func makeContentBlockStopEvent(index int64) anthropic.MessageStreamEventUnion {
 	raw := json.RawMessage(`{"type":"content_block_stop","index":` +
 		string(rune('0'+index)) + `}`)
@@ -186,6 +208,79 @@ func TestAnthropicClient_StreamChat_ReasoningChunks(t *testing.T) {
 	}
 	if len(text) != 1 || text[0] != "answer" {
 		t.Errorf("expected 1 text chunk 'answer', got %v", text)
+	}
+}
+
+func TestAnthropicClient_StreamChat_UsesMessageDeltaInputTokensWhenMessageStartIsZero(t *testing.T) {
+	events := []anthropic.MessageStreamEventUnion{
+		makeMessageStartEvent(0, 0, 0, 0),
+		makeMessageDeltaUsageEvent(3546, 15, 0, 0),
+		makeTextDeltaEvent(0, "ok"),
+		makeContentBlockStopEvent(0),
+	}
+
+	client := newTestAnthropicClient(events)
+	eventCh, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var usage *TokenUsage
+	for event := range eventCh {
+		switch event.Type {
+		case StreamEventTypeUsage:
+			usage = event.Usage
+		case StreamEventTypeError:
+			t.Fatalf("unexpected error: %v", event.Error)
+		}
+	}
+
+	if usage == nil {
+		t.Fatal("expected usage event")
+	}
+	if usage.InputTokens != 3546 {
+		t.Fatalf("expected input tokens 3546, got %d", usage.InputTokens)
+	}
+	if usage.OutputTokens != 15 {
+		t.Fatalf("expected output tokens 15, got %d", usage.OutputTokens)
+	}
+}
+
+func TestAnthropicClient_StreamChat_IncludesCacheTokensInInputFootprint(t *testing.T) {
+	events := []anthropic.MessageStreamEventUnion{
+		makeMessageStartEvent(0, 0, 0, 0),
+		makeMessageDeltaUsageEvent(3000, 20, 400, 100),
+		makeTextDeltaEvent(0, "ok"),
+		makeContentBlockStopEvent(0),
+	}
+
+	client := newTestAnthropicClient(events)
+	eventCh, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var usage *TokenUsage
+	for event := range eventCh {
+		switch event.Type {
+		case StreamEventTypeUsage:
+			usage = event.Usage
+		case StreamEventTypeError:
+			t.Fatalf("unexpected error: %v", event.Error)
+		}
+	}
+
+	if usage == nil {
+		t.Fatal("expected usage event")
+	}
+	if usage.InputTokens != 3500 {
+		t.Fatalf("expected input footprint 3500, got %d", usage.InputTokens)
+	}
+	if usage.CachedTokens != 500 {
+		t.Fatalf("expected cached token breakdown 500, got %d", usage.CachedTokens)
+	}
+	if usage.TotalTokens != 3520 {
+		t.Fatalf("expected total tokens 3520, got %d", usage.TotalTokens)
 	}
 }
 

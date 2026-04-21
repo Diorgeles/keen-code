@@ -39,7 +39,7 @@ func TestHandleLLMChunk(t *testing.T) {
 	}
 }
 
-func TestContextStatus_UpdatesOnlyOnDone(t *testing.T) {
+func TestContextStatus_UpdatesOnUsageEvent(t *testing.T) {
 	m := newTestModel()
 	m.ctx = &replContext{
 		workingDir: "",
@@ -59,23 +59,23 @@ func TestContextStatus_UpdatesOnlyOnDone(t *testing.T) {
 		},
 	}
 	m.appState = replappstate.New(nil, t.TempDir())
-	m.appState.AddMessage(llm.RoleUser, strings.Repeat("word ", 750))
-	m.refreshContextStatus(false)
-	initialPercent := m.contextStatus.Percent
+	m.refreshContextStatus()
+	if m.contextStatus.Percent != 0 {
+		t.Fatalf("expected 0%% initially, got %.2f", m.contextStatus.Percent)
+	}
 
 	eventCh := make(chan llm.StreamEvent)
 	m.streamHandler.Start(eventCh, "Loading...")
 	m.showSpinner = true
 
-	chunk := strings.Repeat("word ", 750)
-	updatedAfterChunk, _ := m.handleLLMChunk(chunk)
-	if updatedAfterChunk.contextStatus.Percent != initialPercent {
-		t.Fatalf("expected context percent to remain %.2f during chunk, got %.2f", initialPercent, updatedAfterChunk.contextStatus.Percent)
+	updatedAfterChunk, _ := m.handleLLMChunk("hello")
+	if updatedAfterChunk.contextStatus.Percent != 0 {
+		t.Fatalf("expected context percent to remain 0 during chunk, got %.2f", updatedAfterChunk.contextStatus.Percent)
 	}
 
-	updatedAfterDone, _ := updatedAfterChunk.handleLLMDone()
-	if updatedAfterDone.contextStatus.Percent <= initialPercent {
-		t.Fatalf("expected context percent to increase after done, got %.2f (initial %.2f)", updatedAfterDone.contextStatus.Percent, initialPercent)
+	updatedAfterUsage, _ := updatedAfterChunk.handleLLMUsage(&llm.TokenUsage{InputTokens: 1000})
+	if updatedAfterUsage.contextStatus.Percent != 50.0 {
+		t.Fatalf("expected 50%% after usage event, got %.2f", updatedAfterUsage.contextStatus.Percent)
 	}
 }
 

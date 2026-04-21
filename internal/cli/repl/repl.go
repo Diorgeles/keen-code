@@ -235,7 +235,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		suggestion:          replwidgets.NewSuggestionModel(),
 	}
 	model.streamHandler.workingDir = ctx.workingDir
-	model.refreshContextStatus(false)
+	model.refreshContextStatus()
 
 	if needsSetup {
 		welcomeStyle := lipgloss.NewStyle().Foreground(repltheme.PrimaryColor).Bold(true)
@@ -592,6 +592,8 @@ func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpe
 				return llmToolStartMsg{toolCall: event.ToolCall}
 			case llm.StreamEventTypeToolEnd:
 				return llmToolEndMsg{toolCall: event.ToolCall}
+			case llm.StreamEventTypeUsage:
+				return llmUsageMsg{usage: event.Usage}
 			default:
 				return llmDoneMsg{}
 			}
@@ -718,7 +720,7 @@ func (m replModel) consumeModelSelectionResult(msg tea.Msg) (replModel, tea.Cmd,
 		m.output.AddStyledLine("  "+successMsg, repltheme.HighlightStyle)
 		m.output.AddEmptyLine()
 		m.modelSelection = nil
-		m.refreshContextStatus(false)
+		m.refreshContextStatus()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return m, nil, true
@@ -799,7 +801,13 @@ func (m replModel) inputMetaView() string {
 	modelText := repltheme.MetaLabelStyle.Render("model:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model)
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
 		if modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
-			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render("thinking:") + " " + repltheme.HighlightStyle.Render(m.ctx.cfg.ThinkingEffort)
+			effortLabel := "thinking:"
+			effortValue := m.ctx.cfg.ThinkingEffort
+			if m.ctx.cfg.Provider == config.ProviderAnthropic {
+				effortLabel = "effort:"
+				effortValue += " (adaptive)"
+			}
+			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render(effortLabel) + " " + repltheme.HighlightStyle.Render(effortValue)
 		}
 	}
 	contextText := renderContextStatus(m.contextStatus)
@@ -927,6 +935,7 @@ func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
 
 func (m *replModel) handleClear() replModel {
 	m.appState.ClearMessages()
+	m.appState.ClearContextMetrics()
 	m.sessions.resetSession()
 
 	newOutput := reploutput.NewOutputBuilder(m.width, m.ctx.workingDir)
@@ -938,7 +947,7 @@ func (m *replModel) handleClear() replModel {
 	newOutput.AddEmptyLine()
 	m.output = newOutput
 
-	m.refreshContextStatus(false)
+	m.refreshContextStatus()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m
@@ -976,7 +985,7 @@ func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {
 	m.output = replay.output
 	m.appState.ReplaceMessages(session.BuildConversation(loaded.Events))
 	m.sessionPicker = nil
-	m.refreshContextStatus(false)
+	m.refreshContextStatus()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 }

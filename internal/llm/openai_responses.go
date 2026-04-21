@@ -179,6 +179,17 @@ func (c *OpenAIResponsesClient) StreamChat(
 			}
 
 			previousResponseID = completed.ID
+			if completed.Usage.InputTokens > 0 || completed.Usage.OutputTokens > 0 {
+				eventCh <- StreamEvent{
+					Type: StreamEventTypeUsage,
+					Usage: &TokenUsage{
+						InputTokens:     int(completed.Usage.InputTokens),
+						OutputTokens:    int(completed.Usage.OutputTokens),
+						TotalTokens:     int(completed.Usage.TotalTokens),
+						ReasoningTokens: int(completed.Usage.OutputTokensDetails.ReasoningTokens),
+					},
+				}
+			}
 			emitMissingFinalContent(eventCh, completed.OutputText(), streamedContent)
 
 			if len(toolCalls) == 0 {

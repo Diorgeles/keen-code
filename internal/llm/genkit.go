@@ -185,6 +185,17 @@ func (c *GenkitClient) StreamChat(
 				return
 			}
 
+			if modelResponse.Usage != nil && (modelResponse.Usage.InputTokens > 0 || modelResponse.Usage.OutputTokens > 0) {
+				eventCh <- StreamEvent{
+					Type: StreamEventTypeUsage,
+					Usage: &TokenUsage{
+						InputTokens:  modelResponse.Usage.InputTokens,
+						OutputTokens: modelResponse.Usage.OutputTokens,
+						TotalTokens:  modelResponse.Usage.TotalTokens,
+					},
+				}
+			}
+
 			toolRequests := modelResponse.ToolRequests()
 			if len(toolRequests) == 0 {
 				eventCh <- StreamEvent{Type: StreamEventTypeDone}

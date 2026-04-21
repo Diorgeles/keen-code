@@ -612,8 +612,8 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 		},
 	}
 	m.appState = replappstate.New(nil, "")
-	m.appState.AddMessage(llm.RoleUser, strings.Repeat("word ", 750))
-	m.refreshContextStatus(false)
+	m.appState.SetLastUsage(&llm.TokenUsage{InputTokens: 1000})
+	m.refreshContextStatus()
 
 	meta := m.inputMetaView()
 	if !strings.Contains(meta, "model:") {
@@ -636,11 +636,77 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	}
 }
 
+func TestInputMetaView_ShowsAnthropicAdaptiveEffort(t *testing.T) {
+	m := newTestModel()
+	m.width = 120
+	m.ctx = &replContext{
+		workingDir: "",
+		cfg: &config.ResolvedConfig{
+			Provider:       config.ProviderAnthropic,
+			Model:          "claude-sonnet-4-6",
+			ThinkingEffort: "high",
+		},
+		registry: &providers.Registry{
+			Providers: []providers.Provider{
+				{
+					ID: config.ProviderAnthropic,
+					Models: []providers.Model{
+						{ID: "claude-sonnet-4-6", ContextWindow: 2000, ThinkingEfforts: []string{"low", "medium", "high", "max"}},
+					},
+				},
+			},
+		},
+	}
+
+	meta := m.inputMetaView()
+	if !strings.Contains(meta, "effort:") {
+		t.Fatalf("expected effort label for anthropic, got %q", meta)
+	}
+	if !strings.Contains(meta, "high (adaptive)") {
+		t.Fatalf("expected adaptive effort text for anthropic, got %q", meta)
+	}
+	if strings.Contains(meta, "thinking:") {
+		t.Fatalf("did not expect thinking label for anthropic, got %q", meta)
+	}
+}
+
+func TestInputMetaView_KeepsThinkingLabelForNonAnthropic(t *testing.T) {
+	m := newTestModel()
+	m.width = 120
+	m.ctx = &replContext{
+		workingDir: "",
+		cfg: &config.ResolvedConfig{
+			Provider:       config.ProviderOpenAI,
+			Model:          "gpt-5.4",
+			ThinkingEffort: "high",
+		},
+		registry: &providers.Registry{
+			Providers: []providers.Provider{
+				{
+					ID: config.ProviderOpenAI,
+					Models: []providers.Model{
+						{ID: "gpt-5.4", ContextWindow: 2000, ThinkingEfforts: []string{"low", "medium", "high", "xhigh"}},
+					},
+				},
+			},
+		},
+	}
+
+	meta := m.inputMetaView()
+	if !strings.Contains(meta, "thinking:") {
+		t.Fatalf("expected thinking label for non-anthropic provider, got %q", meta)
+	}
+	if strings.Contains(meta, "effort:") {
+		t.Fatalf("did not expect effort label for non-anthropic provider, got %q", meta)
+	}
+}
+
 func TestInputMetaView_SuggestsCompactionAtSeventyPercent(t *testing.T) {
 	m := newTestModel()
 	m.width = 120
 	m.contextStatus = contextStatus{
 		KnownWindow:   true,
+		KnownTokens:   true,
 		ContextWindow: 100,
 		CurrentTokens: 70,
 		Percent:       70,
@@ -657,6 +723,7 @@ func TestInputMetaView_DropsCompactionHintWhenWidthIsTight(t *testing.T) {
 	m.width = 30
 	m.contextStatus = contextStatus{
 		KnownWindow:   true,
+		KnownTokens:   true,
 		ContextWindow: 100,
 		CurrentTokens: 75,
 		Percent:       75,
@@ -788,7 +855,7 @@ func TestInputMetaView_UnknownContextWindowShowsNA(t *testing.T) {
 		},
 	}
 
-	m.refreshContextStatus(false)
+	m.refreshContextStatus()
 	meta := m.inputMetaView()
 	if !strings.Contains(meta, "N/A") {
 		t.Fatalf("expected N/A for unknown context window, got %q", meta)

@@ -219,7 +219,7 @@ func (c *OpenAICompatibleClient) collectTurn(
 	ctx context.Context,
 	params openai.ChatCompletionNewParams,
 	eventCh chan<- StreamEvent,
-) (openai.ChatCompletionMessage, string, string, bool, error) {
+) (openai.ChatCompletionMessage, string, string, bool, openai.CompletionUsage, error) {
 	stream := c.streamImpl(ctx, params)
 	var acc openai.ChatCompletionAccumulator
 	var reasoningContent strings.Builder
@@ -253,13 +253,13 @@ func (c *OpenAICompatibleClient) collectTurn(
 	_ = stream.Close()
 
 	if err := stream.Err(); err != nil {
-		return openai.ChatCompletionMessage{}, "", "", false, fmt.Errorf("stream error: %w", err)
+		return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, fmt.Errorf("stream error: %w", err)
 	}
 	if len(acc.ChatCompletion.Choices) == 0 {
-		return openai.ChatCompletionMessage{}, "", "", false, nil
+		return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, nil
 	}
 
-	return acc.ChatCompletion.Choices[0].Message, reasoningContent.String(), streamedContent.String(), true, nil
+	return acc.ChatCompletion.Choices[0].Message, reasoningContent.String(), streamedContent.String(), true, acc.ChatCompletion.Usage, nil
 }
 
 func (c *OpenAICompatibleClient) StreamChat(
@@ -282,11 +282,14 @@ func (c *OpenAICompatibleClient) StreamChat(
 			params := openai.ChatCompletionNewParams{
 				Model:    c.model,
 				Messages: oaiMessages,
+				StreamOptions: openai.ChatCompletionStreamOptionsParam{
+					IncludeUsage: openai.Bool(true),
+				},
 			}
 			if len(oaiTools) > 0 {
 				params.Tools = oaiTools
 			}
-			message, reasoningContent, streamedContent, hasChoice, err := c.collectTurn(ctx, params, eventCh)
+			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurn(ctx, params, eventCh)
 			if err != nil {
 				eventCh <- StreamEvent{
 					Type:  StreamEventTypeError,
@@ -297,6 +300,16 @@ func (c *OpenAICompatibleClient) StreamChat(
 			if !hasChoice {
 				eventCh <- StreamEvent{Type: StreamEventTypeDone}
 				return
+			}
+			if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
+				eventCh <- StreamEvent{
+					Type: StreamEventTypeUsage,
+					Usage: &TokenUsage{
+						InputTokens:  int(usage.PromptTokens),
+						OutputTokens: int(usage.CompletionTokens),
+						TotalTokens:  int(usage.TotalTokens),
+					},
+				}
 			}
 			emitMissingFinalContent(eventCh, message.Content, streamedContent)
 			assistant := c.buildAssistantMessage(message, reasoningContent)

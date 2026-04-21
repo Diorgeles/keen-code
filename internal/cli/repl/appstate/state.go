@@ -17,6 +17,7 @@ type AppState struct {
 	llmClient    llm.LLMClient
 	toolRegistry *tools.Registry
 	workingDir   string
+	lastUsage    *llm.TokenUsage
 }
 
 func New(client llm.LLMClient, workingDir string) *AppState {
@@ -130,4 +131,25 @@ func (s *AppState) RegisterTool(tool tools.Tool) error {
 
 func (s *AppState) WorkingDir() string {
 	return s.workingDir
+}
+
+func (s *AppState) SetLastUsage(usage *llm.TokenUsage) {
+	if usage == nil {
+		s.lastUsage = nil
+		return
+	}
+	cloned := *usage
+	s.lastUsage = &cloned
+}
+
+func (s *AppState) GetLastUsage() *llm.TokenUsage {
+	if s.lastUsage == nil {
+		return nil
+	}
+	cloned := *s.lastUsage
+	return &cloned
+}
+
+func (s *AppState) ClearContextMetrics() {
+	s.lastUsage = nil
 }

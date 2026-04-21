@@ -44,14 +44,17 @@ providers:
   - id: moonshotai
     name: Moonshot AI
     models:
+      - id: kimi-k2.6
+        name: Kimi K2.6
+        context_window: 256000
+      - id: kimi-k2.5
+        name: Kimi K2.5
+        context_window: 256000
       - id: kimi-k2-thinking
         name: Kimi K2 Thinking
         context_window: 256000
       - id: kimi-k2-thinking-turbo
         name: Kimi K2 Thinking Turbo
-        context_window: 256000
-      - id: kimi-k2.5
-        name: Kimi K2.5
         context_window: 256000
 
   - id: deepseek

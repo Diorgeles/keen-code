@@ -9,9 +9,6 @@
 7. We currently show provider in secondary color. Let's change that. We will show the model in secondary color only.
 8. Remove the progress bar and icon from the context status UI. Replace it with so
 
-## Context Status
-1. Currently, system prompt + tool schemas aren't fully accounted for in the percentage. The estimate includes llm.Build(workingDir) text but not the tool descriptors Genkit attaches under the hood. Real context pressure is higher than the bar suggests.
-
 ## Compaction
 1. Currently, when a compaction happens, the compaction is not shown to client. We want to stream the compaction just like other assistant messages. How to do that?
 2. `handleCompactionDone` and `handleCompactionError` - should they be in repl.go? I think we should put them in handlers.go.
@@ -59,3 +56,6 @@ Use the AskUserQuestion tool to clarify further requirements.
 13. Review the current package layout and identify the next safe move.
 14. Evaluate whether compaction_status.go should go into widgets.
 15. Create an output package with output.go and compaction_status.go.
+
+## Context Status Redesign
+

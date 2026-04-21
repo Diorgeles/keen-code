@@ -24,7 +24,7 @@ var (
 	}
 
 	TextPrimaryColor = compat.AdaptiveColor{
-		Light: lipgloss.Color("#757575"),
+		Light: lipgloss.Color("#242323"),
 		Dark:  lipgloss.Color("#BDBDBD"),
 	}
 	TextSecondaryColor = compat.AdaptiveColor{
@@ -32,8 +32,8 @@ var (
 		Dark:  lipgloss.Color("#BDBDBD"),
 	}
 	TextDimColor = compat.AdaptiveColor{
-		Light: lipgloss.Color("#9E9E9E"),
-		Dark:  lipgloss.Color("#757575"),
+		Light: lipgloss.Color("#828282"),
+		Dark:  lipgloss.Color("#B3B3B3"),
 	}
 
 	ErrorColor = compat.AdaptiveColor{Light: lipgloss.Color("#D32F2F"), Dark: lipgloss.Color("#EF5350")}
