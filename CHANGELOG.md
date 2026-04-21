@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-22
+
+### Added
+- Provider-backed context status replacing the local word-count heuristic
+- Token usage events emitted from all provider clients (OpenAI Responses, Anthropic, Genkit/Google AI, DeepSeek/Moonshot)
+- Cache-aware token accounting for Anthropic (includes cache creation and read tokens)
+- Anthropic adaptive effort display in the status bar
+- `N/A` display when context window is unknown instead of a misleading percentage
+
+### Changed
+- Context status now reports actual provider-counted token usage against the model context window
+- Compaction suggestions are grounded in real tokenization rather than local estimates
+- `/clear` and `/new` reset context metrics for new sessions
+- Updated provider registry with new models and context windows
+
+### Removed
+- Local word-count token estimation helpers (`estimateTokensFromWordCount`, `countWords`, `estimateToolDefinitionTokens`, `buildConversationForEstimation`)
+
 ## [0.3.0] - 2026-04-21
 
 ### Added
@@ -121,7 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mochow13/keen-code/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mochow13/keen-code/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/mochow13/keen-code/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/mochow13/keen-code/compare/v0.2.1...v0.2.2
