@@ -664,8 +664,8 @@ func TestRenderDiffSegment_RendersRulesUsingViewportWidth(t *testing.T) {
 	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
 	sh.HandleDiff([]tools.EditDiffLine{
 		{Kind: tools.DiffLineHunk, Content: "@@ -1,2 +1,3 @@"},
-		{Kind: tools.DiffLineRemoved, Content: "short", OldLineNum: 1},
-		{Kind: tools.DiffLineAdded, Content: "shorter", NewLineNum: 1},
+		{Kind: tools.DiffLineRemoved, Content: strings.Repeat("short ", 6), OldLineNum: 1},
+		{Kind: tools.DiffLineAdded, Content: strings.Repeat("shorter ", 6), NewLineNum: 1},
 	})
 
 	wideView := sh.View(80)
@@ -687,8 +687,8 @@ func TestRenderDiffSegment_RendersRulesUsingViewportWidth(t *testing.T) {
 		t.Fatalf("expected top and bottom diff rules, got %q", wideView)
 	}
 	wideRuleWidth := lipgloss.Width(nonEmpty[0])
-	if wideRuleWidth != 80 {
-		t.Fatalf("expected diff rules to match viewport width, got width %d", wideRuleWidth)
+	if wideRuleWidth != 78 {
+		t.Fatalf("expected diff rules to leave right padding, got width %d", wideRuleWidth)
 	}
 
 	narrowView := sh.View(24)
@@ -704,11 +704,19 @@ func TestRenderDiffSegment_RendersRulesUsingViewportWidth(t *testing.T) {
 			narrowNonEmpty = append(narrowNonEmpty, line)
 		}
 	}
+	if len(narrowNonEmpty) <= len(nonEmpty) {
+		t.Fatalf("expected narrow diff view to wrap long lines, got wide=%d narrow=%d", len(nonEmpty), len(narrowNonEmpty))
+	}
 	if len(narrowNonEmpty) < 4 {
 		t.Fatalf("expected non-empty narrow diff lines, got %v", narrowNonEmpty)
 	}
-	if narrowRuleWidth := lipgloss.Width(narrowNonEmpty[0]); narrowRuleWidth != 24 {
-		t.Fatalf("expected narrow diff rules to match viewport width, got width %d", narrowRuleWidth)
+	if narrowRuleWidth := lipgloss.Width(narrowNonEmpty[0]); narrowRuleWidth != 22 {
+		t.Fatalf("expected narrow diff rules to leave right padding, got width %d", narrowRuleWidth)
+	}
+	for _, line := range narrowNonEmpty {
+		if w := lipgloss.Width(line); w > 22 {
+			t.Fatalf("expected non-empty diff line to leave right padding (%d > %d): %q", w, 22, line)
+		}
 	}
 }
 
