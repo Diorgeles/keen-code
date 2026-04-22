@@ -9,3 +9,5 @@
 - Show a brief message ":tick: New session started"
 
 Do you have any other suggestions for the requirements?
+
+2. Ok let's implement it.

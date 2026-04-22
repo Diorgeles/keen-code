@@ -1,0 +1,48 @@
+# Contributing to Keen Code
+
+Thank you for contributing. This project records human-AI interactions that shapes the codebase. When you work on an issue, you must preserve the prompts you send and the outputs the agent produces so the development history stays complete and transparent.
+
+## Prerequisites
+
+- You need to have access to at least one AI coding agent
+- All PRs must be written by an AI agent
+- All prompts must be written by a human
+- Prompts and output docs are critical for the development history so they must be saved as outlined in this document
+
+## Where to save task files
+
+Save everything under `.ai-interactions/tasks/`.
+
+## Folder per issue
+
+Every issue gets its own folder under `.ai-interactions/tasks/<issue-name>/`.
+
+Keep the filenames descriptive, for example `prompts.md`, `outputs.md`, `prompt-1_that-feature.md`, `outputs-1_plan-for-that-feature.md`, etc.
+
+## What to include
+
+- **Prompts** — every message or instruction you send to the agent that was needed to implement the issue
+- **Outputs** — every plan, design doc, code review, or task breakdown the agent returns
+
+Do not edit outputs after the agent produces them. Save them as-is.
+
+## Example
+
+```
+.ai-interactions/
+└── tasks/
+    ├── issue-5/
+    │   └── prompt-and-output.md
+    └── issue-42/
+        ├── prompt-1.md
+        ├── output-1.md
+        ├── prompt-2.md
+        └── output-2.md
+```
+
+## Workflow
+
+1. Open or create a GitHub issue describing the bug or feature.
+2. Work with the agent iteratively. Save each turn.
+3. Place the final prompts and outputs in `.ai-interactions/tasks/` following the rules above.
+4. Open a pull request that includes both the code changes and the task files.

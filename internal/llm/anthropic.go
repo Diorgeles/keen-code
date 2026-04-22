@@ -15,7 +15,7 @@ import (
 	"github.com/user/keen-code/internal/tools"
 )
 
-const anthropicMaxTokens = 16192
+const anthropicMaxTokens = 32768
 
 type anthropicStream interface {
 	Next() bool
@@ -281,7 +281,7 @@ func anthropicThinkingParams(effort string) (anthropic.ThinkingConfigParamUnion,
 		outCfg := anthropic.OutputConfigParam{
 			Effort: anthropic.OutputConfigEffort(effort),
 		}
-		return thinking, outCfg, 32768
+		return thinking, outCfg, anthropicMaxTokens
 	default:
 		thinking := anthropic.ThinkingConfigParamUnion{
 			OfDisabled: &anthropic.ThinkingConfigDisabledParam{},
