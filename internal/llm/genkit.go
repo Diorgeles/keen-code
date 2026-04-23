@@ -10,7 +10,6 @@ import (
 
 	"github.com/firebase/genkit/go/ai"
 	"github.com/firebase/genkit/go/genkit"
-	"github.com/firebase/genkit/go/plugins/compat_oai"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
@@ -36,12 +35,6 @@ func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
 	var modelName string
 
 	switch cfg.Provider {
-	case config.ProviderOpenAI:
-		g = genkit.Init(ctx, genkit.WithPlugins(&compat_oai.OpenAICompatible{
-			APIKey:   cfg.APIKey,
-			Provider: "openai",
-		}))
-		modelName = "openai/" + cfg.Model
 	case config.ProviderGoogleAI:
 		g = genkit.Init(ctx, genkit.WithPlugins(&googlegenai.GoogleAI{
 			APIKey: cfg.APIKey,

@@ -58,9 +58,13 @@ type OpenAICompatibleClient struct {
 }
 
 func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, error) {
-	baseURL, err := openAICompatibleBaseURL(cfg.Provider)
-	if err != nil {
-		return nil, err
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		var err error
+		baseURL, err = openAICompatibleBaseURL(cfg.Provider)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client := openai.NewClient(

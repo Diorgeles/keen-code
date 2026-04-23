@@ -60,9 +60,13 @@ func NewOpenAIResponsesClient(cfg *ClientConfig) (*OpenAIResponsesClient, error)
 		return nil, fmt.Errorf("unsupported Responses API provider: %s", cfg.Provider)
 	}
 
-	client := openai.NewClient(
+	opts := []option.RequestOption{
 		option.WithAPIKey(cfg.APIKey),
-	)
+	}
+	if cfg.BaseURL != "" {
+		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
+	}
+	client := openai.NewClient(opts...)
 
 	c := &OpenAIResponsesClient{
 		provider:       cfg.Provider,

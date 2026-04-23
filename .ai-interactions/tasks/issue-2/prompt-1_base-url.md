@@ -1,0 +1,1 @@
+1. We have an issue on github here: https://github.com/mochow13/keen-code/issues/2. Use the `gh` CLI to view the issue. Then create an implementation plan on how you will implement the feature. Include granular todo list in the plan. Save the plan as output-1_base-url-plan.md in the ./ai-interactions/tasks/issue-2 directory.

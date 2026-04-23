@@ -66,6 +66,21 @@ func TestNewOpenAIResponsesClient_OpenAI(t *testing.T) {
 	}
 }
 
+func TestNewOpenAIResponsesClient_CustomBaseURL(t *testing.T) {
+	client, err := NewOpenAIResponsesClient(&ClientConfig{
+		Provider: Provider(config.ProviderOpenAI),
+		APIKey:   "test-key",
+		Model:    "gpt-5.4",
+		BaseURL:  "https://openai-proxy.example.com/v1",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected client")
+	}
+}
+
 func TestOpenAIResponsesClient_StreamChat_ToolLoop(t *testing.T) {
 	client := &OpenAIResponsesClient{
 		provider: Provider(config.ProviderOpenAI),

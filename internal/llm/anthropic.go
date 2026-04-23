@@ -11,7 +11,6 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
-	"github.com/joho/godotenv"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -54,14 +53,11 @@ type AnthropicClient struct {
 }
 
 func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
-	env, _ := godotenv.Read(".env")
-	baseURL := env["ANTHROPIC_BASE_URL"]
-
 	opts := []option.RequestOption{
 		option.WithAPIKey(cfg.APIKey),
 	}
-	if baseURL != "" {
-		opts = append(opts, option.WithBaseURL(baseURL))
+	if cfg.BaseURL != "" {
+		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
 	}
 
 	client := anthropic.NewClient(opts...)
