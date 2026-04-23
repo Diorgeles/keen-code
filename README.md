@@ -2,10 +2,10 @@
 
 <img src="./assets/keen-code.png" alt="Keen Code" width="350"/>
 
-[![Latest Release](https://img.shields.io/github/v/release/mochow13/keen-code)](https://github.com/mochow13/keen-code/releases/latest)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/mochow13/keen-code/go.yml?branch=main)](https://github.com/mochow13/keen-code/actions)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/mochow13/keen-code)](https://go.dev/)
-[![License](https://img.shields.io/github/license/mochow13/keen-code)](https://github.com/mochow13/keen-code/blob/main/LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/mochow13/keen-code?style=flat-square&logo=github)](https://github.com/mochow13/keen-code/releases/latest)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/mochow13/keen-code/go.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white)](https://github.com/mochow13/keen-code/actions)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/mochow13/keen-code?style=flat-square&logo=go)](https://go.dev/)
+[![License](https://img.shields.io/github/license/mochow13/keen-code?style=flat-square&logo=opensourceinitiative&logoColor=white)](https://github.com/mochow13/keen-code/blob/main/LICENSE)
 
 </div>
 
