@@ -135,6 +135,46 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+func TestResolve_PropagatesBaseURL(t *testing.T) {
+	global := &GlobalConfig{
+		ActiveProvider: ProviderAnthropic,
+		Providers: map[string]ProviderConfig{
+			ProviderAnthropic: {
+				Models:  []string{"claude-3-sonnet"},
+				APIKey:  "sk-ant-test",
+				BaseURL: "https://my-proxy.example.com/v1",
+			},
+		},
+	}
+	session := &SessionConfig{}
+
+	resolved, err := Resolve(global, session)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.BaseURL != "https://my-proxy.example.com/v1" {
+		t.Errorf("expected BaseURL 'https://my-proxy.example.com/v1', got %q", resolved.BaseURL)
+	}
+}
+
+func TestResolve_EmptyBaseURL(t *testing.T) {
+	global := &GlobalConfig{
+		ActiveProvider: ProviderAnthropic,
+		Providers: map[string]ProviderConfig{
+			ProviderAnthropic: {Models: []string{"claude-3-sonnet"}, APIKey: "sk-ant-test"},
+		},
+	}
+	session := &SessionConfig{}
+
+	resolved, err := Resolve(global, session)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.BaseURL != "" {
+		t.Errorf("expected empty BaseURL, got %q", resolved.BaseURL)
+	}
+}
+
 func TestResolve_WithSessionOverrides(t *testing.T) {
 	global := &GlobalConfig{
 		ActiveProvider: ProviderAnthropic,

@@ -37,7 +37,10 @@ Save everything under `.ai-interactions/tasks/`.
 
 Every issue gets its own folder under `.ai-interactions/tasks/<issue-name>/`.
 
-Keep the filenames descriptive, for example `prompts.md`, `outputs.md`, `prompt-1_that-feature.md`, `outputs-1_plan-for-that-feature.md`, etc.
+Follow the naming convention for prompt and output files:
+
+- `prompt-1_that-feature.md`
+- `output-1_plan-for-that-feature.md`
 
 ## What to include
 
@@ -52,12 +55,13 @@ Do not edit outputs after the agent produces them. Save them as-is.
 .ai-interactions/
 └── tasks/
     ├── issue-5/
-    │   └── prompt-and-output.md
+    │   └── prompt-1_issue-5-feature.md
+    │   └── output-1_plan-for-issue-5-feature.md
     └── issue-42/
-        ├── prompt-1.md
-        ├── output-1.md
-        ├── prompt-2.md
-        └── output-2.md
+        ├── prompt-1_issue-42-feature.md
+        ├── output-1_plan-for-issue-42-feature.md
+        ├── prompt-2_issue-42-feature.md
+        └── output-2_plan-for-issue-42-feature.md
 ```
 
 ## Workflow

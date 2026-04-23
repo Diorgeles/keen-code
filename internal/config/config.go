@@ -24,8 +24,9 @@ type GlobalConfig struct {
 }
 
 type ProviderConfig struct {
-	Models []string `json:"models"`
-	APIKey string   `json:"api_key"`
+	Models  []string `json:"models"`
+	APIKey  string   `json:"api_key"`
+	BaseURL string   `json:"base_url,omitempty"`
 }
 
 func (p ProviderConfig) hasModel(model string) bool {
@@ -43,6 +44,7 @@ type ResolvedConfig struct {
 	APIKey         string
 	Model          string
 	ThinkingEffort string
+	BaseURL        string
 }
 
 func (g *GlobalConfig) GetProviderConfig(provider string) (ProviderConfig, bool) {
@@ -112,6 +114,7 @@ func Resolve(global *GlobalConfig, session *SessionConfig) (*ResolvedConfig, err
 		APIKey:         apiKey,
 		Model:          model,
 		ThinkingEffort: global.ThinkingEffort,
+		BaseURL:        providerGlobal.BaseURL,
 	}
 
 	slog.Debug("config resolved", "provider", resolved.Provider, "model", resolved.Model)

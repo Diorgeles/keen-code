@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"fmt"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -11,12 +12,17 @@ import (
 	"github.com/user/keen-code/providers"
 )
 
+func supportsBaseURL(providerID string) bool {
+	return providerID != config.ProviderGoogleAI
+}
+
 type Step int
 
 const (
 	StepProvider Step = iota
 	StepModel
 	StepThinking
+	StepBaseURL
 	StepAPIKey
 )
 
@@ -28,6 +34,8 @@ type Model struct {
 	SelectedProvider string
 	SelectedModel    string
 	APIKeyInput      string
+	BaseURLInput     string
+	BaseURLError     string
 	ProviderCursor   int
 	ModelCursor      int
 	ThinkingCursor   int
@@ -96,6 +104,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.ThinkingOptions = append([]string{"off"}, modelMeta.ThinkingEfforts...)
 				m.ThinkingCursor = m.resolveThinkingCursor(m.ThinkingOptions)
 				m.Step = StepThinking
+			} else if supportsBaseURL(m.SelectedProvider) {
+				m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
+				m.Step = StepBaseURL
 			} else {
 				m.Step = StepAPIKey
 			}
@@ -111,9 +122,37 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.ThinkingCursor = (m.ThinkingCursor + 1) % len(m.ThinkingOptions)
 		case "enter":
 			m.SelectedThinking = m.ThinkingOptions[m.ThinkingCursor]
-			m.Step = StepAPIKey
+			if supportsBaseURL(m.SelectedProvider) {
+				m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
+				m.Step = StepBaseURL
+			} else {
+				m.Step = StepAPIKey
+			}
 		case "esc":
 			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
+		}
+
+	case StepBaseURL:
+		switch msg.String() {
+		case "esc":
+			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
+		case "enter":
+			if err := isValidBaseURL(m.BaseURLInput); err != nil {
+				m.BaseURLError = err.Error()
+				return m, nil
+			}
+			m.BaseURLError = ""
+			m.Step = StepAPIKey
+		case "backspace":
+			if len(m.BaseURLInput) > 0 {
+				m.BaseURLInput = m.BaseURLInput[:len(m.BaseURLInput)-1]
+			}
+			m.BaseURLError = ""
+		default:
+			if len(msg.Text) > 0 {
+				m.BaseURLInput += msg.Text
+				m.BaseURLError = ""
+			}
 		}
 
 	case StepAPIKey:
@@ -159,8 +198,16 @@ func (m *Model) resolveThinkingCursor(options []string) int {
 }
 
 func (m *Model) handlePasteMsg(msg tea.PasteMsg) (*Model, tea.Cmd) {
-	if m.Step == StepAPIKey && msg.Content != "" {
-		m.APIKeyInput += msg.Content
+	switch m.Step {
+	case StepBaseURL:
+		if msg.Content != "" {
+			m.BaseURLInput += msg.Content
+			m.BaseURLError = ""
+		}
+	case StepAPIKey:
+		if msg.Content != "" {
+			m.APIKeyInput += msg.Content
+		}
 	}
 	return m, nil
 }
@@ -198,8 +245,9 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 	m.globalCfg.ThinkingEffort = storedEffort
 
 	providerCfg := config.ProviderConfig{
-		APIKey: apiKey,
-		Models: []string{m.SelectedModel},
+		APIKey:  apiKey,
+		Models:  []string{m.SelectedModel},
+		BaseURL: m.BaseURLInput,
 	}
 	m.globalCfg.SetProviderConfig(m.SelectedProvider, providerCfg)
 
@@ -212,6 +260,7 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 	m.resolvedCfg.Model = m.SelectedModel
 	m.resolvedCfg.APIKey = apiKey
 	m.resolvedCfg.ThinkingEffort = storedEffort
+	m.resolvedCfg.BaseURL = m.BaseURLInput
 
 	if err := m.onComplete(m.SelectedProvider, m.SelectedModel, apiKey); err != nil {
 		m.ErrorMessage = fmt.Sprintf("Failed to initialize LLM client: %v", err)
@@ -229,6 +278,8 @@ func (m *Model) ViewString() string {
 		return m.renderModelSelection()
 	case StepThinking:
 		return m.renderThinkingSelection()
+	case StepBaseURL:
+		return m.renderBaseURLInput()
 	case StepAPIKey:
 		return m.renderAPIKeyInput()
 	}
@@ -260,6 +311,27 @@ func (m *Model) renderThinkingSelection() string {
 	view.WriteString("\n\n")
 	view.WriteString(m.renderList(m.ThinkingCursor, func(i int) string { return m.ThinkingOptions[i] }, len(m.ThinkingOptions)))
 	view.WriteString("\n" + repltheme.HintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
+	return view.String()
+}
+
+func (m *Model) renderBaseURLInput() string {
+	var view strings.Builder
+	providerName := m.getProviderName(m.SelectedProvider)
+	existingURL := m.getExistingBaseURL(m.SelectedProvider)
+
+	title := fmt.Sprintf("Base URL for %s (optional)", providerName)
+	if existingURL != "" {
+		title += "\n" + repltheme.HintStyle.Render("current: "+existingURL)
+	}
+	view.WriteString(repltheme.UserPromptStyle.Render(title))
+	view.WriteString("\n\n")
+
+	view.WriteString(repltheme.PromptStyle.Render("> ") + m.BaseURLInput)
+	view.WriteString("\n\n" + repltheme.HintStyle.Render("[Enter to confirm, Esc to cancel]"))
+
+	if m.BaseURLError != "" {
+		view.WriteString("\n" + repltheme.ErrorStyle.Render(m.BaseURLError))
+	}
 	return view.String()
 }
 
@@ -318,6 +390,16 @@ func (m *Model) getExistingAPIKey(providerID string) string {
 	return ""
 }
 
+func (m *Model) getExistingBaseURL(providerID string) string {
+	if m.globalCfg == nil {
+		return ""
+	}
+	if providerCfg, exists := m.globalCfg.GetProviderConfig(providerID); exists {
+		return providerCfg.BaseURL
+	}
+	return ""
+}
+
 func IsComplete(msg tea.Msg) bool {
 	_, ok := msg.(modelSelectionCompleteMsg)
 	return ok
@@ -326,4 +408,21 @@ func IsComplete(msg tea.Msg) bool {
 func IsCancel(msg tea.Msg) bool {
 	_, ok := msg.(modelSelectionCancelMsg)
 	return ok
+}
+
+func isValidBaseURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("URL must start with http:// or https://")
+	}
+	if u.Host == "" {
+		return fmt.Errorf("URL must include a host")
+	}
+	return nil
 }

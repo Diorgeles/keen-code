@@ -13,6 +13,7 @@ type ClientConfig struct {
 	APIKey         string
 	Model          string
 	ThinkingEffort string
+	BaseURL        string
 }
 
 func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
@@ -30,6 +31,7 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			APIKey:         cfg.APIKey,
 			Model:          cfg.Model,
 			ThinkingEffort: cfg.ThinkingEffort,
+			BaseURL:        cfg.BaseURL,
 		})
 	case config.ProviderGoogleAI:
 		return NewGenkitClient(&ClientConfig{
@@ -37,6 +39,7 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			APIKey:         cfg.APIKey,
 			Model:          cfg.Model,
 			ThinkingEffort: cfg.ThinkingEffort,
+			BaseURL:        cfg.BaseURL,
 		})
 	case config.ProviderOpenAI:
 		return NewOpenAIResponsesClient(&ClientConfig{
@@ -44,6 +47,7 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			APIKey:         cfg.APIKey,
 			Model:          cfg.Model,
 			ThinkingEffort: cfg.ThinkingEffort,
+			BaseURL:        cfg.BaseURL,
 		})
 	case config.ProviderDeepSeek,
 		config.ProviderMoonshotAI:
@@ -52,6 +56,7 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			APIKey:         cfg.APIKey,
 			Model:          cfg.Model,
 			ThinkingEffort: cfg.ThinkingEffort,
+			BaseURL:        cfg.BaseURL,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
