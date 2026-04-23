@@ -2,6 +2,26 @@
 
 Thank you for contributing. This project records human-AI interactions that shapes the codebase. When you work on an issue, you must preserve the prompts you send and the outputs the agent produces so the development history stays complete and transparent.
 
+## Running Locally
+
+This project is built with Go. To run it locally, ensure you have Go installed on your system.
+
+1. Install Go dependencies:
+   ```bash
+   go mod download
+   go mod tidy
+   ```
+
+2. Run the application:
+   ```bash
+   go run cmd/main.go
+   ```
+
+3. Run the tests to ensure everything is working:
+   ```bash
+   go test ./...
+   ```
+
 ## Prerequisites
 
 - You need to have access to at least one AI coding agent
