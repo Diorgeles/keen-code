@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-23
+
+### Added
+- Configurable base URL per provider
+- CONTRIBUTING.md for contributors
+- Public-facing ROADMAP.md
+- Turn-memory documentation
+- Project tour, issue templates, and pull request template
+- Demo GIF in README
+
+### Changed
+- Wrapped REPL diff output in a viewport
+- Updated LLM configuration
+- Refreshed the demo GIF rendering with Monaspace Argon NF
+
 ## [0.4.1] - 2026-04-22
 
 ### Fixed
@@ -72,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Simplified REPL context status display and metadata emphasis
 
-## [0.2.0] - 2025-08-21
+## [0.2.0] - 2026-04-16
 
 ### Added
 - Conversation session management with transcript persistence
@@ -144,7 +159,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/mochow13/keen-code/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/mochow13/keen-code/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/mochow13/keen-code/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mochow13/keen-code/compare/v0.2.3...v0.3.0
