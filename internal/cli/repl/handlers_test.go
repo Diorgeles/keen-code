@@ -127,6 +127,7 @@ func TestHandleLLMError(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
+		appState:      replappstate.New(nil, t.TempDir()),
 		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
@@ -429,6 +430,7 @@ func TestHandleLLMError_ResetsHandler(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
+		appState:      replappstate.New(nil, t.TempDir()),
 		output:        reploutput.NewOutputBuilder(80, ""),
 	}
 
@@ -444,6 +446,47 @@ func TestHandleLLMError_ResetsHandler(t *testing.T) {
 	_ = newM
 }
 
+func TestHandleLLMError_MaterializesMessageAndTurnMemory(t *testing.T) {
+	workingDir := t.TempDir()
+	sh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	sh.Start(eventCh, "Loading...")
+	sh.HandleChunk("partial response")
+
+	m := replModel{
+		streamHandler: sh,
+		showSpinner:   true,
+		width:         80,
+		appState:      replappstate.New(nil, workingDir),
+		output:        reploutput.NewOutputBuilder(80, ""),
+	}
+	m.startAssistantTurnMemory()
+	m.recordToolMemory(&llm.ToolCall{
+		Name:   "write_file",
+		Output: map[string]any{"path": workingDir + "/foo.go"},
+	})
+
+	updated, _ := m.handleLLMError(errors.New("rate limit"))
+
+	messages := updated.appState.GetMessages()
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 materialized assistant message, got %d", len(messages))
+	}
+	msg := messages[0]
+	if msg.Role != llm.RoleAssistant {
+		t.Errorf("expected assistant role, got %s", msg.Role)
+	}
+	if msg.Content != "partial response" {
+		t.Errorf("expected partial response content, got %q", msg.Content)
+	}
+	if msg.TurnMemory == nil {
+		t.Fatal("expected TurnMemory to be preserved, got nil")
+	}
+	if len(msg.TurnMemory.FilesChanged) != 1 {
+		t.Fatalf("expected 1 changed file, got %#v", msg.TurnMemory.FilesChanged)
+	}
+}
+
 func TestHandleLLMError_ContextCanceled_DoesNotAddErrorLine(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	eventCh := make(chan llm.StreamEvent)
@@ -454,6 +497,7 @@ func TestHandleLLMError_ContextCanceled_DoesNotAddErrorLine(t *testing.T) {
 		streamHandler: sh,
 		showSpinner:   true,
 		width:         80,
+		appState:      replappstate.New(nil, t.TempDir()),
 		output:        reploutput.NewOutputBuilder(80, ""),
 		streamCancel:  func() {},
 	}

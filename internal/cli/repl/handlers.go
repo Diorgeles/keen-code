@@ -93,12 +93,19 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	}
 	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
+	partialResponse := m.streamHandler.GetResponse()
 	m.showSpinner = false
 	m.clearStreamCancel()
-	m.clearTurnMemory()
+	turnMemory := m.consumeTurnMemory()
 	m.adjustTextareaHeight()
 	pendingLines, errMsg := m.streamHandler.HandleError(err)
-	if persistErr := m.sessions.appendAssistantTurn(segments, llm.Message{}, false, errMsg); persistErr != nil {
+	assistantMessage := llm.Message{
+		Role:       llm.RoleAssistant,
+		Content:    partialResponse,
+		TurnMemory: turnMemory,
+	}
+	m.appState.AppendMessage(assistantMessage)
+	if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, false, errMsg); persistErr != nil {
 		m.handleSessionPersistenceError(persistErr)
 	}
 	for _, line := range pendingLines {
