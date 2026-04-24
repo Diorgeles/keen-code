@@ -11,6 +11,7 @@ import (
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/respjson"
+	"github.com/openai/openai-go/shared"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
 )
@@ -294,6 +295,22 @@ func (c *OpenAICompatibleClient) StreamChat(
 			}
 			if len(oaiTools) > 0 {
 				params.Tools = oaiTools
+			}
+			if c.provider == Provider(config.ProviderDeepSeek) && c.thinkingEffort != "" {
+				if c.thinkingEffort == "off" {
+					params.SetExtraFields(map[string]any{
+						"thinking": map[string]any{
+							"type": "disabled",
+						},
+					})
+				} else {
+					params.ReasoningEffort = shared.ReasoningEffort(c.thinkingEffort)
+					params.SetExtraFields(map[string]any{
+						"thinking": map[string]any{
+							"type": "enabled",
+						},
+					})
+				}
 			}
 			if c.provider == Provider(config.ProviderZAI) && c.thinkingEffort != "" {
 				params.SetExtraFields(map[string]any{

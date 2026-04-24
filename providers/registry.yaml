@@ -20,15 +20,15 @@ providers:
       - id: gpt-5.4
         name: GPT-5.4
         context_window: 1050000
-        thinking_efforts: ["low", "medium", "high", "xhigh"]
+        thinking_efforts: ["off", "low", "medium", "high", "xhigh"]
       - id: gpt-5.4-mini
         name: GPT-5.4 Mini
         context_window: 400000
-        thinking_efforts: ["low", "medium", "high", "xhigh"]
+        thinking_efforts: ["off", "low", "medium", "high", "xhigh"]
       - id: gpt-5.3-codex
         name: GPT-5.3 Codex
         context_window: 400000
-        thinking_efforts: ["low", "medium", "high", "xhigh"]
+        thinking_efforts: ["off", "low", "medium", "high", "xhigh"]
 
   - id: googleai
     name: Google AI
@@ -36,11 +36,11 @@ providers:
       - id: gemini-3.1-pro-preview
         name: Gemini 3.1 Pro
         context_window: 1048576
-        thinking_efforts: ["low", "medium", "high"]
+        thinking_efforts: ["off", "low", "medium", "high"]
       - id: gemini-3-flash-preview
         name: Gemini 3 Flash
         context_window: 1048576
-        thinking_efforts: ["low", "medium", "high"]
+        thinking_efforts: ["off", "low", "medium", "high"]
   - id: moonshotai
     name: Moonshot AI
     models:
@@ -72,9 +72,11 @@ providers:
   - id: deepseek
     name: DeepSeek
     models:
-      - id: deepseek-chat
-        name: DeepSeek V3.2
-        context_window: 128000
-      - id: deepseek-reasoner
-        name: DeepSeek-V3.2 (Thinking)
-        context_window: 128000
+      - id: deepseek-v4-flash
+        name: DeepSeek V4 Flash
+        context_window: 1000000
+        thinking_efforts: ["off", "high", "max"]
+      - id: deepseek-v4-pro
+        name: DeepSeek V4 Pro
+        context_window: 1000000
+        thinking_efforts: ["off", "high", "max"]

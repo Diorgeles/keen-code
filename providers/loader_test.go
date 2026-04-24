@@ -93,6 +93,11 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 	if len(m.ThinkingEfforts) != 4 {
 		t.Errorf("expected 4 efforts for claude-opus-4-6, got %d: %v", len(m.ThinkingEfforts), m.ThinkingEfforts)
 	}
+	for _, effort := range m.ThinkingEfforts {
+		if effort == "off" {
+			t.Errorf("did not expect anthropic off effort, got %v", m.ThinkingEfforts)
+		}
+	}
 
 	// claude-haiku-4-5 should NOT have thinking efforts
 	haiku, ok := reg.GetModel("anthropic", "claude-haiku-4-5")
@@ -103,7 +108,7 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 		t.Error("expected claude-haiku-4-5 to NOT support thinking effort")
 	}
 
-	// gpt-5.4 should have xhigh
+	// gpt-5.4 should have off and xhigh
 	gpt, ok := reg.GetModel("openai", "gpt-5.4")
 	if !ok {
 		t.Fatal("expected to find gpt-5.4")
@@ -111,14 +116,38 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 	if !gpt.SupportsThinkingEffort() {
 		t.Error("expected gpt-5.4 to support thinking effort")
 	}
-	found := false
+	foundOff := false
+	foundXHigh := false
 	for _, e := range gpt.ThinkingEfforts {
+		if e == "off" {
+			foundOff = true
+		}
 		if e == "xhigh" {
-			found = true
+			foundXHigh = true
 		}
 	}
-	if !found {
+	if !foundOff {
+		t.Errorf("expected gpt-5.4 to have off effort, got %v", gpt.ThinkingEfforts)
+	}
+	if !foundXHigh {
 		t.Errorf("expected gpt-5.4 to have xhigh effort, got %v", gpt.ThinkingEfforts)
+	}
+
+	deepseek, ok := reg.GetModel("deepseek", "deepseek-v4-pro")
+	if !ok {
+		t.Fatal("expected to find deepseek-v4-pro")
+	}
+	if !deepseek.SupportsThinkingEffort() {
+		t.Error("expected deepseek-v4-pro to support thinking effort")
+	}
+	expectedDeepSeek := []string{"off", "high", "max"}
+	if len(deepseek.ThinkingEfforts) != len(expectedDeepSeek) {
+		t.Fatalf("expected deepseek-v4-pro efforts %v, got %v", expectedDeepSeek, deepseek.ThinkingEfforts)
+	}
+	for i, effort := range expectedDeepSeek {
+		if deepseek.ThinkingEfforts[i] != effort {
+			t.Fatalf("expected deepseek-v4-pro efforts %v, got %v", expectedDeepSeek, deepseek.ThinkingEfforts)
+		}
 	}
 }
 

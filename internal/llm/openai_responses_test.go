@@ -309,6 +309,37 @@ func TestOpenAIResponsesClient_NoThinkingEffort_OmitsReasoning(t *testing.T) {
 	}
 }
 
+func TestOpenAIResponsesClient_OffThinkingEffort_OmitsReasoning(t *testing.T) {
+	client := &OpenAIResponsesClient{
+		provider:       Provider(config.ProviderOpenAI),
+		model:          "gpt-5.4",
+		thinkingEffort: "off",
+	}
+
+	var capturedParams responses.ResponseNewParams
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		capturedParams = params
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":1,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "hi"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if capturedParams.Reasoning.Effort != "" {
+		t.Errorf("expected empty Reasoning.Effort when thinkingEffort is off, got %q", capturedParams.Reasoning.Effort)
+	}
+}
+
 func TestReasoningEffortForLevel(t *testing.T) {
 	cases := []struct {
 		input    string

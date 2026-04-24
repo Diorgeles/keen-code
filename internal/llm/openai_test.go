@@ -251,12 +251,11 @@ func TestNewOpenAICompatibleClient_ZAI(t *testing.T) {
 	}
 }
 
-func TestOpenAICompatibleClient_IgnoresThinkingEffort(t *testing.T) {
-	// DeepSeek/Moonshot compatible clients store but ignore thinkingEffort
+func TestOpenAICompatibleClient_StoresThinkingEffort(t *testing.T) {
 	client, err := NewOpenAICompatibleClient(&ClientConfig{
 		Provider:       Provider(config.ProviderDeepSeek),
 		APIKey:         "test-key",
-		Model:          "deepseek-chat",
+		Model:          "deepseek-v4-pro",
 		ThinkingEffort: "high",
 	})
 	if err != nil {
@@ -264,6 +263,94 @@ func TestOpenAICompatibleClient_IgnoresThinkingEffort(t *testing.T) {
 	}
 	if client.thinkingEffort != "high" {
 		t.Errorf("expected thinkingEffort 'high' stored, got %q", client.thinkingEffort)
+	}
+}
+
+func TestOpenAICompatibleClient_DeepSeek_ThinkingEffort(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderDeepSeek),
+		model:          "deepseek-v4-pro",
+		thinkingEffort: "high",
+	}
+
+	var capturedParams openai.ChatCompletionNewParams
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		capturedParams = params
+		return &fakeChatStream{
+			chunks: []openai.ChatCompletionChunk{makeContentChunk("hello")},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if string(capturedParams.ReasoningEffort) != "high" {
+		t.Fatalf("expected reasoning_effort 'high', got %q", capturedParams.ReasoningEffort)
+	}
+	extra := capturedParams.ExtraFields()
+	if extra == nil {
+		t.Fatal("expected extra fields with enabled thinking config")
+	}
+	thinking, ok := extra["thinking"]
+	if !ok {
+		t.Fatal("expected 'thinking' in extra fields")
+	}
+	thinkingMap, ok := thinking.(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking to be map[string]any, got %T", thinking)
+	}
+	if thinkingMap["type"] != "enabled" {
+		t.Fatalf("expected thinking type 'enabled', got %v", thinkingMap["type"])
+	}
+}
+
+func TestOpenAICompatibleClient_DeepSeek_ThinkingOff(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderDeepSeek),
+		model:          "deepseek-v4-pro",
+		thinkingEffort: "off",
+	}
+
+	var capturedParams openai.ChatCompletionNewParams
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		capturedParams = params
+		return &fakeChatStream{
+			chunks: []openai.ChatCompletionChunk{makeContentChunk("hello")},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if capturedParams.ReasoningEffort != "" {
+		t.Fatalf("expected empty reasoning_effort when thinking is off, got %q", capturedParams.ReasoningEffort)
+	}
+	extra := capturedParams.ExtraFields()
+	if extra == nil {
+		t.Fatal("expected extra fields with disabled thinking config")
+	}
+	thinking, ok := extra["thinking"]
+	if !ok {
+		t.Fatal("expected 'thinking' in extra fields")
+	}
+	thinkingMap, ok := thinking.(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking to be map[string]any, got %T", thinking)
+	}
+	if thinkingMap["type"] != "disabled" {
+		t.Fatalf("expected thinking type 'disabled', got %v", thinkingMap["type"])
 	}
 }
 

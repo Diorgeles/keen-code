@@ -122,7 +122,7 @@ func (c *GenkitClient) StreamChat(
 				ai.WithMessages(aiMessages...),
 			}
 
-			if c.thinkingEffort != "" && c.provider == Provider(config.ProviderGoogleAI) {
+			if c.thinkingEffort != "" && c.thinkingEffort != "off" && c.provider == Provider(config.ProviderGoogleAI) {
 				budget := budgetForEffort(c.thinkingEffort)
 				if budget != nil {
 					opts = append(opts, ai.WithConfig(&genai.GenerateContentConfig{

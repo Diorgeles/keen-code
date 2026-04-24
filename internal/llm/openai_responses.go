@@ -157,7 +157,7 @@ func (c *OpenAIResponsesClient) StreamChat(
 					OfInputItemList: input,
 				},
 			}
-			if c.thinkingEffort != "" {
+			if c.thinkingEffort != "" && c.thinkingEffort != "off" {
 				params.Reasoning = shared.ReasoningParam{
 					Effort: reasoningEffortForLevel(c.thinkingEffort),
 				}
