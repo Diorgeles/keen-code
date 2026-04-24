@@ -49,4 +49,4 @@ Guard checks paths before filesystem operations:
 - Commit messages should be concise and focus on the key changes with bullet points
 - Commit messages should follow the `feat(category): description` format
 - Always check both tracked and untracked files for creating the commit message
-- Never add co-authors or other names to commit messages
+- Never add additional authors to the commit message

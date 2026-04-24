@@ -534,7 +534,7 @@ func (m *replModel) updateViewportContent() {
 	}
 
 	if m.modelSelection != nil {
-		content.WriteString(formatModelSelectionCard(m.modelSelection))
+		content.WriteString(formatModelSelectionCard(m.modelSelection, m.viewport.Width()))
 	}
 
 	if m.sessionPicker != nil {
@@ -601,14 +601,25 @@ func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpe
 	}
 }
 
-func formatModelSelectionCard(ms *replwidgets.Model) string {
-	boxed := repltheme.UserPromptCardStyle.Render(ms.ViewString())
-	lines := strings.Split(strings.TrimRight(boxed, "\n"), "\n")
+func formatModelSelectionCard(ms *replwidgets.Model, width int) string {
+	ruleWidth := defaultWidth
+	if width > 0 {
+		ruleWidth = width
+	}
+	if ruleWidth < 1 {
+		ruleWidth = 1
+	}
+
+	rule := repltheme.ModelSelectionRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	lines := strings.Split(strings.TrimRight(ms.ViewString(), "\n"), "\n")
 	var sb strings.Builder
 	sb.WriteString("\n")
+	sb.WriteString(rule + "\n\n")
 	for _, l := range lines {
 		sb.WriteString("  " + l + "\n")
 	}
+	sb.WriteString("\n")
+	sb.WriteString(rule + "\n")
 	return sb.String()
 }
 

@@ -214,7 +214,7 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 	if ruleWidth < 1 {
 		ruleWidth = 1
 	}
-	rule := repltheme.DiffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := repltheme.RuleStyle.Render(strings.Repeat("─", ruleWidth))
 
 	lines := make([]string, 0)
 
@@ -252,21 +252,6 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 	lines = append(lines, rule)
 
 	return lines
-}
-
-func renderDiffLine(dl tools.EditDiffLine) string {
-	switch dl.Kind {
-	case tools.DiffLineHunk:
-		return "  " + repltheme.DiffHunkStyle.Render(dl.Content)
-	case tools.DiffLineAdded:
-		lineNum := fmt.Sprintf("%4d", dl.NewLineNum)
-		return repltheme.DiffLineNumStyle.Render("     "+lineNum) + " " + repltheme.DiffAddStyle.Render("+ "+dl.Content)
-	case tools.DiffLineRemoved:
-		lineNum := fmt.Sprintf("%4d", dl.OldLineNum)
-		return repltheme.DiffLineNumStyle.Render(lineNum+"     ") + " " + repltheme.DiffRemoveStyle.Render("- "+dl.Content)
-	default:
-		return repltheme.DiffLineNumStyle.Render(fmt.Sprintf("%4d %4d", dl.OldLineNum, dl.NewLineNum)) + " " + repltheme.DiffContextStyle.Render("  "+dl.Content)
-	}
 }
 
 func renderWrappedDiffLine(prefix string, content string, contentStyle lipgloss.Style, width int) []string {
@@ -333,7 +318,7 @@ func renderDiffSegment(seg *streamSegment, width int) []string {
 		ruleWidth = 1
 	}
 
-	rule := "  " + repltheme.DiffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := "  " + repltheme.RuleStyle.Render(strings.Repeat("─", ruleWidth))
 	lines := make([]string, 0, len(rendered)+3)
 	lines = append(lines, "")
 	lines = append(lines, rule)

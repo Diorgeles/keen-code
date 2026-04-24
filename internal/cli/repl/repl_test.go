@@ -385,6 +385,32 @@ func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
 	}
 }
 
+func TestFormatModelSelectionCard_UsesViewportWidthRules(t *testing.T) {
+	card := formatModelSelectionCard(&replwidgets.Model{}, 24)
+	lines := strings.Split(strings.TrimRight(card, "\n"), "\n")
+	nonEmpty := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			nonEmpty = append(nonEmpty, line)
+		}
+	}
+	if len(nonEmpty) < 2 {
+		t.Fatalf("expected ruled model selection output, got %v", nonEmpty)
+	}
+	if !strings.Contains(nonEmpty[0], "─") || !strings.Contains(nonEmpty[len(nonEmpty)-1], "─") {
+		t.Fatalf("expected top and bottom rules, got %q", card)
+	}
+	if ruleWidth := lipgloss.Width(nonEmpty[0]); ruleWidth != 24 {
+		t.Fatalf("expected rules to match viewport width, got width %d", ruleWidth)
+	}
+	if strings.TrimSpace(lines[2]) != "" {
+		t.Fatalf("expected blank line after top rule, got %q", lines[2])
+	}
+	if strings.TrimSpace(lines[len(lines)-2]) != "" {
+		t.Fatalf("expected blank line before bottom rule, got %q", lines[len(lines)-2])
+	}
+}
+
 func TestUpdate_RoutesToNormalMode(t *testing.T) {
 	m := newTestModel()
 

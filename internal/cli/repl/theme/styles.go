@@ -35,6 +35,10 @@ var (
 		Light: lipgloss.Color("#828282"),
 		Dark:  lipgloss.Color("#B3B3B3"),
 	}
+	RuleColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#bdbdbd"),
+		Dark:  lipgloss.Color("#454545"),
+	}
 
 	ErrorColor = compat.AdaptiveColor{Light: lipgloss.Color("#D32F2F"), Dark: lipgloss.Color("#EF5350")}
 	WhiteColor = compat.AdaptiveColor{Light: lipgloss.Color("#FFFFFF"), Dark: lipgloss.Color("#FFFFFF")}
@@ -103,9 +107,10 @@ var (
 	DiffContextStyle = lipgloss.NewStyle().Foreground(DiffContextColor)
 	DiffHunkStyle    = lipgloss.NewStyle().Foreground(DiffHunkColor).Bold(true)
 	DiffLineNumStyle = lipgloss.NewStyle().Foreground(TextDimColor)
-	DiffRuleStyle    = lipgloss.NewStyle().Foreground(TextDimColor)
+	RuleStyle        = lipgloss.NewStyle().Foreground(RuleColor)
 
 	ModelSelectionStyle      = lipgloss.NewStyle().Foreground(SecondaryColor).Bold(true)
+	ModelSelectionRuleStyle  = lipgloss.NewStyle().Foreground(SecondaryColor)
 	UserPromptCardStyle      = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(SecondaryColor).Padding(1, 2)
 	UserPromptStyle          = lipgloss.NewStyle().Bold(true).Foreground(SecondaryColor)
 	UserPromptSelectionStyle = lipgloss.NewStyle().Foreground(SecondaryColor).Bold(true)

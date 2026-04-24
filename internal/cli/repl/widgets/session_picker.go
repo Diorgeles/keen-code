@@ -88,7 +88,7 @@ func FormatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string
 	}
 	start, end := picker.visibleRange(maxItems)
 
-	rule := "  " + repltheme.DiffRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	rule := "  " + repltheme.RuleStyle.Render(strings.Repeat("─", ruleWidth))
 	var body strings.Builder
 	body.WriteString(repltheme.UserPromptStyle.Render("Saved Sessions"))
 	body.WriteString("\n\n")
