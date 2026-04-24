@@ -904,21 +904,15 @@ func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	allowed := append([]string{"off"}, modelMeta.ThinkingEfforts...)
-	if !slices.Contains(allowed, effort) {
-		m.output.AddError("Usage: /thinking "+strings.Join(allowed, "|"), repltheme.ErrorStyle)
+	if !slices.Contains(modelMeta.ThinkingEfforts, effort) {
+		m.output.AddError("Usage: /thinking "+strings.Join(modelMeta.ThinkingEfforts, "|"), repltheme.ErrorStyle)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return *m, nil
 	}
 
-	storedEffort := effort
-	if effort == "off" {
-		storedEffort = ""
-	}
-
-	m.ctx.cfg.ThinkingEffort = storedEffort
-	m.ctx.globalCfg.ThinkingEffort = storedEffort
+	m.ctx.cfg.ThinkingEffort = effort
+	m.ctx.globalCfg.ThinkingEffort = effort
 	if err := m.ctx.loader.Save(m.ctx.globalCfg); err != nil {
 		m.output.AddError("Failed to save config: "+err.Error(), repltheme.ErrorStyle)
 		m.updateViewportContent()
@@ -933,11 +927,7 @@ func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	display := effort
-	if display == "off" {
-		display = "off (disabled)"
-	}
-	m.output.AddStyledLine("  ✓ Thinking effort set to: "+display, repltheme.HighlightStyle)
+	m.output.AddStyledLine("  ✓ Thinking effort set to: "+effort, repltheme.HighlightStyle)
 	m.output.AddEmptyLine()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()

@@ -57,6 +57,18 @@ providers:
         name: Kimi K2 Thinking Turbo
         context_window: 256000
 
+  - id: zai
+    name: Z.ai (GLM)
+    models:
+      - id: glm-5.1
+        name: GLM-5.1
+        context_window: 200000
+        thinking_efforts: ["enabled", "disabled"]
+      - id: glm-5
+        name: GLM-5
+        context_window: 200000
+        thinking_efforts: ["enabled", "disabled"]
+
   - id: deepseek
     name: DeepSeek
     models:

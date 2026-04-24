@@ -162,6 +162,35 @@ func TestProviderConstants(t *testing.T) {
 	}
 }
 
+func TestNewClient_ZAI(t *testing.T) {
+	cfg := &config.ResolvedConfig{
+		Provider: "zai",
+		Model:    "glm-4-plus",
+		APIKey:   "test-api-key",
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if client == nil {
+		t.Fatal("expected non-nil client")
+	}
+
+	oaiClient, ok := client.(*OpenAICompatibleClient)
+	if !ok {
+		t.Fatalf("expected *OpenAICompatibleClient, got %T", client)
+	}
+
+	if oaiClient.provider != Provider(config.ProviderZAI) {
+		t.Errorf("expected provider zai, got %s", oaiClient.provider)
+	}
+	if oaiClient.model != "glm-4-plus" {
+		t.Errorf("expected model glm-4-plus, got %s", oaiClient.model)
+	}
+}
+
 func TestNewClient_DeepSeek(t *testing.T) {
 	cfg := &config.ResolvedConfig{
 		Provider: "deepseek",

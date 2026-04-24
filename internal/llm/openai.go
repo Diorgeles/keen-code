@@ -91,6 +91,8 @@ func openAICompatibleBaseURL(provider Provider) (string, error) {
 		return "https://api.deepseek.com/", nil
 	case Provider(config.ProviderMoonshotAI):
 		return "https://api.moonshot.ai/v1/", nil
+	case Provider(config.ProviderZAI):
+		return "https://api.z.ai/api/paas/v4/", nil
 	default:
 		return "", fmt.Errorf("unsupported OpenAI-compatible provider: %s", provider)
 	}
@@ -292,6 +294,13 @@ func (c *OpenAICompatibleClient) StreamChat(
 			}
 			if len(oaiTools) > 0 {
 				params.Tools = oaiTools
+			}
+			if c.provider == Provider(config.ProviderZAI) && c.thinkingEffort != "" {
+				params.SetExtraFields(map[string]any{
+					"thinking": map[string]any{
+						"type": c.thinkingEffort,
+					},
+				})
 			}
 			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurn(ctx, params, eventCh)
 			if err != nil {
