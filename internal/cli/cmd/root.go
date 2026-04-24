@@ -46,6 +46,7 @@ func NewRootCommand(version string) *cobra.Command {
 					Model:          globalCfg.ActiveModel,
 					APIKey:         providerCfg.APIKey,
 					ThinkingEffort: globalCfg.ThinkingEffort,
+					BaseURL:        providerCfg.BaseURL,
 				}
 			}
 
