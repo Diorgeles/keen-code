@@ -101,7 +101,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.SelectedModel = m.ModelList[m.ModelCursor].ID
 			modelMeta, ok := m.registry.GetModel(m.SelectedProvider, m.SelectedModel)
 			if ok && modelMeta.SupportsThinkingEffort() {
-				m.ThinkingOptions = append([]string{"off"}, modelMeta.ThinkingEfforts...)
+				m.ThinkingOptions = modelMeta.ThinkingEfforts
 				m.ThinkingCursor = m.resolveThinkingCursor(m.ThinkingOptions)
 				m.Step = StepThinking
 			} else if supportsBaseURL(m.SelectedProvider) {
@@ -181,20 +181,18 @@ func (m *Model) resolveThinkingCursor(options []string) int {
 		currentEffort = m.resolvedCfg.ThinkingEffort
 	}
 	if currentEffort == "" {
-		// Try "medium" default, else "off"
 		if idx := slices.Index(options, "medium"); idx >= 0 {
 			return idx
 		}
-		return 0 // "off"
+		return 0
 	}
 	if idx := slices.Index(options, currentEffort); idx >= 0 {
 		return idx
 	}
-	// Saved value not compatible — prefer medium
 	if idx := slices.Index(options, "medium"); idx >= 0 {
 		return idx
 	}
-	return 0 // "off"
+	return 0
 }
 
 func (m *Model) handlePasteMsg(msg tea.PasteMsg) (*Model, tea.Cmd) {
@@ -228,11 +226,7 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Resolve the stored effort value ("off" → "")
 	storedEffort := m.SelectedThinking
-	if storedEffort == "off" {
-		storedEffort = ""
-	}
 
 	// If model doesn't support configurable effort, clear any stale value
 	modelMeta, ok := m.registry.GetModel(m.SelectedProvider, m.SelectedModel)

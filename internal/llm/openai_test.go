@@ -234,6 +234,23 @@ func TestOpenAICompatibleClient_StreamChat_InjectsReasoningContentAcrossToolTurn
 	}
 }
 
+func TestNewOpenAICompatibleClient_ZAI(t *testing.T) {
+	client, err := NewOpenAICompatibleClient(&ClientConfig{
+		Provider: Provider(config.ProviderZAI),
+		APIKey:   "test-key",
+		Model:    "glm-4-plus",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected client")
+	}
+	if client.model != "glm-4-plus" {
+		t.Fatalf("expected model glm-4-plus, got %s", client.model)
+	}
+}
+
 func TestOpenAICompatibleClient_IgnoresThinkingEffort(t *testing.T) {
 	// DeepSeek/Moonshot compatible clients store but ignore thinkingEffort
 	client, err := NewOpenAICompatibleClient(&ClientConfig{
@@ -247,6 +264,79 @@ func TestOpenAICompatibleClient_IgnoresThinkingEffort(t *testing.T) {
 	}
 	if client.thinkingEffort != "high" {
 		t.Errorf("expected thinkingEffort 'high' stored, got %q", client.thinkingEffort)
+	}
+}
+
+func TestOpenAICompatibleClient_ZAI_ThinkingEnabled(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderZAI),
+		model:          "glm-5.1",
+		thinkingEffort: "enabled",
+	}
+
+	var capturedParams openai.ChatCompletionNewParams
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		capturedParams = params
+		return &fakeChatStream{
+			chunks: []openai.ChatCompletionChunk{makeContentChunk("hello")},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	extra := capturedParams.ExtraFields()
+	if extra == nil {
+		t.Fatal("expected extra fields with thinking config")
+	}
+	thinking, ok := extra["thinking"]
+	if !ok {
+		t.Fatal("expected 'thinking' in extra fields")
+	}
+	thinkingMap, ok := thinking.(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking to be map[string]any, got %T", thinking)
+	}
+	if thinkingMap["type"] != "enabled" {
+		t.Fatalf("expected thinking type 'enabled', got %v", thinkingMap["type"])
+	}
+}
+
+func TestOpenAICompatibleClient_ZAI_ThinkingDisabled(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderZAI),
+		model:          "glm-5.1",
+		thinkingEffort: "",
+	}
+
+	var capturedParams openai.ChatCompletionNewParams
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		capturedParams = params
+		return &fakeChatStream{
+			chunks: []openai.ChatCompletionChunk{makeContentChunk("hello")},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	extra := capturedParams.ExtraFields()
+	if extra != nil {
+		if _, ok := extra["thinking"]; ok {
+			t.Fatal("expected no thinking config when thinkingEffort is empty")
+		}
 	}
 }
 
