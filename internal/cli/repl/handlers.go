@@ -594,3 +594,17 @@ func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 		return m, nil, false
 	}
 }
+
+func (m *replModel) handleUpdateCheckMsg(msg updateCheckMsg) {
+	if msg.latest == "" {
+		return
+	}
+	m.output.AddEmptyLine()
+	m.output.AddStyledLine("  Update available: v"+msg.latest, repltheme.UpdateAvailableStyle)
+	m.output.AddEmptyLine()
+	updateCmd := "  npm update -g keen-code\n  or\n  curl -fsSL https://raw.githubusercontent.com/mochow13/keen-code/main/scripts/install.sh | bash"
+	m.output.AddStyledLine(updateCmd, repltheme.UpdateCommandStyle)
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+}

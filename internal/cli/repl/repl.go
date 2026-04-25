@@ -26,6 +26,7 @@ import (
 	"github.com/user/keen-code/internal/filesystem"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
+	"github.com/user/keen-code/internal/updater"
 	"github.com/user/keen-code/providers"
 )
 
@@ -207,7 +208,6 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	s.Spinner = spinner.Pulse
 	s.Style = lipgloss.NewStyle().Foreground(repltheme.PrimaryColor)
 
-	initialOutput := buildInitialScreen(ctx)
 	appState := replappstate.New(llmClient, ctx.workingDir)
 
 	permissionRequester := replpermissions.NewRequester()
@@ -227,15 +227,20 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		mdRenderer = nil
 	}
 
+	output := reploutput.NewOutputBuilder(defaultWidth, ctx.workingDir)
+	initialLines := buildInitialScreen(ctx)
+	for _, line := range initialLines {
+		output.AddLine(line)
+	}
+
 	vp := viewport.New(viewport.WithWidth(defaultWidth), viewport.WithHeight(24))
-	vp.SetContent(strings.Join(initialOutput, "\n"))
 
 	model := replModel{
 		textarea:            ta,
 		viewport:            vp,
 		ctx:                 ctx,
 		appState:            appState,
-		output:              reploutput.NewOutputBuilder(defaultWidth, ctx.workingDir),
+		output:              output,
 		spinner:             s,
 		streamHandler:       NewStreamHandler(mdRenderer),
 		mdRenderer:          mdRenderer,
@@ -255,6 +260,8 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		model.output.AddEmptyLine()
 		model.output.AddEmptyLine()
 		model = model.startModelSelection()
+	} else {
+		model.updateViewportContent()
 	}
 
 	return model
@@ -308,7 +315,17 @@ func buildInitialScreen(ctx *replContext) []string {
 }
 
 func (m replModel) Init() tea.Cmd {
-	return textarea.Blink
+	return tea.Batch(textarea.Blink, checkForUpdate(m.ctx.version))
+}
+
+func checkForUpdate(currentVersion string) tea.Cmd {
+	return func() tea.Msg {
+		latest, newer, err := updater.CheckLatest(context.Background(), currentVersion, "mochow13", "keen-code")
+		if err != nil || !newer {
+			return updateCheckMsg{}
+		}
+		return updateCheckMsg{latest: latest}
+	}
 }
 
 func (m *replModel) spinnerHeight() int {
@@ -689,6 +706,9 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 		return m.handleCompactionDone()
 	case compactionErrMsg:
 		return m.handleCompactionError(msg.err)
+	case updateCheckMsg:
+		m.handleUpdateCheckMsg(msg)
+		return m, nil
 	case diffReadyMsg:
 		m.streamHandler.HandleDiff(msg.req.Lines)
 		close(msg.req.Done)

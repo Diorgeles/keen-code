@@ -31,3 +31,6 @@ type compactionDoneMsg struct{}
 type compactionErrMsg struct {
 	err error
 }
+type updateCheckMsg struct {
+	latest string
+}
