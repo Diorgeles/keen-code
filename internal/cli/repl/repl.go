@@ -622,6 +622,8 @@ func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpe
 				return llmToolEndMsg{toolCall: event.ToolCall}
 			case llm.StreamEventTypeUsage:
 				return llmUsageMsg{usage: event.Usage}
+			case llm.StreamEventTypeRetry:
+				return llmRetryMsg{err: event.Error, attempt: event.Attempt}
 			default:
 				return llmDoneMsg{}
 			}

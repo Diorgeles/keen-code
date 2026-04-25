@@ -69,6 +69,7 @@ const (
 	StreamEventTypeToolStart      StreamEventType = "tool_start"
 	StreamEventTypeToolEnd        StreamEventType = "tool_end"
 	StreamEventTypeUsage          StreamEventType = "usage"
+	StreamEventTypeRetry          StreamEventType = "retry"
 )
 
 type TokenUsage struct {
@@ -85,6 +86,7 @@ type StreamEvent struct {
 	Error    error
 	ToolCall *ToolCall
 	Usage    *TokenUsage
+	Attempt  int
 }
 
 type ToolCall struct {

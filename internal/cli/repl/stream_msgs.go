@@ -12,6 +12,10 @@ type llmDoneMsg struct{}
 type llmErrorMsg struct {
 	err error
 }
+type llmRetryMsg struct {
+	err     error
+	attempt int
+}
 type llmToolStartMsg struct {
 	toolCall *llm.ToolCall
 }

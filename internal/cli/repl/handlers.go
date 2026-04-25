@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -122,6 +123,17 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil
+}
+
+func (m *replModel) handleLLMRetry(err error, attempt int) (replModel, tea.Cmd) {
+	m.streamHandler.ResetContent()
+	m.loadingText = fmt.Sprintf("Retrying (attempt %d)...", attempt)
+	m.streamHandler.SetLoadingText(m.loadingText)
+	m.updateViewportContent()
+	if !m.userScrolled {
+		m.viewport.GotoBottom()
+	}
+	return *m, m.waitForAsyncEvent()
 }
 
 func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
@@ -563,7 +575,7 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 	if m.streamHandler == nil || !m.streamHandler.IsActive() {
 		switch msg.(type) {
-		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmErrorMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
+		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmErrorMsg, llmRetryMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
 			return m, nil, true
 		}
 	}
@@ -583,6 +595,9 @@ func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 		return updated, cmd, true
 	case llmErrorMsg:
 		updated, cmd := m.handleLLMError(msg.err)
+		return updated, cmd, true
+	case llmRetryMsg:
+		updated, cmd := m.handleLLMRetry(msg.err, msg.attempt)
 		return updated, cmd, true
 	case llmToolStartMsg:
 		updated, cmd := m.handleToolStart(msg.toolCall)

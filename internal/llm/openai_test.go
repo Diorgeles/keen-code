@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -466,5 +467,133 @@ func TestOpenAICompatibleClient_buildAssistantMessage_AttachesReasoningWithoutTo
 	}
 	if got, _ := v.(string); got != "reasoning-step" {
 		t.Fatalf("expected reasoning_content=reasoning-step, got %#v", v)
+	}
+}
+
+func TestIsRetryableError(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       error
+		retryable bool
+	}{
+		{"nil", nil, false},
+		{"context canceled", context.Canceled, false},
+		{"context deadline", context.DeadlineExceeded, false},
+		{"generic error", fmt.Errorf("connection reset"), true},
+		{"429 rate limit", &openai.Error{StatusCode: 429}, true},
+		{"500 server error", &openai.Error{StatusCode: 500}, true},
+		{"502 bad gateway", &openai.Error{StatusCode: 502}, true},
+		{"503 service unavailable", &openai.Error{StatusCode: 503}, true},
+		{"504 gateway timeout", &openai.Error{StatusCode: 504}, true},
+		{"400 bad request", &openai.Error{StatusCode: 400}, false},
+		{"401 unauthorized", &openai.Error{StatusCode: 401}, false},
+		{"403 forbidden", &openai.Error{StatusCode: 403}, false},
+		{"404 not found", &openai.Error{StatusCode: 404}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isRetryableError(tt.err); got != tt.retryable {
+				t.Errorf("isRetryableError(%v) = %v, want %v", tt.err, got, tt.retryable)
+			}
+		})
+	}
+}
+
+func TestOpenAICompatibleClient_StreamChat_RetriesOnRetryableError(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider: Provider(config.ProviderDeepSeek),
+		model:    "deepseek-chat",
+	}
+
+	callCount := 0
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		callCount++
+		if callCount <= 2 {
+			return &fakeChatStream{err: fmt.Errorf("connection reset")}
+		}
+		return &fakeChatStream{
+			chunks: []openai.ChatCompletionChunk{makeContentChunk("recovered")},
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var retryEvents []StreamEvent
+	var streamed strings.Builder
+	var hasDone bool
+	for ev := range eventCh {
+		switch ev.Type {
+		case StreamEventTypeRetry:
+			retryEvents = append(retryEvents, ev)
+		case StreamEventTypeChunk:
+			streamed.WriteString(ev.Content)
+		case StreamEventTypeDone:
+			hasDone = true
+		case StreamEventTypeError:
+			t.Fatalf("unexpected error event: %v", ev.Error)
+		}
+	}
+
+	if !hasDone {
+		t.Fatal("expected done event")
+	}
+	if callCount != 3 {
+		t.Fatalf("expected 3 calls (2 retries + 1 success), got %d", callCount)
+	}
+	if len(retryEvents) != 2 {
+		t.Fatalf("expected 2 retry events, got %d", len(retryEvents))
+	}
+	if retryEvents[0].Attempt != 1 || retryEvents[1].Attempt != 2 {
+		t.Fatalf("expected retry attempts 1,2; got %d,%d", retryEvents[0].Attempt, retryEvents[1].Attempt)
+	}
+	if streamed.String() != "recovered" {
+		t.Fatalf("expected 'recovered', got %q", streamed.String())
+	}
+}
+
+func TestOpenAICompatibleClient_StreamChat_NoRetryOnNonRetryableError(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider: Provider(config.ProviderDeepSeek),
+		model:    "deepseek-chat",
+	}
+
+	callCount := 0
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		callCount++
+		return &fakeChatStream{err: &openai.Error{StatusCode: 401}}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasError bool
+	var retryCount int
+	for ev := range eventCh {
+		switch ev.Type {
+		case StreamEventTypeRetry:
+			retryCount++
+		case StreamEventTypeError:
+			hasError = true
+		}
+	}
+
+	if !hasError {
+		t.Fatal("expected error event")
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 call (no retry), got %d", callCount)
+	}
+	if retryCount != 0 {
+		t.Fatalf("expected 0 retry events, got %d", retryCount)
 	}
 }

@@ -3,8 +3,10 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -173,6 +175,31 @@ func emitChunk(eventCh chan<- StreamEvent, content string) {
 	}
 }
 
+const maxRetries = 10
+
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var apiErr *openai.Error
+	if errors.As(err, &apiErr) {
+		switch apiErr.StatusCode {
+		case http.StatusTooManyRequests,
+			http.StatusInternalServerError,
+			http.StatusBadGateway,
+			http.StatusServiceUnavailable,
+			http.StatusGatewayTimeout:
+			return true
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func (c *OpenAICompatibleClient) buildAssistantMessage(message openai.ChatCompletionMessage, reasoningContent string) openai.ChatCompletionAssistantMessageParam {
 	assistant := openai.ChatCompletionAssistantMessageParam{}
 	if message.Content != "" {
@@ -269,6 +296,35 @@ func (c *OpenAICompatibleClient) collectTurn(
 	return acc.ChatCompletion.Choices[0].Message, reasoningContent.String(), streamedContent.String(), true, acc.ChatCompletion.Usage, nil
 }
 
+func (c *OpenAICompatibleClient) collectTurnWithRetry(
+	ctx context.Context,
+	params openai.ChatCompletionNewParams,
+	eventCh chan<- StreamEvent,
+) (openai.ChatCompletionMessage, string, string, bool, openai.CompletionUsage, error) {
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurn(ctx, params, eventCh)
+		if err == nil {
+			return message, reasoningContent, streamedContent, hasChoice, usage, nil
+		}
+		if !isRetryableError(err) || attempt == maxRetries {
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+			return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, err
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		slog.Debug("LLM stream error, retrying", "attempt", attempt, "maxRetries", maxRetries, "backoff", backoff, "error", err)
+		eventCh <- StreamEvent{Type: StreamEventTypeRetry, Error: err, Attempt: attempt}
+
+		select {
+		case <-ctx.Done():
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
+			return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, nil
+}
+
 func (c *OpenAICompatibleClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
@@ -319,14 +375,12 @@ func (c *OpenAICompatibleClient) StreamChat(
 					},
 				})
 			}
-			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurn(ctx, params, eventCh)
+
+			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
-				eventCh <- StreamEvent{
-					Type:  StreamEventTypeError,
-					Error: err,
-				}
 				return
 			}
+
 			if !hasChoice {
 				eventCh <- StreamEvent{Type: StreamEventTypeDone}
 				return

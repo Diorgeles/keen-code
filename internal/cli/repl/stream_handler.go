@@ -165,6 +165,12 @@ func (sh *StreamHandler) appendAssistantVisible(chunk string) {
 	sh.segments = append(sh.segments, streamSegment{kind: segmentAssistant, content: chunk})
 }
 
+func (sh *StreamHandler) ResetContent() {
+	sh.currentResponse = ""
+	sh.rawResponse = ""
+	sh.segments = make([]streamSegment, 0)
+}
+
 func (sh *StreamHandler) finalizeAssistantContent() {
 }
 
