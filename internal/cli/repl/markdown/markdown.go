@@ -1,17 +1,25 @@
 package markdown
 
-import "github.com/charmbracelet/glamour"
+import (
+	"github.com/charmbracelet/glamour"
+	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
+)
 
 type Renderer struct {
 	renderer *glamour.TermRenderer
 	width    int
 }
 
-func New(width int) (*Renderer, error) {
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
+func newGlamourRenderer(width int) (*glamour.TermRenderer, error) {
+	return glamour.NewTermRenderer(
+		glamour.WithStyles(repltheme.MarkdownStyleConfig()),
+		glamour.WithChromaFormatter("terminal256"),
 		glamour.WithWordWrap(width-4),
 	)
+}
+
+func New(width int) (*Renderer, error) {
+	renderer, err := newGlamourRenderer(width)
 	if err != nil {
 		return nil, err
 	}
@@ -39,10 +47,7 @@ func (r *Renderer) UpdateWidth(width int) error {
 		return nil
 	}
 
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
-		glamour.WithWordWrap(width-4),
-	)
+	renderer, err := newGlamourRenderer(width)
 	if err != nil {
 		return err
 	}

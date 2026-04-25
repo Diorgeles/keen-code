@@ -32,12 +32,12 @@ var (
 		Dark:  lipgloss.Color("#BDBDBD"),
 	}
 	TextDimColor = compat.AdaptiveColor{
-		Light: lipgloss.Color("#828282"),
+		Light: lipgloss.Color("#5e5d5d"),
 		Dark:  lipgloss.Color("#B3B3B3"),
 	}
 	RuleColor = compat.AdaptiveColor{
 		Light: lipgloss.Color("#bdbdbd"),
-		Dark:  lipgloss.Color("#454545"),
+		Dark:  lipgloss.Color("#3b3b3b"),
 	}
 
 	ErrorColor = compat.AdaptiveColor{Light: lipgloss.Color("#D32F2F"), Dark: lipgloss.Color("#EF5350")}
