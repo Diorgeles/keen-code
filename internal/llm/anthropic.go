@@ -14,7 +14,7 @@ import (
 	"github.com/user/keen-code/internal/tools"
 )
 
-const anthropicMaxTokens = 32768
+const anthropicMaxTokens = 65536
 
 type anthropicStream interface {
 	Next() bool

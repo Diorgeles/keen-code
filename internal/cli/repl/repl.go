@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -14,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	replfilesearch "github.com/user/keen-code/internal/cli/repl/filesearch"
 	replmarkdown "github.com/user/keen-code/internal/cli/repl/markdown"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
@@ -21,6 +23,7 @@ import (
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
+	"github.com/user/keen-code/internal/filesystem"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/providers"
@@ -144,6 +147,7 @@ type replModel struct {
 	sessions            *replSessionState
 	sessionPicker       *replwidgets.SessionPicker
 	suggestion          replwidgets.SuggestionModel
+	fileSearcher        *replfilesearch.FileSearcher
 	quitting            bool
 	streamHandler       *StreamHandler
 	mdRenderer          *replmarkdown.Renderer
@@ -209,6 +213,12 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	permissionRequester := replpermissions.NewRequester()
 	diffEmitter := repltooling.NewDiffEmitter()
 	sessions := newReplSessionState(ctx.workingDir)
+
+	fileGitAwareness := filesystem.NewGitAwareness()
+	_ = fileGitAwareness.LoadGitignore(filepath.Join(ctx.workingDir, ".gitignore"))
+	fileGuard := filesystem.NewGuard(ctx.workingDir, fileGitAwareness)
+	fileSearcher := replfilesearch.NewFileSearcher(ctx.workingDir, fileGuard)
+
 	repltooling.SetupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter)
 
 	mdRenderer, err := replmarkdown.New(defaultWidth)
@@ -233,6 +243,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		diffEmitter:         diffEmitter,
 		sessions:            sessions,
 		suggestion:          replwidgets.NewSuggestionModel(),
+		fileSearcher:        fileSearcher,
 	}
 	model.streamHandler.workingDir = ctx.workingDir
 	model.refreshContextStatus()

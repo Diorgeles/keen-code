@@ -137,3 +137,78 @@ func TestSuggestionRefreshEmpty(t *testing.T) {
 		t.Error("expected not visible after refresh('')")
 	}
 }
+
+// File mode tests
+
+func TestRefreshFilesVisible(t *testing.T) {
+	s := NewSuggestionModel()
+	s.RefreshFiles([]string{"internal/main.go", "internal/model.go"})
+	if !s.visible {
+		t.Error("expected visible after RefreshFiles")
+	}
+	if len(s.items) != 2 {
+		t.Errorf("expected 2 items, got %d", len(s.items))
+	}
+	if s.items[0].Name != "internal/main.go" {
+		t.Errorf("unexpected first item: %s", s.items[0].Name)
+	}
+}
+
+func TestRefreshFilesEmptyHides(t *testing.T) {
+	s := NewSuggestionModel()
+	s.RefreshFiles([]string{})
+	if s.visible {
+		t.Error("expected not visible with empty file list")
+	}
+}
+
+func TestRefreshFilesNoDescription(t *testing.T) {
+	s := NewSuggestionModel()
+	s.RefreshFiles([]string{"foo.go"})
+	if s.items[0].Description != "" {
+		t.Errorf("expected empty description for file item, got %q", s.items[0].Description)
+	}
+}
+
+func TestIsFileMode(t *testing.T) {
+	s := NewSuggestionModel()
+	s.Refresh("/")
+	if s.IsFileMode() {
+		t.Error("command mode should not report file mode")
+	}
+	s.RefreshFiles([]string{"foo.go"})
+	if !s.IsFileMode() {
+		t.Error("expected file mode after RefreshFiles")
+	}
+}
+
+func TestCurrentInFileMode(t *testing.T) {
+	s := NewSuggestionModel()
+	s.RefreshFiles([]string{"a.go", "b.go", "c.go"})
+	s.MoveDown()
+	cur := s.Current()
+	if cur == nil || cur.Name != "b.go" {
+		t.Errorf("expected b.go, got %v", cur)
+	}
+}
+
+func TestViewFilesModeNoDescription(t *testing.T) {
+	s := NewSuggestionModel()
+	s.RefreshFiles([]string{"src/main.go"})
+	view := s.View(80)
+	if view == "" {
+		t.Error("expected non-empty view")
+	}
+}
+
+func TestNavigationFileMode(t *testing.T) {
+	s := NewSuggestionModel()
+	s.RefreshFiles([]string{"a.go", "b.go", "c.go"})
+	s.MoveDown()
+	s.MoveDown()
+	s.MoveUp()
+	cur := s.Current()
+	if cur == nil || cur.Name != "b.go" {
+		t.Errorf("expected b.go after down/down/up, got %v", cur)
+	}
+}

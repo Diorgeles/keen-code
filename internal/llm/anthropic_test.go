@@ -529,8 +529,8 @@ func TestAnthropicThinkingParams_EnabledEfforts(t *testing.T) {
 		if string(outCfg.Effort) != effort {
 			t.Errorf("effort %q: expected OutputConfig.Effort %q, got %q", effort, effort, outCfg.Effort)
 		}
-		if maxTok != 32768 {
-			t.Errorf("effort %q: expected maxTok 32768, got %d", effort, maxTok)
+		if maxTok != anthropicMaxTokens {
+			t.Errorf("effort %q: expected maxTok %d, got %d", effort, anthropicMaxTokens, maxTok)
 		}
 	}
 }
@@ -563,8 +563,8 @@ func TestAnthropicClient_ThinkingEffort_UsedInParams(t *testing.T) {
 	if string(capturedParams.OutputConfig.Effort) != "high" {
 		t.Errorf("expected OutputConfig.Effort 'high', got %q", capturedParams.OutputConfig.Effort)
 	}
-	if capturedParams.MaxTokens != 32768 {
-		t.Errorf("expected MaxTokens 32768, got %d", capturedParams.MaxTokens)
+	if capturedParams.MaxTokens != anthropicMaxTokens {
+		t.Errorf("expected MaxTokens %d, got %d", anthropicMaxTokens, capturedParams.MaxTokens)
 	}
 }
 
