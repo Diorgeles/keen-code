@@ -8,18 +8,38 @@ import (
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 )
 
+type suggestionMode int
+
+const (
+	commandMode suggestionMode = iota
+	fileMode
+)
+
+// SuggestionItem is a generic suggestion entry used for both slash commands and file paths.
+type SuggestionItem struct {
+	Name        string
+	Description string
+}
+
 type SuggestionModel struct {
 	visible  bool
-	items    []replcommands.SlashCommand
+	items    []SuggestionItem
 	selected int
+	mode     suggestionMode
 }
 
 func NewSuggestionModel() SuggestionModel {
 	return SuggestionModel{}
 }
 
+// Refresh filters slash commands matching input and shows them.
 func (s *SuggestionModel) Refresh(input string) {
-	s.items = replcommands.Filter(input)
+	s.mode = commandMode
+	cmds := replcommands.Filter(input)
+	s.items = make([]SuggestionItem, len(cmds))
+	for i, c := range cmds {
+		s.items[i] = SuggestionItem{Name: c.Name, Description: c.Description}
+	}
 	if len(s.items) > 0 {
 		s.visible = true
 		s.selected = 0
@@ -27,6 +47,27 @@ func (s *SuggestionModel) Refresh(input string) {
 		s.visible = false
 		s.items = nil
 	}
+}
+
+// RefreshFiles sets file path suggestions directly.
+func (s *SuggestionModel) RefreshFiles(paths []string) {
+	s.mode = fileMode
+	if len(paths) == 0 {
+		s.visible = false
+		s.items = nil
+		return
+	}
+	s.items = make([]SuggestionItem, len(paths))
+	for i, p := range paths {
+		s.items[i] = SuggestionItem{Name: p}
+	}
+	s.visible = true
+	s.selected = 0
+}
+
+func (s *SuggestionModel) Hide() {
+	s.visible = false
+	s.items = nil
 }
 
 func (s *SuggestionModel) MoveDown() {
@@ -43,18 +84,22 @@ func (s *SuggestionModel) MoveUp() {
 	s.selected = (s.selected - 1 + len(s.items)) % len(s.items)
 }
 
-func (s SuggestionModel) Current() *replcommands.SlashCommand {
+func (s SuggestionModel) Current() *SuggestionItem {
 	if !s.visible || len(s.items) == 0 {
 		return nil
 	}
 	return &s.items[s.selected]
 }
 
-func (s SuggestionModel) First() *replcommands.SlashCommand {
+func (s SuggestionModel) First() *SuggestionItem {
 	if len(s.items) == 0 {
 		return nil
 	}
 	return &s.items[0]
+}
+
+func (s SuggestionModel) IsFileMode() bool {
+	return s.mode == fileMode
 }
 
 func (s SuggestionModel) Height() int {
@@ -94,10 +139,15 @@ func (s SuggestionModel) View(width int) string {
 			descStyle = repltheme.SuggestionDescStyle
 		}
 
-		row := lipgloss.JoinHorizontal(lipgloss.Left,
-			cmdStyle.Render(item.Name),
-			descStyle.Render(item.Description),
-		)
+		var row string
+		if item.Description != "" {
+			row = lipgloss.JoinHorizontal(lipgloss.Left,
+				cmdStyle.Render(item.Name),
+				descStyle.Render(item.Description),
+			)
+		} else {
+			row = cmdStyle.Render(item.Name)
+		}
 		rows = append(rows, row)
 	}
 

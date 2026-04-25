@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
+	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/llm"
 )
 
@@ -93,12 +95,19 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	}
 	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
+	partialResponse := m.streamHandler.GetResponse()
 	m.showSpinner = false
 	m.clearStreamCancel()
-	m.clearTurnMemory()
+	turnMemory := m.consumeTurnMemory()
 	m.adjustTextareaHeight()
 	pendingLines, errMsg := m.streamHandler.HandleError(err)
-	if persistErr := m.sessions.appendAssistantTurn(segments, llm.Message{}, false, errMsg); persistErr != nil {
+	assistantMessage := llm.Message{
+		Role:       llm.RoleAssistant,
+		Content:    partialResponse,
+		TurnMemory: turnMemory,
+	}
+	m.appState.AppendMessage(assistantMessage)
+	if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, false, errMsg); persistErr != nil {
 		m.handleSessionPersistenceError(persistErr)
 	}
 	for _, line := range pendingLines {
@@ -202,6 +211,95 @@ func (m *replModel) handleToolEnd(toolCall *llm.ToolCall) (replModel, tea.Cmd) {
 	return *m, m.waitForAsyncEvent()
 }
 
+// extractAtToken scans backwards from cursorPos in input to find a @<token>.
+// The @ must be at the start of input or preceded by a space.
+// Returns the token text (without @), the start index of @, and found=true if valid.
+func extractAtToken(input string, cursorPos int) (token string, startIdx int, found bool) {
+	if cursorPos <= 0 || cursorPos > len(input) {
+		return "", 0, false
+	}
+	sub := input[:cursorPos]
+	atIdx := strings.LastIndex(sub, "@")
+	if atIdx < 0 {
+		return "", 0, false
+	}
+	if atIdx > 0 && input[atIdx-1] != ' ' {
+		return "", 0, false
+	}
+	tok := sub[atIdx+1:]
+	if len(tok) == 0 {
+		return "", 0, false
+	}
+	if strings.ContainsRune(tok, ' ') {
+		return "", 0, false
+	}
+	return tok, atIdx, true
+}
+
+func (m *replModel) handleFileModeSelection() (replModel, tea.Cmd) {
+	var item *replwidgets.SuggestionItem
+	if cur := m.suggestion.Current(); cur != nil {
+		item = cur
+	} else if first := m.suggestion.First(); first != nil {
+		item = first
+	}
+	if item != nil {
+		val := m.textarea.Value()
+		linesBefore := strings.Split(val, "\n")
+		cursorByte := 0
+		for i, ln := range linesBefore {
+			if i == m.textarea.Line() {
+				cursorByte += m.textarea.Column()
+				break
+			}
+			cursorByte += len(ln) + 1
+		}
+		if _, atIdx, found := extractAtToken(val, cursorByte); found {
+			replacement := "@" + item.Name + " "
+			newVal := val[:atIdx] + replacement + val[cursorByte:]
+			m.textarea.SetValue(newVal)
+			m.textarea.MoveToEnd()
+		}
+	}
+	m.suggestion.Hide()
+	m.adjustTextareaHeight()
+	return *m, nil
+}
+
+func (m *replModel) handleSuggestionKeyMsg(keyMsg tea.KeyPressMsg) (bool, replModel, tea.Cmd) {
+	switch keyMsg.String() {
+	case keyEnter, keyTab:
+		if m.suggestion.IsFileMode() {
+			result, cmd := m.handleFileModeSelection()
+			return true, result, cmd
+		}
+		if cur := m.suggestion.Current(); cur != nil {
+			m.textarea.SetValue(cur.Name)
+		} else if first := m.suggestion.First(); first != nil {
+			m.textarea.SetValue(first.Name)
+		}
+		if keyMsg.String() == keyEnter {
+			m.suggestion.Refresh("")
+		} else {
+			m.suggestion.Refresh(m.textarea.Value())
+		}
+		m.adjustTextareaHeight()
+		return true, *m, nil
+	case keyUp, keyShiftUp:
+		m.suggestion.MoveUp()
+		return true, *m, nil
+	case keyDown, keyShiftDown:
+		m.suggestion.MoveDown()
+		return true, *m, nil
+	case keyEsc:
+		if m.streamHandler == nil || !m.streamHandler.IsActive() {
+			m.suggestion.Refresh("")
+			return true, *m, nil
+		}
+	}
+	return false, *m, nil
+}
+
 func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 	if m.sessionPicker != nil {
 		return m.handleSessionPickerKeyMsg(msg)
@@ -235,31 +333,8 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 	}
 
 	if m.suggestion.Visible() {
-		switch keyMsg.String() {
-		case keyEnter, keyTab:
-			if cur := m.suggestion.Current(); cur != nil {
-				m.textarea.SetValue(cur.Name)
-			} else if first := m.suggestion.First(); first != nil {
-				m.textarea.SetValue(first.Name)
-			}
-			if keyMsg.String() == keyEnter {
-				m.suggestion.Refresh("")
-			} else {
-				m.suggestion.Refresh(m.textarea.Value())
-			}
-			m.adjustTextareaHeight()
-			return *m, nil
-		case keyUp, keyShiftUp:
-			m.suggestion.MoveUp()
-			return *m, nil
-		case keyDown, keyShiftDown:
-			m.suggestion.MoveDown()
-			return *m, nil
-		case keyEsc:
-			if m.streamHandler == nil || !m.streamHandler.IsActive() {
-				m.suggestion.Refresh("")
-				return *m, nil
-			}
+		if handled, result, cmd := m.handleSuggestionKeyMsg(keyMsg); handled {
+			return result, cmd
 		}
 	} else if keyMsg.String() == keyTab {
 		return *m, nil
@@ -313,9 +388,36 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.textarea, cmd = m.textarea.Update(keyMsg)
-	m.suggestion.Refresh(m.textarea.Value())
+	input := m.textarea.Value()
+	if strings.HasPrefix(input, "/") {
+		m.suggestion.Refresh(input)
+	} else {
+		m.refreshFileSuggestions(input)
+	}
 	m.adjustTextareaHeight()
 	return *m, cmd
+}
+
+func (m *replModel) refreshFileSuggestions(input string) {
+	if m.fileSearcher == nil {
+		m.suggestion.Hide()
+		return
+	}
+	linesBefore := strings.Split(input, "\n")
+	cursorByte := 0
+	for i, ln := range linesBefore {
+		if i == m.textarea.Line() {
+			cursorByte += m.textarea.Column()
+			break
+		}
+		cursorByte += len(ln) + 1
+	}
+	if tok, _, found := extractAtToken(input, cursorByte); found {
+		paths := m.fileSearcher.Search(tok, 10)
+		m.suggestion.RefreshFiles(paths)
+	} else {
+		m.suggestion.Hide()
+	}
 }
 
 func (m *replModel) interruptStream(message string) {
