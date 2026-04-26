@@ -16,6 +16,7 @@ import (
 	"charm.land/lipgloss/v2"
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
 	replfilesearch "github.com/user/keen-code/internal/cli/repl/filesearch"
+	replhistory "github.com/user/keen-code/internal/cli/repl/history"
 	replmarkdown "github.com/user/keen-code/internal/cli/repl/markdown"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
@@ -163,6 +164,7 @@ type replModel struct {
 	isCompacting        bool
 	compactionCancel    context.CancelFunc
 	contextStatus       contextStatus
+	history             replhistory.InputHistory
 }
 
 func abbreviateHome(path string) string {
@@ -201,7 +203,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	styles.Blurred.CursorLine = lipgloss.NewStyle()
 	ta.SetStyles(styles)
 
-	ta.KeyMap.InsertNewline.SetKeys("ctrl+enter")
+	ta.KeyMap.InsertNewline.SetKeys("shift+enter")
 	ta.KeyMap.InsertNewline.SetEnabled(true)
 
 	s := spinner.New()
@@ -251,6 +253,15 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		fileSearcher:        fileSearcher,
 	}
 	model.streamHandler.workingDir = ctx.workingDir
+
+	historyDir, err := os.UserHomeDir()
+	if err == nil {
+		historyDir = filepath.Join(historyDir, ".keen")
+		if mkdirErr := os.MkdirAll(historyDir, 0755); mkdirErr == nil {
+			_ = model.history.LoadFromFile(filepath.Join(historyDir, "input-history"))
+		}
+	}
+
 	model.refreshContextStatus()
 
 	if needsSetup {
@@ -304,7 +315,7 @@ func buildInitialScreen(ctx *replContext) []string {
 	tips := []string{
 		"Use /help  for available commands",
 		"Use /model to change provider or model",
-		"Press Enter to send, Ctrl+Enter for new line",
+		"Press Enter to send, Shift+Enter for new line",
 		"Shift+click to select and copy text",
 	}
 	tipsBox := repltheme.BoxStyle.Render(repltheme.TipStyle.Render(strings.Join(tips, "\n")))
@@ -382,9 +393,11 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	m.output.AddUserInput(input, repltheme.PromptStyle)
+	m.history.Push(input)
 
 	if input == exitCommand {
 		m.quitting = true
+		_ = m.history.Flush()
 		return *m, tea.Quit
 	}
 
@@ -971,6 +984,7 @@ func (m *replModel) handleClear() replModel {
 	m.appState.ClearMessages()
 	m.appState.ClearContextMetrics()
 	m.sessions.resetSession()
+	m.history.Reset()
 
 	newOutput := reploutput.NewOutputBuilder(m.width, m.ctx.workingDir)
 	initialLines := buildInitialScreen(m.ctx)
@@ -1018,6 +1032,7 @@ func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {
 
 	m.output = replay.output
 	m.appState.ReplaceMessages(session.BuildConversation(loaded.Events))
+	m.history.Reset()
 	m.sessionPicker = nil
 	m.refreshContextStatus()
 	m.updateViewportContent()

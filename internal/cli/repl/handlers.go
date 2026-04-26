@@ -107,9 +107,11 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 		Content:    partialResponse,
 		TurnMemory: turnMemory,
 	}
-	m.appState.AppendMessage(assistantMessage)
-	if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, false, errMsg); persistErr != nil {
-		m.handleSessionPersistenceError(persistErr)
+	if partialResponse != "" || (turnMemory != nil && !turnMemory.IsEmpty()) {
+		m.appState.AppendMessage(assistantMessage)
+		if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, false, errMsg); persistErr != nil {
+			m.handleSessionPersistenceError(persistErr)
+		}
 	}
 	for _, line := range pendingLines {
 		m.output.AddLine(line)
@@ -362,6 +364,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			return *m, nil
 		}
 		m.quitting = true
+		_ = m.history.Flush()
 		return *m, tea.Quit
 	case keyEsc:
 		if m.streamHandler != nil && m.streamHandler.IsActive() {
@@ -370,12 +373,24 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		return *m, nil
 	case keyUp, keyShiftUp:
 		if m.isAtTopOfInput() {
+			if val, ok := m.history.NavigateUp(m.textarea.Value()); ok {
+				m.textarea.SetValue(val)
+				m.textarea.MoveToEnd()
+				m.adjustTextareaHeight()
+				return *m, nil
+			}
 			m.viewport.ScrollUp(1)
 			m.userScrolled = !m.viewport.AtBottom()
 			return *m, nil
 		}
 	case keyDown, keyShiftDown:
 		if m.isAtBottomOfInput() {
+			if val, ok := m.history.NavigateDown(); ok {
+				m.textarea.SetValue(val)
+				m.textarea.MoveToEnd()
+				m.adjustTextareaHeight()
+				return *m, nil
+			}
 			m.viewport.ScrollDown(1)
 			m.userScrolled = !m.viewport.AtBottom()
 			return *m, nil
