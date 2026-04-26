@@ -84,9 +84,13 @@ func toAnthropicMessages(messages []Message) ([]anthropic.TextBlockParam, []anth
 		case RoleSystem:
 			systemBlocks = append(systemBlocks, anthropic.TextBlockParam{Text: content})
 		case RoleUser:
-			msgParams = append(msgParams, anthropic.NewUserMessage(anthropic.NewTextBlock(content)))
+			if content != "" {
+				msgParams = append(msgParams, anthropic.NewUserMessage(anthropic.NewTextBlock(content)))
+			}
 		case RoleAssistant:
-			msgParams = append(msgParams, anthropic.NewAssistantMessage(anthropic.NewTextBlock(content)))
+			if content != "" {
+				msgParams = append(msgParams, anthropic.NewAssistantMessage(anthropic.NewTextBlock(content)))
+			}
 		}
 	}
 

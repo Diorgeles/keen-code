@@ -107,9 +107,11 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 		Content:    partialResponse,
 		TurnMemory: turnMemory,
 	}
-	m.appState.AppendMessage(assistantMessage)
-	if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, false, errMsg); persistErr != nil {
-		m.handleSessionPersistenceError(persistErr)
+	if partialResponse != "" || (turnMemory != nil && !turnMemory.IsEmpty()) {
+		m.appState.AppendMessage(assistantMessage)
+		if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, false, errMsg); persistErr != nil {
+			m.handleSessionPersistenceError(persistErr)
+		}
 	}
 	for _, line := range pendingLines {
 		m.output.AddLine(line)
