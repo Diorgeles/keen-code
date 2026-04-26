@@ -364,6 +364,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			return *m, nil
 		}
 		m.quitting = true
+		_ = m.history.Flush()
 		return *m, tea.Quit
 	case keyEsc:
 		if m.streamHandler != nil && m.streamHandler.IsActive() {
@@ -372,12 +373,24 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		return *m, nil
 	case keyUp, keyShiftUp:
 		if m.isAtTopOfInput() {
+			if val, ok := m.history.NavigateUp(m.textarea.Value()); ok {
+				m.textarea.SetValue(val)
+				m.textarea.MoveToEnd()
+				m.adjustTextareaHeight()
+				return *m, nil
+			}
 			m.viewport.ScrollUp(1)
 			m.userScrolled = !m.viewport.AtBottom()
 			return *m, nil
 		}
 	case keyDown, keyShiftDown:
 		if m.isAtBottomOfInput() {
+			if val, ok := m.history.NavigateDown(); ok {
+				m.textarea.SetValue(val)
+				m.textarea.MoveToEnd()
+				m.adjustTextareaHeight()
+				return *m, nil
+			}
 			m.viewport.ScrollDown(1)
 			m.userScrolled = !m.viewport.AtBottom()
 			return *m, nil

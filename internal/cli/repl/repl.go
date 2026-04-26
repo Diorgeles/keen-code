@@ -397,6 +397,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 
 	if input == exitCommand {
 		m.quitting = true
+		_ = m.history.Flush()
 		return *m, tea.Quit
 	}
 
