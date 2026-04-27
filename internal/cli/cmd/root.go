@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	keenauth "github.com/user/keen-code/internal/auth"
 	"github.com/user/keen-code/internal/cli/repl"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/providers"
@@ -47,6 +48,10 @@ func NewRootCommand(version string) *cobra.Command {
 					APIKey:         providerCfg.APIKey,
 					ThinkingEffort: globalCfg.ThinkingEffort,
 					BaseURL:        providerCfg.BaseURL,
+					AuthMode:       config.AuthModeForProvider(globalCfg.ActiveProvider),
+				}
+				if resolvedCfg.AuthMode == config.AuthModeOAuth && !keenauth.NewOAuthManager(nil).HasCredential(globalCfg.ActiveProvider) {
+					needsSetup = true
 				}
 			}
 

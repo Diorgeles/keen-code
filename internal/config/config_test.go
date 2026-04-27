@@ -175,6 +175,28 @@ func TestResolve_EmptyBaseURL(t *testing.T) {
 	}
 }
 
+func TestResolve_OpenAICodexAllowsMissingAPIKey(t *testing.T) {
+	global := &GlobalConfig{
+		ActiveProvider: ProviderOpenAICodex,
+		ActiveModel:    "gpt-5.4",
+		ThinkingEffort: "medium",
+		Providers: map[string]ProviderConfig{
+			ProviderOpenAICodex: {Models: []string{"gpt-5.4"}},
+		},
+	}
+
+	resolved, err := Resolve(global, &SessionConfig{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.APIKey != "" {
+		t.Fatalf("expected empty API key, got %q", resolved.APIKey)
+	}
+	if resolved.AuthMode != AuthModeOAuth {
+		t.Fatalf("expected oauth auth mode, got %q", resolved.AuthMode)
+	}
+}
+
 func TestResolve_WithSessionOverrides(t *testing.T) {
 	global := &GlobalConfig{
 		ActiveProvider: ProviderAnthropic,

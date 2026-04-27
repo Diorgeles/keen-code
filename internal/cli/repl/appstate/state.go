@@ -71,7 +71,7 @@ func (s *AppState) buildCompactionRequest(cfg *config.ResolvedConfig, extraPromp
 	if s.llmClient == nil {
 		return nil, fmt.Errorf("LLM client not initialized")
 	}
-	if cfg == nil || cfg.APIKey == "" || cfg.Model == "" {
+	if cfg == nil || cfg.Model == "" || (config.RequiresAPIKey(cfg.Provider) && cfg.APIKey == "") {
 		return nil, fmt.Errorf("LLM client not initialized")
 	}
 
@@ -110,7 +110,7 @@ func (s *AppState) ApplyCompaction(summary string) error {
 }
 
 func (s *AppState) IsClientReady(cfg *config.ResolvedConfig) bool {
-	return s.llmClient != nil && cfg.APIKey != "" && cfg.Model != ""
+	return s.llmClient != nil && cfg != nil && cfg.Model != "" && (!config.RequiresAPIKey(cfg.Provider) || cfg.APIKey != "")
 }
 
 func (s *AppState) UpdateClient(client llm.LLMClient) {

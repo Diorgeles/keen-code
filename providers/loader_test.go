@@ -116,21 +116,22 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 	if !gpt.SupportsThinkingEffort() {
 		t.Error("expected gpt-5.4 to support thinking effort")
 	}
-	foundOff := false
 	foundXHigh := false
 	for _, e := range gpt.ThinkingEfforts {
-		if e == "off" {
-			foundOff = true
-		}
 		if e == "xhigh" {
 			foundXHigh = true
 		}
 	}
-	if !foundOff {
-		t.Errorf("expected gpt-5.4 to have off effort, got %v", gpt.ThinkingEfforts)
-	}
 	if !foundXHigh {
 		t.Errorf("expected gpt-5.4 to have xhigh effort, got %v", gpt.ThinkingEfforts)
+	}
+
+	codex, ok := reg.GetModel("openai-codex", "gpt-5.4")
+	if !ok {
+		t.Fatal("expected to find openai-codex/gpt-5.4")
+	}
+	if codex.ContextWindow != 256000 {
+		t.Fatalf("expected openai-codex/gpt-5.4 context 256000, got %d", codex.ContextWindow)
 	}
 
 	deepseek, ok := reg.GetModel("deepseek", "deepseek-v4-pro")

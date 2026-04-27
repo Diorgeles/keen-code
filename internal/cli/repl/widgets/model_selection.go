@@ -1,19 +1,22 @@
 package widgets
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+	keenauth "github.com/user/keen-code/internal/auth"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/providers"
 )
 
 func supportsBaseURL(providerID string) bool {
-	return providerID != config.ProviderGoogleAI
+	return providerID != config.ProviderGoogleAI && config.RequiresAPIKey(providerID)
 }
 
 type Step int
@@ -24,10 +27,14 @@ const (
 	StepThinking
 	StepBaseURL
 	StepAPIKey
+	StepOAuth
 )
 
 type modelSelectionCompleteMsg struct{}
 type modelSelectionCancelMsg struct{}
+type modelSelectionOAuthCompleteMsg struct {
+	err error
+}
 
 type Model struct {
 	Step             Step
@@ -41,9 +48,13 @@ type Model struct {
 	ThinkingCursor   int
 	ThinkingOptions  []string
 	SelectedThinking string
+	OAuthStatus      string
+	OAuthURL         string
 	ProviderList     []providers.Provider
 	ModelList        []providers.Model
 	ErrorMessage     string
+	oauthCancel      context.CancelFunc
+	authManager      *keenauth.OAuthManager
 	registry         *providers.Registry
 	globalCfg        *config.GlobalConfig
 	loader           *config.Loader
@@ -55,6 +66,7 @@ func New(registry *providers.Registry, globalCfg *config.GlobalConfig, loader *c
 	return &Model{
 		Step:         StepProvider,
 		ProviderList: registry.Providers,
+		authManager:  keenauth.NewOAuthManager(nil),
 		registry:     registry,
 		globalCfg:    globalCfg,
 		loader:       loader,
@@ -63,12 +75,20 @@ func New(registry *providers.Registry, globalCfg *config.GlobalConfig, loader *c
 	}
 }
 
+func NewWithAuthManager(registry *providers.Registry, globalCfg *config.GlobalConfig, loader *config.Loader, resolvedCfg *config.ResolvedConfig, authManager *keenauth.OAuthManager, onComplete func(provider, model, apiKey string) error) *Model {
+	m := New(registry, globalCfg, loader, resolvedCfg, onComplete)
+	m.authManager = authManager
+	return m
+}
+
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m.handleKeyMsg(msg)
 	case tea.PasteMsg:
 		return m.handlePasteMsg(msg)
+	case modelSelectionOAuthCompleteMsg:
+		return m.handleOAuthComplete(msg)
 	}
 	return m, nil
 }
@@ -86,6 +106,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			provider, _ := m.registry.GetProvider(m.SelectedProvider)
 			m.ModelList = provider.Models
 			m.ModelCursor = 0
+			m.ErrorMessage = ""
+			if config.AuthModeForProvider(m.SelectedProvider) == config.AuthModeOAuth && !m.authManager.HasCredential(m.SelectedProvider) {
+				return m.startOAuth()
+			}
 			m.Step = StepModel
 		case "esc":
 			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
@@ -104,6 +128,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.ThinkingOptions = modelMeta.ThinkingEfforts
 				m.ThinkingCursor = m.resolveThinkingCursor(m.ThinkingOptions)
 				m.Step = StepThinking
+			} else if !config.RequiresAPIKey(m.SelectedProvider) {
+				return m.complete()
 			} else if supportsBaseURL(m.SelectedProvider) {
 				m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
 				m.Step = StepBaseURL
@@ -122,6 +148,9 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.ThinkingCursor = (m.ThinkingCursor + 1) % len(m.ThinkingOptions)
 		case "enter":
 			m.SelectedThinking = m.ThinkingOptions[m.ThinkingCursor]
+			if !config.RequiresAPIKey(m.SelectedProvider) {
+				return m.complete()
+			}
 			if supportsBaseURL(m.SelectedProvider) {
 				m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
 				m.Step = StepBaseURL
@@ -170,8 +199,60 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.APIKeyInput += msg.Text
 			}
 		}
+
+	case StepOAuth:
+		switch msg.String() {
+		case "esc":
+			if m.oauthCancel != nil {
+				m.oauthCancel()
+			}
+			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
+		}
 	}
 
+	return m, nil
+}
+
+func (m *Model) startOAuth() (*Model, tea.Cmd) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	session, err := m.authManager.StartLogin(ctx, m.SelectedProvider)
+	if err != nil {
+		cancel()
+		m.ErrorMessage = err.Error()
+		m.OAuthStatus = "Authentication failed."
+		m.Step = StepOAuth
+		return m, nil
+	}
+
+	m.Step = StepOAuth
+	m.OAuthStatus = "Complete authentication in your browser."
+	m.OAuthURL = session.AuthURL
+	m.oauthCancel = cancel
+	return m, m.waitOAuthCmd(ctx, cancel, session)
+}
+
+func (m *Model) waitOAuthCmd(ctx context.Context, cancel context.CancelFunc, session *keenauth.OAuthLoginSession) tea.Cmd {
+	return func() tea.Msg {
+		defer cancel()
+		err := session.Wait(ctx)
+		return modelSelectionOAuthCompleteMsg{err: err}
+	}
+}
+
+func (m *Model) handleOAuthComplete(msg modelSelectionOAuthCompleteMsg) (*Model, tea.Cmd) {
+	m.oauthCancel = nil
+	if msg.err != nil {
+		m.ErrorMessage = msg.err.Error()
+		m.OAuthStatus = "Authentication failed."
+		return m, nil
+	}
+	provider, _ := m.registry.GetProvider(m.SelectedProvider)
+	m.ModelList = provider.Models
+	m.ModelCursor = 0
+	m.ErrorMessage = ""
+	m.OAuthStatus = ""
+	m.OAuthURL = ""
+	m.Step = StepModel
 	return m, nil
 }
 
@@ -221,7 +302,7 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 		apiKey = existingKey
 	}
 
-	if apiKey == "" {
+	if config.RequiresAPIKey(m.SelectedProvider) && apiKey == "" {
 		m.ErrorMessage = "API key is required"
 		return m, nil
 	}
@@ -239,9 +320,11 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 	m.globalCfg.ThinkingEffort = storedEffort
 
 	providerCfg := config.ProviderConfig{
-		APIKey:  apiKey,
-		Models:  []string{m.SelectedModel},
-		BaseURL: m.BaseURLInput,
+		APIKey: apiKey,
+		Models: []string{m.SelectedModel},
+	}
+	if config.RequiresAPIKey(m.SelectedProvider) {
+		providerCfg.BaseURL = m.BaseURLInput
 	}
 	m.globalCfg.SetProviderConfig(m.SelectedProvider, providerCfg)
 
@@ -254,7 +337,8 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 	m.resolvedCfg.Model = m.SelectedModel
 	m.resolvedCfg.APIKey = apiKey
 	m.resolvedCfg.ThinkingEffort = storedEffort
-	m.resolvedCfg.BaseURL = m.BaseURLInput
+	m.resolvedCfg.BaseURL = providerCfg.BaseURL
+	m.resolvedCfg.AuthMode = config.AuthModeForProvider(m.SelectedProvider)
 
 	if err := m.onComplete(m.SelectedProvider, m.SelectedModel, apiKey); err != nil {
 		m.ErrorMessage = fmt.Sprintf("Failed to initialize LLM client: %v", err)
@@ -276,6 +360,8 @@ func (m *Model) ViewString() string {
 		return m.renderBaseURLInput()
 	case StepAPIKey:
 		return m.renderAPIKeyInput()
+	case StepOAuth:
+		return m.renderOAuthStatus()
 	}
 	return ""
 }
@@ -347,6 +433,28 @@ func (m *Model) renderAPIKeyInput() string {
 
 	if m.ErrorMessage != "" {
 		view.WriteString("\n" + repltheme.ErrorStyle.Render(m.ErrorMessage))
+	}
+	return view.String()
+}
+
+func (m *Model) renderOAuthStatus() string {
+	var view strings.Builder
+	view.WriteString(repltheme.UserPromptStyle.Render("Sign in with OpenAI"))
+	view.WriteString("\n\n")
+	status := m.OAuthStatus
+	if status == "" {
+		status = "Waiting for authentication..."
+	}
+	view.WriteString(repltheme.NormalStyle.Render(status))
+	view.WriteString("\n")
+	if m.OAuthURL != "" {
+		view.WriteString("\n" + repltheme.HintStyle.Render("URL:"))
+		view.WriteString("\n" + repltheme.NormalStyle.Render(m.OAuthURL))
+		view.WriteString("\n")
+	}
+	view.WriteString(repltheme.HintStyle.Render("After authentication succeeds, return to Keen Code. Press Esc to cancel."))
+	if m.ErrorMessage != "" {
+		view.WriteString("\n\n" + repltheme.ErrorStyle.Render(m.ErrorMessage))
 	}
 	return view.String()
 }

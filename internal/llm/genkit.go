@@ -16,7 +16,7 @@ import (
 	"google.golang.org/genai"
 )
 
-const maxToolTurns = 2000
+const maxToolTurns = 5000
 
 type streamFunc func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error]
 

@@ -1,0 +1,400 @@
+package llm
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/responses"
+	"github.com/openai/openai-go/shared"
+	"github.com/user/keen-code/internal/auth"
+	"github.com/user/keen-code/internal/config"
+	"github.com/user/keen-code/internal/tools"
+)
+
+func TestNewClient_OpenAICodexAllowsMissingAPIKey(t *testing.T) {
+	client, err := NewClient(&config.ResolvedConfig{
+		Provider:       config.ProviderOpenAICodex,
+		Model:          "gpt-5.4",
+		ThinkingEffort: "medium",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := client.(*OpenAICodexClient); !ok {
+		t.Fatalf("expected *OpenAICodexClient, got %T", client)
+	}
+}
+
+func TestNewCodexHTTPClientDisablesHTTP2(t *testing.T) {
+	client := newCodexHTTPClient()
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", client.Transport)
+	}
+	if transport.ForceAttemptHTTP2 {
+		t.Fatal("expected Codex HTTP client to disable automatic HTTP/2")
+	}
+	if transport.TLSNextProto == nil {
+		t.Fatal("expected Codex HTTP client to override TLSNextProto")
+	}
+	if got := transport.TLSClientConfig.NextProtos; len(got) != 1 || got[0] != "http/1.1" {
+		t.Fatalf("expected Codex HTTP client to force HTTP/1.1 ALPN, got %#v", got)
+	}
+}
+
+func TestOpenAICodexClientRequestTargetsCodexEndpointAndOAuthHeaders(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "env-api-key")
+
+	store := auth.NewStoreAt(filepath.Join(t.TempDir(), "auth.json"))
+	if err := store.Set(auth.OpenAICodexProviderID, auth.OAuthCredential{
+		Type:         "oauth",
+		AccessToken:  "oauth-access",
+		RefreshToken: "refresh",
+		ExpiresAt:    time.Now().Add(time.Hour),
+		AccountID:    "acct_123",
+	}); err != nil {
+		t.Fatalf("seed auth store: %v", err)
+	}
+
+	var gotPath string
+	var gotAuth string
+	var gotAccountID string
+	var gotOriginator string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		gotAccountID = r.Header.Get("ChatGPT-Account-Id")
+		gotOriginator = r.Header.Get("originator")
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"type":"response.completed","sequence_number":1,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	client := &OpenAICodexClient{
+		model:       "gpt-5.4",
+		client:      openai.NewClient(option.WithBaseURL(server.URL + "/backend-api/codex/")),
+		authManager: auth.NewOAuthManager(store),
+		userAgent:   "keen-code-test",
+	}
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		return &sdkResponseStream{stream: client.client.Responses.NewStreaming(ctx, params, opts...)}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	for ev := range ch {
+		if ev.Type == StreamEventTypeError {
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if gotPath != "/backend-api/codex/responses" {
+		t.Fatalf("expected Codex responses path, got %q", gotPath)
+	}
+	if gotAuth != "Bearer oauth-access" {
+		t.Fatalf("expected OAuth authorization override, got %q", gotAuth)
+	}
+	if gotAccountID != "acct_123" {
+		t.Fatalf("expected account header, got %q", gotAccountID)
+	}
+	if gotOriginator != "keen-code" {
+		t.Fatalf("expected originator header, got %q", gotOriginator)
+	}
+}
+
+func TestOpenAICodexClientSetsInstructionsStoreAndReasoning(t *testing.T) {
+	client := newTestCodexClient(t)
+	client.thinkingEffort = "high"
+
+	var capturedParams responses.ResponseNewParams
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		capturedParams = params
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":1,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleSystem, Content: "system prompt"},
+		{Role: RoleUser, Content: "hi"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	for ev := range ch {
+		if ev.Type == StreamEventTypeError {
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if !capturedParams.Instructions.Valid() || capturedParams.Instructions.Value != "system prompt" {
+		t.Fatalf("expected system prompt in instructions, got %#v", capturedParams.Instructions)
+	}
+	if !capturedParams.Store.Valid() || capturedParams.Store.Value {
+		t.Fatalf("expected store=false, got %#v", capturedParams.Store)
+	}
+	if capturedParams.Reasoning.Effort != shared.ReasoningEffortHigh {
+		t.Fatalf("expected high reasoning, got %q", capturedParams.Reasoning.Effort)
+	}
+	body, err := json.Marshal(capturedParams.Input)
+	if err != nil {
+		t.Fatalf("marshal input: %v", err)
+	}
+	if strings.Contains(string(body), "system prompt") {
+		t.Fatalf("did not expect system prompt in input items, got %s", string(body))
+	}
+	if !strings.Contains(string(body), "hi") {
+		t.Fatalf("expected user input item, got %s", string(body))
+	}
+}
+
+func TestOpenAICodexClientOutputTextDoneEmitsFinalText(t *testing.T) {
+	client := newTestCodexClient(t)
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.output_text.done","item_id":"msg_1","output_index":0,"content_index":0,"text":"final text","sequence_number":1}`),
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":2,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	var streamed strings.Builder
+	for ev := range ch {
+		if ev.Type == StreamEventTypeChunk {
+			streamed.WriteString(ev.Content)
+		}
+	}
+	if streamed.String() != "final text" {
+		t.Fatalf("expected finalized text, got %q", streamed.String())
+	}
+}
+
+func TestOpenAICodexClientOutputTextDoneDoesNotDuplicateDeltas(t *testing.T) {
+	client := newTestCodexClient(t)
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.output_text.delta","item_id":"msg_1","output_index":0,"content_index":0,"delta":"final ","sequence_number":1}`),
+				mustResponseEvent(t, `{"type":"response.output_text.done","item_id":"msg_1","output_index":0,"content_index":0,"text":"final text","sequence_number":2}`),
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":3,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	var streamed strings.Builder
+	for ev := range ch {
+		if ev.Type == StreamEventTypeChunk {
+			streamed.WriteString(ev.Content)
+		}
+	}
+	if streamed.String() != "final text" {
+		t.Fatalf("expected non-duplicated finalized text, got %q", streamed.String())
+	}
+}
+
+func TestOpenAICodexClientOutputItemDoneEmitsMessageText(t *testing.T) {
+	client := newTestCodexClient(t)
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"review text","annotations":[]}]},"sequence_number":1}`),
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":2,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "review this"}}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	var streamed strings.Builder
+	for ev := range ch {
+		if ev.Type == StreamEventTypeChunk {
+			streamed.WriteString(ev.Content)
+		}
+	}
+	if streamed.String() != "review text" {
+		t.Fatalf("expected output item text, got %q", streamed.String())
+	}
+}
+
+func TestOpenAICodexClientOutputItemDoneDoesNotDuplicateDeltas(t *testing.T) {
+	client := newTestCodexClient(t)
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.output_text.delta","item_id":"msg_1","output_index":0,"content_index":0,"delta":"review ","sequence_number":1}`),
+				mustResponseEvent(t, `{"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"review text","annotations":[]}]},"sequence_number":2}`),
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":3,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "review this"}}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	var streamed strings.Builder
+	for ev := range ch {
+		if ev.Type == StreamEventTypeChunk {
+			streamed.WriteString(ev.Content)
+		}
+	}
+	if streamed.String() != "review text" {
+		t.Fatalf("expected non-duplicated output item text, got %q", streamed.String())
+	}
+}
+
+func TestOpenAICodexClientToolCallsReplayItemsWithoutPreviousResponseID(t *testing.T) {
+	client := newTestCodexClient(t)
+
+	var capturedParams []responses.ResponseNewParams
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		capturedParams = append(capturedParams, params)
+		if len(capturedParams) == 1 {
+			return &fakeResponseStream{
+				events: []responses.ResponseStreamEventUnion{
+					mustResponseEvent(t, `{"type":"response.output_item.done","output_index":0,"item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"read_file","arguments":"{\"path\":\"go.mod\"}","status":"completed"},"sequence_number":1}`),
+					mustResponseEvent(t, `{"type":"response.completed","sequence_number":2,"response":{"id":"resp_1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+				},
+			}
+		}
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.output_text.delta","delta":"done","sequence_number":3}`),
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":4,"response":{"id":"resp_2","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successToolOAI{}); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "read go.mod"}}, registry)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+
+	var streamed strings.Builder
+	var toolStartCount int
+	var toolEndCount int
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeChunk:
+			streamed.WriteString(ev.Content)
+		case StreamEventTypeToolStart:
+			toolStartCount++
+		case StreamEventTypeToolEnd:
+			toolEndCount++
+		case StreamEventTypeError:
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if len(capturedParams) != 2 {
+		t.Fatalf("expected two Codex response turns, got %d", len(capturedParams))
+	}
+	if capturedParams[0].PreviousResponseID.Valid() || capturedParams[1].PreviousResponseID.Valid() {
+		t.Fatalf("did not expect previous_response_id with store=false")
+	}
+	if toolStartCount != 1 || toolEndCount != 1 {
+		t.Fatalf("expected one tool start/end, got start=%d end=%d", toolStartCount, toolEndCount)
+	}
+	if streamed.String() != "done" {
+		t.Fatalf("expected final assistant stream, got %q", streamed.String())
+	}
+
+	body, err := json.Marshal(capturedParams[1].Input)
+	if err != nil {
+		t.Fatalf("marshal second request input: %v", err)
+	}
+	inputJSON := string(body)
+	for _, want := range []string{
+		"read go.mod",
+		`"type":"function_call"`,
+		`"call_id":"call_1"`,
+		`"name":"read_file"`,
+		`"type":"function_call_output"`,
+		"module github.com/user/keen-code",
+	} {
+		if !strings.Contains(inputJSON, want) {
+			t.Fatalf("expected second request input to contain %q, got %s", want, inputJSON)
+		}
+	}
+}
+
+func TestFormatCodexStreamErrorIncludesAPIErrorBody(t *testing.T) {
+	req, err := http.NewRequest(http.MethodPost, "https://chatgpt.com/backend-api/codex/responses", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Status:     "400 Bad Request",
+		Body:       io.NopCloser(bytes.NewBufferString(`{"detail":"bad codex request"}`)),
+	}
+	apiErr := &openai.Error{
+		StatusCode: http.StatusBadRequest,
+		Request:    req,
+		Response:   resp,
+	}
+
+	got := formatCodexStreamError(apiErr).Error()
+	if !strings.Contains(got, "HTTP 400") || !strings.Contains(got, "bad codex request") {
+		t.Fatalf("expected formatted API error body, got %q", got)
+	}
+}
+
+func TestFormatCodexStreamErrorWrapsNonAPIError(t *testing.T) {
+	err := errors.New("network failed")
+	got := formatCodexStreamError(err)
+	if !strings.Contains(got.Error(), "stream error: network failed") {
+		t.Fatalf("unexpected error: %v", got)
+	}
+}
+
+func newTestCodexClient(t *testing.T) *OpenAICodexClient {
+	t.Helper()
+	store := auth.NewStoreAt(filepath.Join(t.TempDir(), "auth.json"))
+	if err := store.Set(auth.OpenAICodexProviderID, auth.OAuthCredential{
+		Type:         "oauth",
+		AccessToken:  "oauth-access",
+		RefreshToken: "refresh",
+		ExpiresAt:    time.Now().Add(time.Hour),
+		AccountID:    "acct_123",
+	}); err != nil {
+		t.Fatalf("seed auth store: %v", err)
+	}
+	return &OpenAICodexClient{
+		model:       "gpt-5.4",
+		authManager: auth.NewOAuthManager(store),
+		userAgent:   "keen-code-test",
+	}
+}

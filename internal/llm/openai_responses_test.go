@@ -349,6 +349,7 @@ func TestReasoningEffortForLevel(t *testing.T) {
 		{"medium", shared.ReasoningEffortMedium},
 		{"high", shared.ReasoningEffortHigh},
 		{"xhigh", shared.ReasoningEffort("xhigh")},
+		{"none", shared.ReasoningEffort("none")},
 		{"", ""},
 		{"invalid", ""},
 	}

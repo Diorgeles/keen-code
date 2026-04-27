@@ -131,6 +131,8 @@ func reasoningEffortForLevel(effort string) shared.ReasoningEffort {
 		return shared.ReasoningEffortHigh
 	case "xhigh":
 		return shared.ReasoningEffort("xhigh")
+	case "none":
+		return shared.ReasoningEffort("none")
 	default:
 		return ""
 	}

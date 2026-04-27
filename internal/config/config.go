@@ -9,12 +9,13 @@ import (
 )
 
 const (
-	ProviderAnthropic  = "anthropic"
-	ProviderOpenAI     = "openai"
-	ProviderGoogleAI   = "googleai"
-	ProviderMoonshotAI = "moonshotai"
-	ProviderDeepSeek   = "deepseek"
-	ProviderZAI        = "zai"
+	ProviderAnthropic   = "anthropic"
+	ProviderOpenAI      = "openai"
+	ProviderOpenAICodex = "openai-codex"
+	ProviderGoogleAI    = "googleai"
+	ProviderMoonshotAI  = "moonshotai"
+	ProviderDeepSeek    = "deepseek"
+	ProviderZAI         = "zai"
 )
 
 type GlobalConfig struct {
@@ -46,7 +47,13 @@ type ResolvedConfig struct {
 	Model          string
 	ThinkingEffort string
 	BaseURL        string
+	AuthMode       string
 }
+
+const (
+	AuthModeAPIKey = "api_key"
+	AuthModeOAuth  = "oauth"
+)
 
 func (g *GlobalConfig) GetProviderConfig(provider string) (ProviderConfig, bool) {
 	cfg, ok := g.Providers[provider]
@@ -100,7 +107,7 @@ func Resolve(global *GlobalConfig, session *SessionConfig) (*ResolvedConfig, err
 		providerGlobal = ProviderConfig{}
 	}
 	apiKey := firstNonEmpty(session.APIKey, providerGlobal.APIKey)
-	if apiKey == "" {
+	if RequiresAPIKey(provider) && apiKey == "" {
 		return nil, fmt.Errorf("no API key configured for %s", provider)
 	}
 
@@ -116,10 +123,22 @@ func Resolve(global *GlobalConfig, session *SessionConfig) (*ResolvedConfig, err
 		Model:          model,
 		ThinkingEffort: global.ThinkingEffort,
 		BaseURL:        providerGlobal.BaseURL,
+		AuthMode:       AuthModeForProvider(provider),
 	}
 
 	slog.Debug("config resolved", "provider", resolved.Provider, "model", resolved.Model)
 	return resolved, nil
+}
+
+func RequiresAPIKey(provider string) bool {
+	return AuthModeForProvider(provider) == AuthModeAPIKey
+}
+
+func AuthModeForProvider(provider string) string {
+	if provider == ProviderOpenAICodex {
+		return AuthModeOAuth
+	}
+	return AuthModeAPIKey
 }
 
 func DefaultGlobalConfig() *GlobalConfig {

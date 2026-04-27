@@ -17,7 +17,7 @@ type ClientConfig struct {
 }
 
 func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
-	if cfg.APIKey == "" {
+	if config.RequiresAPIKey(cfg.Provider) && cfg.APIKey == "" {
 		return nil, fmt.Errorf("API key is required")
 	}
 	if cfg.Model == "" {
@@ -48,6 +48,12 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			Model:          cfg.Model,
 			ThinkingEffort: cfg.ThinkingEffort,
 			BaseURL:        cfg.BaseURL,
+		})
+	case config.ProviderOpenAICodex:
+		return NewOpenAICodexClient(&ClientConfig{
+			Provider:       Provider(cfg.Provider),
+			Model:          cfg.Model,
+			ThinkingEffort: cfg.ThinkingEffort,
 		})
 	case config.ProviderDeepSeek,
 		config.ProviderMoonshotAI,

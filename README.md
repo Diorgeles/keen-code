@@ -9,7 +9,9 @@
 
 </div>
 
-![Keen Code demo](./assets/keen-demo.gif)
+<div align="center">
+<img src="./assets/keen-demo.gif" alt="Keen Code demo" style="width: 100%; height: auto;"/>
+</div>
 
 **Keen Code** is a terminal-based AI coding agent like Claude Code or OpenCode. Written in Go, it is simpler, lighter, and avoids feature bloat. It is designed to be a minimalistic but useful coding agent for typical software engineering tasks.
 
@@ -120,9 +122,12 @@ keen
 
 - Anthropic
 - OpenAI
+- Codex (ChatGPT OAuth)
 - Google AI (Gemini)
 - Moonshot AI (Kimi)
 - DeepSeek
+
+> Use `/model` to switch providers. The ChatGPT/Codex option opens a browser-based OpenAI sign-in flow and stores OAuth credentials in `~/.keen/auth.json`.
 
 More providers will be added in the future.
 

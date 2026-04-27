@@ -14,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	keenauth "github.com/user/keen-code/internal/auth"
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
 	replfilesearch "github.com/user/keen-code/internal/cli/repl/filesearch"
 	replhistory "github.com/user/keen-code/internal/cli/repl/history"
@@ -41,6 +42,7 @@ const (
 	clearCommand    = "/clear"
 	newCommand      = "/new"
 	thinkingCommand = "/thinking"
+	logoutCommand   = "/logout"
 
 	defaultWidth = 120
 	maxHeight    = 3
@@ -413,6 +415,11 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	if input == modelCommand {
 		m.textarea.Reset()
 		return m.startModelSelection(), nil
+	}
+
+	if input == logoutCommand {
+		m.textarea.Reset()
+		return m.handleLogout(), nil
 	}
 
 	if input == sessionsCommand || input == resumeCommand {
@@ -921,6 +928,7 @@ func getHelpText() string {
 		{"/clear", "Start a new session (also /new)"},
 		{"/compact", "Compact conversation context"},
 		{"/help", "Show available commands"},
+		{"/logout", "Sign out of the current OAuth provider"},
 		{"/model", "Change provider or model"},
 		{"/new", "Start a new session (also /clear)"},
 		{"/resume", "Open the session picker"},
@@ -978,6 +986,33 @@ func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil
+}
+
+func (m *replModel) handleLogout() replModel {
+	if m.ctx == nil || m.ctx.cfg == nil || m.ctx.cfg.Provider == "" {
+		m.output.AddError("No provider is configured.", repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+	if config.AuthModeForProvider(m.ctx.cfg.Provider) != config.AuthModeOAuth {
+		m.output.AddError("Current provider does not use OAuth.", repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+	if err := keenauth.NewStore().Remove(m.ctx.cfg.Provider); err != nil {
+		m.output.AddError("Failed to remove OAuth credentials: "+err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+	m.appState.UpdateClient(nil)
+	m.output.AddStyledLine("  ✓ Signed out of "+m.ctx.cfg.Provider, repltheme.HighlightStyle)
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
 }
 
 func (m *replModel) handleClear() replModel {
@@ -1058,7 +1093,7 @@ func RunREPL(
 	}
 
 	var llmClient llm.LLMClient
-	if cfg.APIKey != "" && cfg.Model != "" {
+	if cfg.Model != "" && (!config.RequiresAPIKey(cfg.Provider) || cfg.APIKey != "") {
 		client, err := llm.NewClient(cfg)
 		if err != nil {
 			return fmt.Errorf("failed to initialize LLM client: %w", err)

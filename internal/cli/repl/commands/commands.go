@@ -12,6 +12,7 @@ var all = []SlashCommand{
 	{"/compact", "Compact conversation context"},
 	{"/exit", "Quit Keen"},
 	{"/help", "Show available commands"},
+	{"/logout", "Sign out of the current OAuth provider"},
 	{"/model", "Change provider or model"},
 	{"/new", "Start a new session (also /clear)"},
 	{"/resume", "Open the session picker"},
