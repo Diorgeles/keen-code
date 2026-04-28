@@ -592,6 +592,12 @@ func (m *replModel) updateViewportContent() {
 	m.viewport.SetContent(content.String())
 }
 
+func (m *replModel) scrollToBottomIfFollowing() {
+	if !m.userScrolled {
+		m.viewport.GotoBottom()
+	}
+}
+
 func (m replModel) waitForAsyncEvent() tea.Cmd {
 	if m.streamHandler == nil || !m.streamHandler.IsActive() || m.streamHandler.eventCh == nil {
 		return nil
@@ -735,13 +741,13 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 		m.streamHandler.HandleDiff(msg.req.Lines)
 		close(msg.req.Done)
 		m.updateViewportContent()
-		m.viewport.GotoBottom()
+		m.scrollToBottomIfFollowing()
 		return m, m.waitForAsyncEvent()
 
 	case permissionReadyMsg:
 		m.streamHandler.HandlePermissionRequest(msg.req)
 		m.updateViewportContent()
-		m.viewport.GotoBottom()
+		m.scrollToBottomIfFollowing()
 		return m, m.waitForAsyncEvent()
 
 	case spinner.TickMsg:

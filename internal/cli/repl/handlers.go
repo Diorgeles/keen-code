@@ -43,18 +43,14 @@ func (m *replModel) handleLLMUsage(usage *llm.TokenUsage) (replModel, tea.Cmd) {
 func (m *replModel) handleLLMChunk(chunk string) (replModel, tea.Cmd) {
 	m.streamHandler.HandleChunk(chunk)
 	m.updateViewportContent()
-	if !m.userScrolled {
-		m.viewport.GotoBottom()
-	}
+	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
 }
 
 func (m *replModel) handleLLMReasoningChunk(chunk string) (replModel, tea.Cmd) {
 	m.streamHandler.HandleReasoningChunk(chunk)
 	m.updateViewportContent()
-	if !m.userScrolled {
-		m.viewport.GotoBottom()
-	}
+	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
 }
 
@@ -84,9 +80,7 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 	}
 	m.output.AddEmptyLine()
 	m.updateViewportContent()
-	if !m.userScrolled {
-		m.viewport.GotoBottom()
-	}
+	m.scrollToBottomIfFollowing()
 	return *m, nil
 }
 
@@ -118,12 +112,12 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	}
 	if errors.Is(err, context.Canceled) {
 		m.updateViewportContent()
-		m.viewport.GotoBottom()
+		m.scrollToBottomIfFollowing()
 		return *m, nil
 	}
 	m.output.AddError(errMsg, repltheme.ErrorStyle)
 	m.updateViewportContent()
-	m.viewport.GotoBottom()
+	m.scrollToBottomIfFollowing()
 	return *m, nil
 }
 
@@ -132,9 +126,7 @@ func (m *replModel) handleLLMRetry(err error, attempt int) (replModel, tea.Cmd) 
 	m.loadingText = fmt.Sprintf("Retrying (attempt %d)...", attempt)
 	m.streamHandler.SetLoadingText(m.loadingText)
 	m.updateViewportContent()
-	if !m.userScrolled {
-		m.viewport.GotoBottom()
-	}
+	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
 }
 
@@ -161,7 +153,7 @@ func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
 	}
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
-	m.viewport.GotoBottom()
+	m.scrollToBottomIfFollowing()
 	return *m, nil
 }
 
@@ -190,7 +182,7 @@ func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
 	m.adjustTextareaHeight()
 	m.refreshContextStatus()
 	m.updateViewportContent()
-	m.viewport.GotoBottom()
+	m.scrollToBottomIfFollowing()
 	return *m, nil
 }
 
@@ -203,9 +195,7 @@ func (m *replModel) handleToolStart(toolCall *llm.ToolCall) (replModel, tea.Cmd)
 		m.streamHandler.HandleToolStart(toolCall)
 	}
 	m.updateViewportContent()
-	if !m.userScrolled {
-		m.viewport.GotoBottom()
-	}
+	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
 }
 
@@ -219,9 +209,7 @@ func (m *replModel) handleToolEnd(toolCall *llm.ToolCall) (replModel, tea.Cmd) {
 		m.streamHandler.SetLoadingText(m.loadingText)
 	}
 	m.updateViewportContent()
-	if !m.userScrolled {
-		m.viewport.GotoBottom()
-	}
+	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
 }
 
@@ -484,7 +472,7 @@ func (m *replModel) interruptStream(message string) {
 	m.output.AddEmptyLine()
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
-	m.viewport.GotoBottom()
+	m.scrollToBottomIfFollowing()
 }
 
 func (m *replModel) logAppStateMessages(reason string) {
@@ -542,15 +530,11 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 	case "up", "k":
 		m.streamHandler.MovePendingCursor(-1)
 		m.updateViewportContent()
-		if !m.userScrolled {
-			m.viewport.GotoBottom()
-		}
+		m.scrollToBottomIfFollowing()
 	case "down", "j":
 		m.streamHandler.MovePendingCursor(1)
 		m.updateViewportContent()
-		if !m.userScrolled {
-			m.viewport.GotoBottom()
-		}
+		m.scrollToBottomIfFollowing()
 	case keyEnter:
 		req := m.streamHandler.GetPendingPermissionRequest()
 		if req == nil {
@@ -569,9 +553,7 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 		m.streamHandler.ResolvePendingPermission(status)
 		m.permissionRequester.SendResponse(choice, req.ToolName)
 		m.updateViewportContent()
-		if !m.userScrolled {
-			m.viewport.GotoBottom()
-		}
+		m.scrollToBottomIfFollowing()
 	case keyEsc:
 		req := m.streamHandler.GetPendingPermissionRequest()
 		if req == nil {
@@ -580,9 +562,7 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 		m.streamHandler.ResolvePendingPermission(replpermissions.StatusDenied)
 		m.permissionRequester.SendResponse(replpermissions.ChoiceDeny, req.ToolName)
 		m.updateViewportContent()
-		if !m.userScrolled {
-			m.viewport.GotoBottom()
-		}
+		m.scrollToBottomIfFollowing()
 	}
 	return *m, nil
 }
@@ -636,5 +616,5 @@ func (m *replModel) handleUpdateCheckMsg(msg updateCheckMsg) {
 	m.output.AddStyledLine(updateCmd, repltheme.UpdateCommandStyle)
 	m.output.AddEmptyLine()
 	m.updateViewportContent()
-	m.viewport.GotoBottom()
+	m.scrollToBottomIfFollowing()
 }

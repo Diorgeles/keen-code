@@ -25,6 +25,7 @@ type GenkitClient struct {
 	provider       Provider
 	model          string
 	thinkingEffort string
+	maxRetries     int
 	streamImpl     streamFunc
 }
 
@@ -53,6 +54,7 @@ func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
 		provider:       cfg.Provider,
 		model:          modelName,
 		thinkingEffort: cfg.ThinkingEffort,
+		maxRetries:     retryCount(cfg.MaxRetries),
 		streamImpl:     genkit.GenerateStream,
 	}, nil
 }
@@ -99,6 +101,74 @@ func budgetForEffort(effort string) *int32 {
 	return &b
 }
 
+func (c *GenkitClient) collectTurnWithRetry(
+	ctx context.Context,
+	opts []ai.GenerateOption,
+	eventCh chan<- StreamEvent,
+) (*ai.ModelResponse, error) {
+	maxRetries := retryCount(c.maxRetries)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		modelResponse, err := c.collectTurn(ctx, opts, eventCh)
+		if err == nil {
+			return modelResponse, nil
+		}
+		if !isRetryableError(err) || attempt == maxRetries {
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+			return nil, err
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		slog.Debug("LLM stream error, retrying", "attempt", attempt, "maxRetries", maxRetries, "backoff", backoff, "error", err)
+		eventCh <- StreamEvent{Type: StreamEventTypeRetry, Error: err, Attempt: attempt}
+
+		select {
+		case <-ctx.Done():
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
+			return nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return nil, nil
+}
+
+func (c *GenkitClient) collectTurn(
+	ctx context.Context,
+	opts []ai.GenerateOption,
+	eventCh chan<- StreamEvent,
+) (*ai.ModelResponse, error) {
+	stream := c.streamImpl(ctx, c.g, opts...)
+	var modelResponse *ai.ModelResponse
+
+	for result, err := range stream {
+		if err != nil {
+			return nil, err
+		}
+
+		if result.Done {
+			modelResponse = result.Response
+			break
+		}
+
+		if result.Chunk != nil && len(result.Chunk.Content) > 0 {
+			for _, part := range result.Chunk.Content {
+				if part.IsReasoning() && part.Text != "" {
+					eventCh <- StreamEvent{
+						Type:    StreamEventTypeReasoningChunk,
+						Content: part.Text,
+					}
+				} else if (part.IsText() || part.IsData()) && part.Text != "" {
+					eventCh <- StreamEvent{
+						Type:    StreamEventTypeChunk,
+						Content: part.Text,
+					}
+				}
+			}
+		}
+	}
+
+	return modelResponse, nil
+}
+
 func (c *GenkitClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
@@ -139,38 +209,9 @@ func (c *GenkitClient) StreamChat(
 				opts = append(opts, ai.WithReturnToolRequests(true))
 			}
 
-			stream := c.streamImpl(ctx, c.g, opts...)
-			var modelResponse *ai.ModelResponse
-
-			for result, err := range stream {
-				if err != nil {
-					eventCh <- StreamEvent{
-						Type:  StreamEventTypeError,
-						Error: err,
-					}
-					return
-				}
-
-				if result.Done {
-					modelResponse = result.Response
-					break
-				}
-
-				if result.Chunk != nil && len(result.Chunk.Content) > 0 {
-					for _, part := range result.Chunk.Content {
-						if part.IsReasoning() && part.Text != "" {
-							eventCh <- StreamEvent{
-								Type:    StreamEventTypeReasoningChunk,
-								Content: part.Text,
-							}
-						} else if (part.IsText() || part.IsData()) && part.Text != "" {
-							eventCh <- StreamEvent{
-								Type:    StreamEventTypeChunk,
-								Content: part.Text,
-							}
-						}
-					}
-				}
+			modelResponse, err := c.collectTurnWithRetry(ctx, opts, eventCh)
+			if err != nil {
+				return
 			}
 
 			if modelResponse == nil || modelResponse.Message == nil {

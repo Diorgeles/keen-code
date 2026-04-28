@@ -47,6 +47,26 @@ func newTestModel() replModel {
 	}
 }
 
+func scrollViewportAwayFromBottom(t *testing.T, m *replModel) int {
+	t.Helper()
+
+	m.viewport.SetHeight(6)
+	for range 40 {
+		m.output.AddLine("existing output")
+	}
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	if m.viewport.AtTop() {
+		t.Fatal("expected test viewport to be scrollable")
+	}
+	m.viewport.ScrollUp(4)
+	if m.viewport.AtBottom() {
+		t.Fatal("expected test viewport to be above bottom")
+	}
+	m.userScrolled = true
+	return m.viewport.YOffset()
+}
+
 func TestUpdate_InlinePermission_AllowsToolStartEvent(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	eventCh := make(chan llm.StreamEvent)
@@ -503,6 +523,29 @@ func TestUpdateNormalMode_PermissionReadyRendersImmediately(t *testing.T) {
 	}
 }
 
+func TestUpdateNormalMode_PermissionReadyPreservesUserScroll(t *testing.T) {
+	m := newTestModel()
+	eventCh := make(chan llm.StreamEvent)
+	m.streamHandler.Start(eventCh, "Loading...")
+	m.showSpinner = true
+	offset := scrollViewportAwayFromBottom(t, &m)
+
+	req := &replpermissions.Request{
+		RequestID:    "1",
+		ToolName:     "read_file",
+		Path:         "../foo.txt",
+		ResolvedPath: "/tmp/foo.txt",
+		Status:       replpermissions.StatusPending,
+		ResponseChan: make(chan bool, 1),
+	}
+
+	newM, _ := m.updateNormalMode(permissionReadyMsg{req: req})
+
+	if got := newM.viewport.YOffset(); got != offset {
+		t.Fatalf("expected permission prompt to preserve scroll offset %d, got %d", offset, got)
+	}
+}
+
 func TestUpdateNormalMode_DiffReadyRendersImmediately(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
@@ -528,6 +571,38 @@ func TestUpdateNormalMode_DiffReadyRendersImmediately(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("expected async waiter to be re-armed")
+	}
+}
+
+func TestUpdateNormalMode_DiffReadyPreservesUserScroll(t *testing.T) {
+	m := newTestModel()
+	eventCh := make(chan llm.StreamEvent)
+	m.streamHandler.Start(eventCh, "Loading...")
+	offset := scrollViewportAwayFromBottom(t, &m)
+
+	done := make(chan struct{})
+	req := repltooling.DiffRequest{
+		Lines: []tools.EditDiffLine{
+			{Kind: tools.DiffLineAdded, Content: "hello", NewLineNum: 1},
+		},
+		Done: done,
+	}
+
+	newM, _ := m.updateNormalMode(diffReadyMsg{req: req})
+
+	if got := newM.viewport.YOffset(); got != offset {
+		t.Fatalf("expected diff prompt to preserve scroll offset %d, got %d", offset, got)
+	}
+}
+
+func TestHandleUpdateCheckMsg_PreservesUserScroll(t *testing.T) {
+	m := newTestModel()
+	offset := scrollViewportAwayFromBottom(t, &m)
+
+	m.handleUpdateCheckMsg(updateCheckMsg{latest: "9.9.9"})
+
+	if got := m.viewport.YOffset(); got != offset {
+		t.Fatalf("expected update notice to preserve scroll offset %d, got %d", offset, got)
 	}
 }
 

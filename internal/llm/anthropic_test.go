@@ -286,7 +286,7 @@ func TestAnthropicClient_StreamChat_IncludesCacheTokensInInputFootprint(t *testi
 
 func TestAnthropicClient_StreamChat_StreamError(t *testing.T) {
 	expectedErr := errors.New("network failure")
-	c := &AnthropicClient{model: "claude-3-haiku-20240307"}
+	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
 	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
 		return &mockAnthropicStream{err: expectedErr}
 	}
@@ -305,6 +305,46 @@ func TestAnthropicClient_StreamChat_StreamError(t *testing.T) {
 
 	if receivedErr == nil {
 		t.Fatal("expected error event")
+	}
+}
+
+func TestAnthropicClient_StreamChat_RetriesOnRetryableError(t *testing.T) {
+	const testMaxRetries = 2
+	expectedErr := errors.New("network failure")
+	callCount := 0
+	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: testMaxRetries}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		callCount++
+		return &mockAnthropicStream{err: expectedErr}
+	}
+
+	eventCh, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var retryEvents []StreamEvent
+	var receivedErr error
+	for event := range eventCh {
+		switch event.Type {
+		case StreamEventTypeRetry:
+			retryEvents = append(retryEvents, event)
+		case StreamEventTypeError:
+			receivedErr = event.Error
+		}
+	}
+
+	if callCount != testMaxRetries {
+		t.Fatalf("expected %d stream calls, got %d", testMaxRetries, callCount)
+	}
+	if len(retryEvents) != testMaxRetries-1 {
+		t.Fatalf("expected %d retry events, got %d", testMaxRetries-1, len(retryEvents))
+	}
+	if retryEvents[0].Attempt != 1 {
+		t.Fatalf("expected retry attempt 1, got %d", retryEvents[0].Attempt)
+	}
+	if receivedErr == nil {
+		t.Fatal("expected final error event")
 	}
 }
 

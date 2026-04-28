@@ -49,6 +49,7 @@ type AnthropicClient struct {
 	client         anthropic.Client
 	model          string
 	thinkingEffort string
+	maxRetries     int
 	streamImpl     anthropicStreamFactory
 }
 
@@ -66,6 +67,7 @@ func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
 		client:         client,
 		model:          cfg.Model,
 		thinkingEffort: cfg.ThinkingEffort,
+		maxRetries:     retryCount(cfg.MaxRetries),
 	}
 	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
 		return &sdkAnthropicStream{stream: c.client.Messages.NewStreaming(ctx, params)}
@@ -127,6 +129,36 @@ func toAnthropicTools(registry *tools.Registry) []anthropic.ToolUnionParam {
 		return nil
 	}
 	return result
+}
+
+func (c *AnthropicClient) collectTurnWithRetry(
+	ctx context.Context,
+	params anthropic.MessageNewParams,
+	eventCh chan<- StreamEvent,
+) ([]anthropic.ContentBlockParamUnion, []toolUseEntry, *TokenUsage, error) {
+	maxRetries := retryCount(c.maxRetries)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		assistantBlocks, toolUses, usage, err := c.collectTurn(ctx, params, eventCh)
+		if err == nil {
+			return assistantBlocks, toolUses, usage, nil
+		}
+		if !isRetryableError(err) || attempt == maxRetries {
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+			return nil, nil, nil, err
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		slog.Debug("LLM stream error, retrying", "attempt", attempt, "maxRetries", maxRetries, "backoff", backoff, "error", err)
+		eventCh <- StreamEvent{Type: StreamEventTypeRetry, Error: err, Attempt: attempt}
+
+		select {
+		case <-ctx.Done():
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
+			return nil, nil, nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return nil, nil, nil, nil
 }
 
 func (c *AnthropicClient) collectTurn(
@@ -319,9 +351,8 @@ func (c *AnthropicClient) StreamChat(
 				params.Tools = anthropicTools
 			}
 
-			assistantBlocks, toolUses, usage, err := c.collectTurn(ctx, params, eventCh)
+			assistantBlocks, toolUses, usage, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
-				eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
 				return
 			}
 

@@ -80,9 +80,10 @@ func TestGenkitClient_StreamChat_Success(t *testing.T) {
 
 func TestGenkitClient_StreamChat_Error(t *testing.T) {
 	client := &GenkitClient{
-		g:        &genkit.Genkit{},
-		provider: Provider(config.ProviderGoogleAI),
-		model:    "googleai/gemini-pro",
+		g:          &genkit.Genkit{},
+		provider:   Provider(config.ProviderGoogleAI),
+		model:      "googleai/gemini-pro",
+		maxRetries: 1,
 	}
 
 	expectedErr := errors.New("API error")
@@ -115,6 +116,54 @@ func TestGenkitClient_StreamChat_Error(t *testing.T) {
 		t.Error("expected error event, but didn't receive one")
 	}
 
+	if receivedErr != expectedErr {
+		t.Errorf("expected error %v, got %v", expectedErr, receivedErr)
+	}
+}
+
+func TestGenkitClient_StreamChat_RetriesOnRetryableError(t *testing.T) {
+	const testMaxRetries = 2
+	expectedErr := errors.New("API error")
+	callCount := 0
+	client := &GenkitClient{
+		g:          &genkit.Genkit{},
+		provider:   Provider(config.ProviderGoogleAI),
+		model:      "googleai/gemini-pro",
+		maxRetries: testMaxRetries,
+	}
+
+	client.streamImpl = func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error] {
+		callCount++
+		return func(yield func(*ai.ModelStreamValue, error) bool) {
+			yield(nil, expectedErr)
+		}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "Hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var retryEvents []StreamEvent
+	var receivedErr error
+	for event := range eventCh {
+		switch event.Type {
+		case StreamEventTypeRetry:
+			retryEvents = append(retryEvents, event)
+		case StreamEventTypeError:
+			receivedErr = event.Error
+		}
+	}
+
+	if callCount != testMaxRetries {
+		t.Fatalf("expected %d stream calls, got %d", testMaxRetries, callCount)
+	}
+	if len(retryEvents) != testMaxRetries-1 {
+		t.Fatalf("expected %d retry events, got %d", testMaxRetries-1, len(retryEvents))
+	}
+	if retryEvents[0].Attempt != 1 {
+		t.Fatalf("expected retry attempt 1, got %d", retryEvents[0].Attempt)
+	}
 	if receivedErr != expectedErr {
 		t.Errorf("expected error %v, got %v", expectedErr, receivedErr)
 	}

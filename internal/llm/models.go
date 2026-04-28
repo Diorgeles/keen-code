@@ -14,6 +14,7 @@ type ClientConfig struct {
 	Model          string
 	ThinkingEffort string
 	BaseURL        string
+	MaxRetries     int
 }
 
 func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {

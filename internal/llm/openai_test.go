@@ -502,8 +502,9 @@ func TestIsRetryableError(t *testing.T) {
 
 func TestOpenAICompatibleClient_StreamChat_RetriesOnRetryableError(t *testing.T) {
 	client := &OpenAICompatibleClient{
-		provider: Provider(config.ProviderDeepSeek),
-		model:    "deepseek-chat",
+		provider:   Provider(config.ProviderDeepSeek),
+		model:      "deepseek-chat",
+		maxRetries: 3,
 	}
 
 	callCount := 0

@@ -83,8 +83,9 @@ func TestNewOpenAIResponsesClient_CustomBaseURL(t *testing.T) {
 
 func TestOpenAIResponsesClient_StreamChat_ToolLoop(t *testing.T) {
 	client := &OpenAIResponsesClient{
-		provider: Provider(config.ProviderOpenAI),
-		model:    "gpt-5.4",
+		provider:   Provider(config.ProviderOpenAI),
+		model:      "gpt-5.4",
+		maxRetries: 2,
 	}
 
 	callCount := 0
@@ -158,9 +159,11 @@ func TestOpenAIResponsesClient_StreamChat_ToolLoop(t *testing.T) {
 }
 
 func TestOpenAIResponsesClient_StreamChat_ErrorEvent(t *testing.T) {
+	const testMaxRetries = 2
 	client := &OpenAIResponsesClient{
-		provider: Provider(config.ProviderOpenAI),
-		model:    "gpt-5.4",
+		provider:   Provider(config.ProviderOpenAI),
+		model:      "gpt-5.4",
+		maxRetries: testMaxRetries,
 	}
 
 	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
@@ -197,8 +200,8 @@ func TestOpenAIResponsesClient_StreamChat_ErrorEvent(t *testing.T) {
 	if !hasError {
 		t.Fatal("expected error event")
 	}
-	if streamed.String() != "Hello" {
-		t.Fatalf("expected streamed content before error, got %q", streamed.String())
+	if streamed.String() != strings.Repeat("Hello", testMaxRetries) {
+		t.Fatalf("expected streamed content from each retry before error, got %q", streamed.String())
 	}
 	if !strings.Contains(errorMsg, "Rate limit exceeded") {
 		t.Fatalf("expected error message to contain 'Rate limit exceeded', got %q", errorMsg)
@@ -210,8 +213,9 @@ func TestOpenAIResponsesClient_StreamChat_ErrorEvent(t *testing.T) {
 
 func TestOpenAIResponsesClient_StreamChat_ErrorEventEmptyMessage(t *testing.T) {
 	client := &OpenAIResponsesClient{
-		provider: Provider(config.ProviderOpenAI),
-		model:    "gpt-5.4",
+		provider:   Provider(config.ProviderOpenAI),
+		model:      "gpt-5.4",
+		maxRetries: 1,
 	}
 
 	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {

@@ -29,6 +29,7 @@ const openAICodexBaseURL = "https://chatgpt.com/backend-api/codex/"
 type OpenAICodexClient struct {
 	model              string
 	thinkingEffort     string
+	maxRetries         int
 	client             openai.Client
 	responseStreamImpl responseStreamFactory
 	authManager        *auth.OAuthManager
@@ -43,6 +44,7 @@ func NewOpenAICodexClient(cfg *ClientConfig) (*OpenAICodexClient, error) {
 	c := &OpenAICodexClient{
 		model:          cfg.Model,
 		thinkingEffort: cfg.ThinkingEffort,
+		maxRetries:     retryCount(cfg.MaxRetries),
 		client:         openai.NewClient(option.WithBaseURL(openAICodexBaseURL), option.WithHTTPClient(newCodexHTTPClient())),
 		authManager:    auth.NewOAuthManager(nil),
 		userAgent:      fmt.Sprintf("keen-code (%s; %s)", runtime.GOOS, runtime.GOARCH),
@@ -93,12 +95,8 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 				params.Tools = responseTools
 			}
 
-			completed, streamedContent, toolCalls, err := c.collectTurn(ctx, params, eventCh)
+			completed, streamedContent, toolCalls, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
-				eventCh <- StreamEvent{
-					Type:  StreamEventTypeError,
-					Error: err,
-				}
 				return
 			}
 			if completed == nil {
@@ -148,6 +146,36 @@ func codexInstructionsAndInput(messages []Message) (string, []responses.Response
 		inputMessages = append(inputMessages, m)
 	}
 	return strings.Join(instructions, "\n\n"), toOpenAIResponseInput(inputMessages)
+}
+
+func (c *OpenAICodexClient) collectTurnWithRetry(
+	ctx context.Context,
+	params responses.ResponseNewParams,
+	eventCh chan<- StreamEvent,
+) (*responses.Response, string, []responses.ResponseFunctionToolCall, error) {
+	maxRetries := retryCount(c.maxRetries)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		completed, streamedContent, toolCalls, err := c.collectTurn(ctx, params, eventCh)
+		if err == nil {
+			return completed, streamedContent, toolCalls, nil
+		}
+		if !isRetryableError(err) || attempt == maxRetries {
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+			return nil, "", nil, err
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		slog.Debug("LLM stream error, retrying", "attempt", attempt, "maxRetries", maxRetries, "backoff", backoff, "error", err)
+		eventCh <- StreamEvent{Type: StreamEventTypeRetry, Error: err, Attempt: attempt}
+
+		select {
+		case <-ctx.Done():
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
+			return nil, "", nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return nil, "", nil, nil
 }
 
 func (c *OpenAICodexClient) collectTurn(
@@ -259,7 +287,23 @@ func formatCodexStreamError(err error) error {
 	if apiErr.Param != "" {
 		parts = append(parts, "param="+apiErr.Param)
 	}
-	return fmt.Errorf("OpenAI Codex API error: %s", strings.Join(parts, ": "))
+	return codexStreamError{
+		message: fmt.Sprintf("OpenAI Codex API error: %s", strings.Join(parts, ": ")),
+		err:     err,
+	}
+}
+
+type codexStreamError struct {
+	message string
+	err     error
+}
+
+func (e codexStreamError) Error() string {
+	return e.message
+}
+
+func (e codexStreamError) Unwrap() error {
+	return e.err
 }
 
 func readCodexAPIErrorResponseBody(apiErr *openai.Error) string {

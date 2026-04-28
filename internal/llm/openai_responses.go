@@ -51,6 +51,7 @@ type OpenAIResponsesClient struct {
 	provider           Provider
 	model              string
 	thinkingEffort     string
+	maxRetries         int
 	client             openai.Client
 	responseStreamImpl responseStreamFactory
 }
@@ -72,6 +73,7 @@ func NewOpenAIResponsesClient(cfg *ClientConfig) (*OpenAIResponsesClient, error)
 		provider:       cfg.Provider,
 		model:          cfg.Model,
 		thinkingEffort: cfg.ThinkingEffort,
+		maxRetries:     retryCount(cfg.MaxRetries),
 		client:         client,
 	}
 	c.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
@@ -171,12 +173,8 @@ func (c *OpenAIResponsesClient) StreamChat(
 				params.PreviousResponseID = param.NewOpt(previousResponseID)
 			}
 
-			completed, streamedContent, toolCalls, err := c.collectTurn(ctx, params, eventCh)
+			completed, streamedContent, toolCalls, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
-				eventCh <- StreamEvent{
-					Type:  StreamEventTypeError,
-					Error: err,
-				}
 				return
 			}
 			if completed == nil {
@@ -210,6 +208,36 @@ func (c *OpenAIResponsesClient) StreamChat(
 	}()
 
 	return eventCh, nil
+}
+
+func (c *OpenAIResponsesClient) collectTurnWithRetry(
+	ctx context.Context,
+	params responses.ResponseNewParams,
+	eventCh chan<- StreamEvent,
+) (*responses.Response, string, []responses.ResponseFunctionToolCall, error) {
+	maxRetries := retryCount(c.maxRetries)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		completed, streamedContent, toolCalls, err := c.collectTurn(ctx, params, eventCh)
+		if err == nil {
+			return completed, streamedContent, toolCalls, nil
+		}
+		if !isRetryableError(err) || attempt == maxRetries {
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+			return nil, "", nil, err
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		slog.Debug("LLM stream error, retrying", "attempt", attempt, "maxRetries", maxRetries, "backoff", backoff, "error", err)
+		eventCh <- StreamEvent{Type: StreamEventTypeRetry, Error: err, Attempt: attempt}
+
+		select {
+		case <-ctx.Done():
+			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
+			return nil, "", nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return nil, "", nil, nil
 }
 
 func (c *OpenAIResponsesClient) collectTurn(

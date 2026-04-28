@@ -56,6 +56,7 @@ type OpenAICompatibleClient struct {
 	provider       Provider
 	model          string
 	thinkingEffort string
+	maxRetries     int
 	client         openai.Client
 	streamImpl     streamFactory
 }
@@ -79,6 +80,7 @@ func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, erro
 		provider:       cfg.Provider,
 		model:          cfg.Model,
 		thinkingEffort: cfg.ThinkingEffort,
+		maxRetries:     retryCount(cfg.MaxRetries),
 		client:         client,
 	}
 	c.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
@@ -175,7 +177,14 @@ func emitChunk(eventCh chan<- StreamEvent, content string) {
 	}
 }
 
-const maxRetries = 10
+const defaultMaxRetries = 10
+
+func retryCount(maxRetries int) int {
+	if maxRetries <= 0 {
+		return defaultMaxRetries
+	}
+	return maxRetries
+}
 
 func isRetryableError(err error) bool {
 	if err == nil {
@@ -301,6 +310,7 @@ func (c *OpenAICompatibleClient) collectTurnWithRetry(
 	params openai.ChatCompletionNewParams,
 	eventCh chan<- StreamEvent,
 ) (openai.ChatCompletionMessage, string, string, bool, openai.CompletionUsage, error) {
+	maxRetries := retryCount(c.maxRetries)
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurn(ctx, params, eventCh)
 		if err == nil {
