@@ -58,7 +58,6 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 	if m.isCompacting {
 		return m.handleCompactionDone()
 	}
-	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	m.showSpinner = false
 	m.clearStreamCancel()
@@ -84,11 +83,37 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 	return *m, nil
 }
 
+func (m *replModel) handleLLMIncomplete(err error) (replModel, tea.Cmd) {
+	segments := cloneStreamSegments(m.streamHandler.segments)
+	partialResponse := m.streamHandler.GetResponse()
+	m.showSpinner = false
+	m.clearStreamCancel()
+	turnMemory := m.consumeTurnMemory()
+	m.adjustTextareaHeight()
+	pendingLines, errMsg := m.streamHandler.HandleError(err)
+	assistantMessage := llm.Message{
+		Role:       llm.RoleAssistant,
+		Content:    partialResponse,
+		TurnMemory: turnMemory,
+	}
+	if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, false, errMsg); persistErr != nil {
+		m.handleSessionPersistenceError(persistErr)
+	}
+	for _, line := range pendingLines {
+		m.output.AddLine(line)
+	}
+	if err != nil && !errors.Is(err, context.Canceled) {
+		m.output.AddError(errMsg, repltheme.ErrorStyle)
+	}
+	m.updateViewportContent()
+	m.scrollToBottomIfFollowing()
+	return *m, nil
+}
+
 func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	if m.isCompacting {
 		return m.handleCompactionError(err)
 	}
-	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	partialResponse := m.streamHandler.GetResponse()
 	m.showSpinner = false
@@ -131,7 +156,6 @@ func (m *replModel) handleLLMRetry(err error, attempt int) (replModel, tea.Cmd) 
 }
 
 func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
-	m.streamHandler.finalizeAssistantContent()
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	responseLines, summary := m.streamHandler.HandleDone()
 	m.isCompacting = false
@@ -443,33 +467,25 @@ func (m *replModel) interruptStream(message string) {
 
 	m.showSpinner = false
 
-	m.streamHandler.finalizeAssistantContent()
-	partialResponse := m.streamHandler.GetResponse()
 	segments := cloneStreamSegments(m.streamHandler.segments)
-	interruptedMessage := "[Response interrupted by user]"
+	partialResponse := m.streamHandler.GetResponse()
 	turnMemory := m.consumeTurnMemory()
-
-	if partialResponse != "" {
-		interruptedMessage = partialResponse + "\n\n[Response interrupted by user]"
-	}
-	m.appState.AppendMessage(llm.Message{
-		Role:       llm.RoleAssistant,
-		Content:    interruptedMessage,
-		TurnMemory: turnMemory,
-	})
-	if err := m.sessions.appendAssistantTurn(segments, llm.Message{
-		Role:       llm.RoleAssistant,
-		Content:    interruptedMessage,
-		TurnMemory: turnMemory,
-	}, true, ""); err != nil {
-		m.handleSessionPersistenceError(err)
-	}
 
 	for _, line := range m.streamHandler.HandleInterrupt() {
 		m.output.AddLine(line)
 	}
 	m.output.AddStyledLine("\n  "+message, repltheme.InterruptedStyle)
 	m.output.AddEmptyLine()
+
+	assistantMessage := llm.Message{
+		Role:       llm.RoleAssistant,
+		Content:    partialResponse,
+		TurnMemory: turnMemory,
+	}
+	if persistErr := m.sessions.appendAssistantTurn(segments, assistantMessage, true, ""); persistErr != nil {
+		m.handleSessionPersistenceError(persistErr)
+	}
+
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.scrollToBottomIfFollowing()
@@ -570,7 +586,7 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 	if m.streamHandler == nil || !m.streamHandler.IsActive() {
 		switch msg.(type) {
-		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmErrorMsg, llmRetryMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
+		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmIncompleteMsg, llmErrorMsg, llmRetryMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
 			return m, nil, true
 		}
 	}
@@ -587,6 +603,9 @@ func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 		return updated, cmd, true
 	case llmDoneMsg:
 		updated, cmd := m.handleLLMDone()
+		return updated, cmd, true
+	case llmIncompleteMsg:
+		updated, cmd := m.handleLLMIncomplete(msg.err)
 		return updated, cmd, true
 	case llmErrorMsg:
 		updated, cmd := m.handleLLMError(msg.err)

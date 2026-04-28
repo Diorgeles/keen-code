@@ -1,5 +1,21 @@
 # TurnMemory In Keen
 
+## Table of Contents
+
+- [The Idea](#the-idea)
+- [How To Think About It](#how-to-think-about-it)
+- [Lifecycle Of A Turn](#lifecycle-of-a-turn)
+- [Why Keen Does This](#why-keen-does-this)
+- [What The Next Turn Actually Gets](#what-the-next-turn-actually-gets)
+- [How This Differs From Other Coding Agents](#how-this-differs-from-other-coding-agents)
+- [What Is Distinctive About Keen's Approach](#what-is-distinctive-about-keens-approach)
+- [Pros](#pros)
+- [Cons](#cons)
+- [When This Design Works Well](#when-this-design-works-well)
+- [When Another Design Might Work Better](#when-another-design-might-work-better)
+- [Bottom Line](#bottom-line)
+- [Assistant Turn Reliability](#assistant-turn-reliability)
+
 ## The Idea
 
 `TurnMemory` addresses a simple problem: a coding agent needs detailed tool state while it is actively working, but keeping every tool call forever makes later turns noisy, expensive, and harder to reason about.
@@ -15,13 +31,7 @@ In practice, the current turn may involve many tool calls, many tool results, an
 
 ## How To Think About It
 
-`TurnMemory` is not a transcript.
-
-It is not a full execution log.
-
-It is not a hidden chain of thought.
-
-It is closer to a short note about the turn: "what changed during this turn that the next turn may need to know?"
+`TurnMemory` is not a transcript. It is not a full execution log, nor a hidden chain of thought. It is closer to a short note about the turn: "what changed during this turn that the next turn may need to know?"
 
 Today that summary is intentionally narrow. It remembers facts such as:
 
@@ -38,10 +48,11 @@ The model to keep in mind is:
 2. Keen gives the model the conversation history it has retained so far.
 3. Inside that turn, the model may call tools repeatedly.
 4. Those raw tool calls are available while the turn is still running.
-5. When the turn finishes, Keen summarizes the useful state into `TurnMemory`.
-6. The raw tool-call trace does not become part of the next-turn conversation state.
+5. When the turn finishes successfully, Keen summarizes the useful state into `TurnMemory`.
+6. When the turn fails mid-loop, Keen saves the accumulated turn data as pending state (see "Assistant Turn Reliability" below).
+7. On normal completion, the raw tool-call trace does not become part of the next-turn conversation state.
 
-This means tool calls matter during execution, but they are temporary as long-term memory.
+This means tool calls matter during execution, but they are temporary as long-term memory — unless the turn fails, in which case they are preserved for recovery.
 
 ## Why Keen Does This
 
@@ -67,6 +78,7 @@ Instead, the next turn gets:
 - prior user messages
 - prior assistant responses
 - the compact turn-memory summary from earlier assistant turns
+- any pending turn state from a prior failed turn (injected in provider-native format)
 
 That matters because it changes the agent's behavior. Keen is implicitly saying:
 
@@ -74,8 +86,9 @@ That matters because it changes the agent's behavior. Keen is implicitly saying:
 - if a search result is needed again, re-run the search
 - if a file was changed, remember that it changed
 - if a shell command failed, remember that it failed
+- if the prior turn failed mid-loop, resume from where it left off
 
-So continuity is based on retained outcomes, not retained execution traces.
+So continuity is based on retained outcomes, not retained execution traces — with the exception of failed turns, where the full in-progress transcript is preserved for recovery.
 
 ## How This Differs From Other Coding Agents
 
@@ -177,4 +190,40 @@ Inside a turn, Keen allows rich tool-driven execution.
 
 Across turns, Keen keeps only a small summary of the tool execution.
 
+If a turn fails, Keen preserves the full in-progress transcript as pending state so the model can resume on the next attempt — but that state is temporary and in-memory only.
+
 Compared with many other coding agents, Keen is more conservative about what deserves durable memory. The upside is cleaner context and clearer continuity. The downside is that some useful history is discarded.
+
+## Assistant Turn Reliability
+
+### The Problem
+
+A single assistant turn can involve many loop iterations — reading files, running commands, editing code — before producing a final response. If the turn fails partway through (API error, empty response, max tool turns exhausted, or user interruption), all of that accumulated work is lost. The local variables holding the turn transcript are discarded when the goroutine exits. On the next user message, the model has no memory of the work it already performed and starts over from scratch.
+
+### The Solution: Pending Turn State
+
+Each LLM client stores a pending state field in the provider's native message format. When a turn ends abnormally and tool work has accumulated, the client saves the delta (everything beyond the initial message conversion) to this field. On the next `StreamChat` call, the pending state is injected into the conversation — spliced in before the new user message — so the model sees its prior work and can resume.
+
+### Terminal States
+
+A turn can end in three ways from the REPL's perspective:
+
+| Event | Meaning | Pending state action |
+|---|---|---|
+| `Done` | Normal completion | Cleared (or never saved) |
+| `Incomplete` | Turn ended abnormally but work was done | Saved for next call |
+| `Error` | Turn failed before any tool work accumulated | Not saved |
+
+The `Incomplete` event is the key addition. It tells the REPL that work happened but the turn did not finish — so the REPL should not append anything to `appState.messages` (the pending state on the client already has the full transcript).
+
+### Characteristics
+
+- **In-memory only.** Pending state does not survive process crashes or get written to the session file.
+- **Provider-native format.** Each client stores messages in its own type, avoiding lossy conversion.
+- **No re-execution.** Tools have side effects; the state captures outputs, not re-execution intent.
+- **Sequential safety.** The REPL is single-threaded with respect to `StreamChat` calls, so no synchronization is needed.
+- **Cleared on success.** If the recovery turn completes normally, pending state is cleared and the full assistant response goes into `appState.messages` as usual.
+
+### Why Not Just Save to appState?
+
+Saving the partial turn transcript into `appState.messages` would mean converting provider-native messages into the generic `Message` type and back — a lossy round-trip. It would also mean `appState` carries incomplete turn data that is not a proper assistant response. Keeping the state on the client avoids both problems.

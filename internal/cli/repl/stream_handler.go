@@ -116,7 +116,6 @@ func (sh *StreamHandler) HandleDiff(lines []tools.EditDiffLine) {
 }
 
 func (sh *StreamHandler) HandleDone() ([]string, string) {
-	sh.finalizeAssistantContent()
 	response := sh.currentResponse
 	lines := sh.renderTranscriptLines()
 	sh.resetState()
@@ -124,14 +123,15 @@ func (sh *StreamHandler) HandleDone() ([]string, string) {
 }
 
 func (sh *StreamHandler) HandleError(err error) ([]string, string) {
-	sh.finalizeAssistantContent()
 	lines := sh.renderTranscriptLines()
 	sh.resetState()
+	if err == nil {
+		return lines, ""
+	}
 	return lines, err.Error()
 }
 
 func (sh *StreamHandler) HandleInterrupt() []string {
-	sh.finalizeAssistantContent()
 	lines := sh.renderTranscriptLines()
 	sh.resetState()
 	return lines
@@ -169,9 +169,6 @@ func (sh *StreamHandler) ResetContent() {
 	sh.currentResponse = ""
 	sh.rawResponse = ""
 	sh.segments = make([]streamSegment, 0)
-}
-
-func (sh *StreamHandler) finalizeAssistantContent() {
 }
 
 func (sh *StreamHandler) View(width int) string {

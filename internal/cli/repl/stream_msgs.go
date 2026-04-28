@@ -9,6 +9,9 @@ import (
 type llmChunkMsg string
 type llmReasoningChunkMsg string
 type llmDoneMsg struct{}
+type llmIncompleteMsg struct {
+	err error
+}
 type llmErrorMsg struct {
 	err error
 }

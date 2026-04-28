@@ -70,6 +70,7 @@ const (
 	StreamEventTypeToolEnd        StreamEventType = "tool_end"
 	StreamEventTypeUsage          StreamEventType = "usage"
 	StreamEventTypeRetry          StreamEventType = "retry"
+	StreamEventTypeIncomplete     StreamEventType = "incomplete"
 )
 
 type TokenUsage struct {

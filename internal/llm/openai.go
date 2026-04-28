@@ -59,6 +59,7 @@ type OpenAICompatibleClient struct {
 	maxRetries     int
 	client         openai.Client
 	streamImpl     streamFactory
+	pendingState   []openai.ChatCompletionMessageParamUnion
 }
 
 func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, error) {
@@ -317,7 +318,6 @@ func (c *OpenAICompatibleClient) collectTurnWithRetry(
 			return message, reasoningContent, streamedContent, hasChoice, usage, nil
 		}
 		if !isRetryableError(err) || attempt == maxRetries {
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
 			return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, err
 		}
 
@@ -327,12 +327,76 @@ func (c *OpenAICompatibleClient) collectTurnWithRetry(
 
 		select {
 		case <-ctx.Done():
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
 			return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, ctx.Err()
 		case <-time.After(backoff):
 		}
 	}
 	return openai.ChatCompletionMessage{}, "", "", false, openai.CompletionUsage{}, nil
+}
+
+func (c *OpenAICompatibleClient) injectPendingState(oaiMessages []openai.ChatCompletionMessageParamUnion) ([]openai.ChatCompletionMessageParamUnion, []openai.ChatCompletionMessageParamUnion) {
+	if len(c.pendingState) == 0 {
+		return oaiMessages, nil
+	}
+
+	injectedPending := append([]openai.ChatCompletionMessageParamUnion(nil), c.pendingState...)
+
+	slog.Debug("Injecting pending state", "pending_messages", len(c.pendingState), "total_messages", len(oaiMessages))
+	if prettyJSON, err := json.MarshalIndent(c.pendingState, "", "  "); err == nil {
+		slog.Debug("Pending state contents:\n" + string(prettyJSON))
+	}
+
+	if len(oaiMessages) > 0 {
+		last := oaiMessages[len(oaiMessages)-1]
+		oaiMessages = append(oaiMessages[:len(oaiMessages)-1], injectedPending...)
+		oaiMessages = append(oaiMessages, last)
+	} else {
+		oaiMessages = append(oaiMessages, injectedPending...)
+	}
+	c.pendingState = nil
+	return oaiMessages, injectedPending
+}
+
+func (c *OpenAICompatibleClient) buildChatParams(oaiMessages []openai.ChatCompletionMessageParamUnion, oaiTools []openai.ChatCompletionToolParam) openai.ChatCompletionNewParams {
+	params := openai.ChatCompletionNewParams{
+		Model:    c.model,
+		Messages: oaiMessages,
+		StreamOptions: openai.ChatCompletionStreamOptionsParam{
+			IncludeUsage: openai.Bool(true),
+		},
+	}
+	if len(oaiTools) > 0 {
+		params.Tools = oaiTools
+	}
+	if c.provider == Provider(config.ProviderDeepSeek) && c.thinkingEffort != "" {
+		if c.thinkingEffort == "off" {
+			params.SetExtraFields(map[string]any{
+				"thinking": map[string]any{
+					"type": "disabled",
+				},
+			})
+		} else {
+			params.ReasoningEffort = shared.ReasoningEffort(c.thinkingEffort)
+			params.SetExtraFields(map[string]any{
+				"thinking": map[string]any{
+					"type": "enabled",
+				},
+			})
+		}
+	}
+	if c.provider == Provider(config.ProviderZAI) && c.thinkingEffort != "" {
+		params.SetExtraFields(map[string]any{
+			"thinking": map[string]any{
+				"type": c.thinkingEffort,
+			},
+		})
+	}
+	return params
+}
+
+func (c *OpenAICompatibleClient) exitIncomplete(eventCh chan<- StreamEvent, oaiMessages []openai.ChatCompletionMessageParamUnion, turnStartLen int, injectedPending []openai.ChatCompletionMessageParamUnion, err error) {
+	c.savePendingIfAccumulated(oaiMessages, turnStartLen, injectedPending)
+	c.emitTerminalEvent(eventCh, oaiMessages, turnStartLen, injectedPending, err)
 }
 
 func (c *OpenAICompatibleClient) StreamChat(
@@ -346,53 +410,26 @@ func (c *OpenAICompatibleClient) StreamChat(
 		defer close(eventCh)
 
 		oaiMessages := toOpenAIMessages(messages)
+		oaiMessages, injectedPending := c.injectPendingState(oaiMessages)
+
+		turnStartLen := len(oaiMessages)
+
 		if prettyJSON, err := json.MarshalIndent(oaiMessages, "", "  "); err == nil {
 			slog.Debug("OpenAI messages", "messages", string(prettyJSON))
 		}
 		oaiTools := toOpenAITools(toolRegistry)
 
 		for range maxToolTurns {
-			params := openai.ChatCompletionNewParams{
-				Model:    c.model,
-				Messages: oaiMessages,
-				StreamOptions: openai.ChatCompletionStreamOptionsParam{
-					IncludeUsage: openai.Bool(true),
-				},
-			}
-			if len(oaiTools) > 0 {
-				params.Tools = oaiTools
-			}
-			if c.provider == Provider(config.ProviderDeepSeek) && c.thinkingEffort != "" {
-				if c.thinkingEffort == "off" {
-					params.SetExtraFields(map[string]any{
-						"thinking": map[string]any{
-							"type": "disabled",
-						},
-					})
-				} else {
-					params.ReasoningEffort = shared.ReasoningEffort(c.thinkingEffort)
-					params.SetExtraFields(map[string]any{
-						"thinking": map[string]any{
-							"type": "enabled",
-						},
-					})
-				}
-			}
-			if c.provider == Provider(config.ProviderZAI) && c.thinkingEffort != "" {
-				params.SetExtraFields(map[string]any{
-					"thinking": map[string]any{
-						"type": c.thinkingEffort,
-					},
-				})
-			}
+			params := c.buildChatParams(oaiMessages, oaiTools)
 
 			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
+				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, err)
 				return
 			}
 
 			if !hasChoice {
-				eventCh <- StreamEvent{Type: StreamEventTypeDone}
+				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil)
 				return
 			}
 			if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
@@ -423,10 +460,35 @@ func (c *OpenAICompatibleClient) StreamChat(
 			}
 		}
 
-		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+		c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil)
 	}()
 
 	return eventCh, nil
+}
+
+func (c *OpenAICompatibleClient) savePendingIfAccumulated(oaiMessages []openai.ChatCompletionMessageParamUnion, turnStartLen int, injectedPending []openai.ChatCompletionMessageParamUnion) {
+	if len(injectedPending) == 0 && len(oaiMessages) <= turnStartLen {
+		return
+	}
+
+	newDelta := []openai.ChatCompletionMessageParamUnion(nil)
+	if len(oaiMessages) > turnStartLen {
+		newDelta = oaiMessages[turnStartLen:]
+	}
+
+	c.pendingState = make([]openai.ChatCompletionMessageParamUnion, 0, len(injectedPending)+len(newDelta))
+	c.pendingState = append(c.pendingState, injectedPending...)
+	c.pendingState = append(c.pendingState, newDelta...)
+}
+
+func (c *OpenAICompatibleClient) emitTerminalEvent(eventCh chan<- StreamEvent, oaiMessages []openai.ChatCompletionMessageParamUnion, turnStartLen int, injectedPending []openai.ChatCompletionMessageParamUnion, err error) {
+	if len(injectedPending) > 0 || len(oaiMessages) > turnStartLen {
+		eventCh <- StreamEvent{Type: StreamEventTypeIncomplete, Error: err}
+	} else if err != nil {
+		eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+	} else {
+		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+	}
 }
 
 func (c *OpenAICompatibleClient) executeTools(

@@ -598,3 +598,304 @@ func TestOpenAICompatibleClient_StreamChat_NoRetryOnNonRetryableError(t *testing
 		t.Fatalf("expected 0 retry events, got %d", retryCount)
 	}
 }
+
+func TestOpenAICompatibleClient_PendingState_ErrorMidLoop(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:   Provider(config.ProviderDeepSeek),
+		model:      "deepseek-chat",
+		maxRetries: 1,
+	}
+
+	callCount := 0
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		callCount++
+		if callCount == 1 {
+			return &fakeChatStream{chunks: []openai.ChatCompletionChunk{makeToolCallChunk()}}
+		}
+		return &fakeChatStream{err: &openai.Error{StatusCode: 500}}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successToolOAI{}); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "read go.mod"},
+	}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasIncomplete bool
+	var incompleteErr error
+	for ev := range eventCh {
+		if ev.Type == StreamEventTypeIncomplete {
+			hasIncomplete = true
+			incompleteErr = ev.Error
+		}
+		if ev.Type == StreamEventTypeError {
+			t.Fatalf("expected incomplete, got error: %v", ev.Error)
+		}
+	}
+
+	if !hasIncomplete {
+		t.Fatal("expected incomplete event")
+	}
+	if incompleteErr == nil {
+		t.Fatal("expected error on incomplete event")
+	}
+	if len(client.pendingState) == 0 {
+		t.Fatal("expected pending state to be saved")
+	}
+}
+
+func TestOpenAICompatibleClient_PendingState_InjectedOnNextCall(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:   Provider(config.ProviderDeepSeek),
+		model:      "deepseek-chat",
+		maxRetries: 1,
+	}
+
+	callCount := 0
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		callCount++
+		if callCount == 1 {
+			return &fakeChatStream{chunks: []openai.ChatCompletionChunk{makeToolCallChunk()}}
+		}
+		if callCount == 2 {
+			return &fakeChatStream{err: &openai.Error{StatusCode: 500}}
+		}
+		return &fakeChatStream{chunks: []openai.ChatCompletionChunk{makeContentChunk("recovered")}}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successToolOAI{}); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
+
+	// First call: tool call succeeds, then API error on second iteration
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "read go.mod"},
+	}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if len(client.pendingState) == 0 {
+		t.Fatal("expected pending state after failed turn")
+	}
+	savedLen := len(client.pendingState)
+
+	// Second call: pending state should be injected, model recovers
+	var capturedParams openai.ChatCompletionNewParams
+	origStreamImpl := client.streamImpl
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		capturedParams = params
+		return origStreamImpl(ctx, params, opts...)
+	}
+
+	eventCh, err = client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "read go.mod"},
+		{Role: RoleUser, Content: "continue"},
+	}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasDone bool
+	var streamed strings.Builder
+	for ev := range eventCh {
+		switch ev.Type {
+		case StreamEventTypeDone:
+			hasDone = true
+		case StreamEventTypeChunk:
+			streamed.WriteString(ev.Content)
+		case StreamEventTypeError:
+			t.Fatalf("unexpected error: %v", ev.Error)
+		}
+	}
+
+	if !hasDone {
+		t.Fatal("expected done event on recovery")
+	}
+	if streamed.String() != "recovered" {
+		t.Fatalf("expected 'recovered', got %q", streamed.String())
+	}
+	if len(client.pendingState) != 0 {
+		t.Fatal("expected pending state to be cleared after injection")
+	}
+	// The injected messages should include the original user message + pending state + "continue"
+	// Original: [user:"read go.mod"] + pending (assistant+tool = savedLen) + [user:"continue"]
+	expectedMsgCount := 1 + savedLen + 1
+	if len(capturedParams.Messages) != expectedMsgCount {
+		t.Fatalf("expected %d messages after injection, got %d", expectedMsgCount, len(capturedParams.Messages))
+	}
+}
+
+func TestOpenAICompatibleClient_PendingState_PreservedWhenRecoveryFailsBeforeProgress(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:   Provider(config.ProviderDeepSeek),
+		model:      "deepseek-chat",
+		maxRetries: 1,
+		pendingState: []openai.ChatCompletionMessageParamUnion{
+			openai.ToolMessage("old result 1", "call_old_1"),
+			openai.ToolMessage("old result 2", "call_old_2"),
+		},
+	}
+
+	wantPending, err := json.Marshal(client.pendingState)
+	if err != nil {
+		t.Fatalf("marshal pending state: %v", err)
+	}
+
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		return &fakeChatStream{err: &openai.Error{StatusCode: 500}}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "read go.mod"},
+		{Role: RoleUser, Content: "continue"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasIncomplete bool
+	for ev := range eventCh {
+		switch ev.Type {
+		case StreamEventTypeIncomplete:
+			hasIncomplete = true
+		case StreamEventTypeError:
+			t.Fatalf("expected incomplete, got error: %v", ev.Error)
+		}
+	}
+
+	if !hasIncomplete {
+		t.Fatal("expected incomplete event")
+	}
+
+	gotPending, err := json.Marshal(client.pendingState)
+	if err != nil {
+		t.Fatalf("marshal saved pending state: %v", err)
+	}
+	if string(gotPending) != string(wantPending) {
+		t.Fatalf("expected pending state to be preserved\nwant: %s\n got: %s", wantPending, gotPending)
+	}
+}
+
+func TestOpenAICompatibleClient_PendingState_NoAccumulation_EmitsError(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider: Provider(config.ProviderDeepSeek),
+		model:    "deepseek-chat",
+	}
+
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		return &fakeChatStream{err: &openai.Error{StatusCode: 401}}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasError bool
+	for ev := range eventCh {
+		if ev.Type == StreamEventTypeError {
+			hasError = true
+		}
+		if ev.Type == StreamEventTypeIncomplete {
+			t.Fatal("expected error, not incomplete")
+		}
+	}
+
+	if !hasError {
+		t.Fatal("expected error event")
+	}
+	if len(client.pendingState) != 0 {
+		t.Fatal("expected no pending state when nothing accumulated")
+	}
+}
+
+func TestOpenAICompatibleClient_PendingState_EmptyResponseMidLoop(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:   Provider(config.ProviderDeepSeek),
+		model:      "deepseek-chat",
+		maxRetries: 1,
+	}
+
+	callCount := 0
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		callCount++
+		if callCount == 1 {
+			return &fakeChatStream{chunks: []openai.ChatCompletionChunk{makeToolCallChunk()}}
+		}
+		return &fakeChatStream{chunks: nil}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successToolOAI{}); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "read go.mod"},
+	}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasIncomplete bool
+	for ev := range eventCh {
+		if ev.Type == StreamEventTypeIncomplete {
+			hasIncomplete = true
+		}
+	}
+
+	if !hasIncomplete {
+		t.Fatal("expected incomplete event for empty response mid-loop")
+	}
+	if len(client.pendingState) == 0 {
+		t.Fatal("expected pending state to be saved")
+	}
+}
+
+func TestOpenAICompatibleClient_PendingState_ClearedOnSuccess(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider: Provider(config.ProviderDeepSeek),
+		model:    "deepseek-chat",
+		pendingState: []openai.ChatCompletionMessageParamUnion{
+			openai.ToolMessage("old result", "call_old"),
+		},
+	}
+
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		return &fakeChatStream{chunks: []openai.ChatCompletionChunk{makeContentChunk("hello")}}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "original"},
+		{Role: RoleUser, Content: "continue"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasDone bool
+	for ev := range eventCh {
+		if ev.Type == StreamEventTypeDone {
+			hasDone = true
+		}
+	}
+
+	if !hasDone {
+		t.Fatal("expected done event")
+	}
+	if len(client.pendingState) != 0 {
+		t.Fatal("expected pending state to be cleared after successful completion")
+	}
+}
