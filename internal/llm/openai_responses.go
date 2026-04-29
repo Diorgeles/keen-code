@@ -54,6 +54,7 @@ type OpenAIResponsesClient struct {
 	maxRetries         int
 	client             openai.Client
 	responseStreamImpl responseStreamFactory
+	pendingState       []responses.ResponseInputItemUnionParam
 }
 
 func NewOpenAIResponsesClient(cfg *ClientConfig) (*OpenAIResponsesClient, error) {
@@ -151,12 +152,14 @@ func (c *OpenAIResponsesClient) StreamChat(
 		defer close(eventCh)
 
 		input := toOpenAIResponseInput(messages)
+		input, replayedPendingInput := c.injectPendingState(input)
+		turnStartLen := len(input)
 		responseTools := toOpenAIResponseTools(toolRegistry)
-		previousResponseID := ""
 
 		for range maxToolTurns {
 			params := responses.ResponseNewParams{
 				Model: c.model,
+				Store: param.NewOpt(false),
 				Input: responses.ResponseNewParamsInputUnion{
 					OfInputItemList: input,
 				},
@@ -169,20 +172,17 @@ func (c *OpenAIResponsesClient) StreamChat(
 			if len(responseTools) > 0 {
 				params.Tools = responseTools
 			}
-			if previousResponseID != "" {
-				params.PreviousResponseID = param.NewOpt(previousResponseID)
-			}
 
 			completed, streamedContent, toolCalls, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
+				c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, err)
 				return
 			}
 			if completed == nil {
-				eventCh <- StreamEvent{Type: StreamEventTypeDone}
+				c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil)
 				return
 			}
 
-			previousResponseID = completed.ID
 			if completed.Usage.InputTokens > 0 || completed.Usage.OutputTokens > 0 {
 				eventCh <- StreamEvent{
 					Type: StreamEventTypeUsage,
@@ -201,13 +201,67 @@ func (c *OpenAIResponsesClient) StreamChat(
 				return
 			}
 
-			input = c.executeTools(ctx, toolCalls, toolRegistry, eventCh)
+			input = append(input, responseOutputInputs(completed.Output, toolCalls, streamedContent)...)
+			input = append(input, c.executeTools(ctx, toolCalls, toolRegistry, eventCh)...)
 		}
 
-		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+		c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil)
 	}()
 
 	return eventCh, nil
+}
+
+func (c *OpenAIResponsesClient) injectPendingState(input []responses.ResponseInputItemUnionParam) ([]responses.ResponseInputItemUnionParam, []responses.ResponseInputItemUnionParam) {
+	if len(c.pendingState) == 0 {
+		return input, nil
+	}
+
+	replayedPendingInput := append([]responses.ResponseInputItemUnionParam(nil), c.pendingState...)
+
+	slog.Debug("Injecting pending state", "pending_messages", len(c.pendingState), "total_messages", len(input))
+	if prettyJSON, err := json.MarshalIndent(c.pendingState, "", "  "); err == nil {
+		slog.Debug("Pending state contents:\n" + string(prettyJSON))
+	}
+
+	if len(input) > 0 {
+		last := input[len(input)-1]
+		input = append(input[:len(input)-1], replayedPendingInput...)
+		input = append(input, last)
+	} else {
+		input = append(input, replayedPendingInput...)
+	}
+	c.pendingState = nil
+	return input, replayedPendingInput
+}
+
+func (c *OpenAIResponsesClient) exitIncomplete(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, replayedPendingInput []responses.ResponseInputItemUnionParam, err error) {
+	c.savePendingIfAccumulated(input, turnStartLen, replayedPendingInput)
+	c.emitTerminalEvent(eventCh, input, turnStartLen, replayedPendingInput, err)
+}
+
+func (c *OpenAIResponsesClient) savePendingIfAccumulated(input []responses.ResponseInputItemUnionParam, turnStartLen int, replayedPendingInput []responses.ResponseInputItemUnionParam) {
+	if len(replayedPendingInput) == 0 && len(input) <= turnStartLen {
+		return
+	}
+
+	newDelta := []responses.ResponseInputItemUnionParam(nil)
+	if len(input) > turnStartLen {
+		newDelta = input[turnStartLen:]
+	}
+
+	c.pendingState = make([]responses.ResponseInputItemUnionParam, 0, len(replayedPendingInput)+len(newDelta))
+	c.pendingState = append(c.pendingState, replayedPendingInput...)
+	c.pendingState = append(c.pendingState, newDelta...)
+}
+
+func (c *OpenAIResponsesClient) emitTerminalEvent(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, replayedPendingInput []responses.ResponseInputItemUnionParam, err error) {
+	if len(replayedPendingInput) > 0 || len(input) > turnStartLen {
+		eventCh <- StreamEvent{Type: StreamEventTypeIncomplete, Error: err}
+	} else if err != nil {
+		eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+	} else {
+		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+	}
 }
 
 func (c *OpenAIResponsesClient) collectTurnWithRetry(
@@ -222,7 +276,6 @@ func (c *OpenAIResponsesClient) collectTurnWithRetry(
 			return completed, streamedContent, toolCalls, nil
 		}
 		if !isRetryableError(err) || attempt == maxRetries {
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
 			return nil, "", nil, err
 		}
 
@@ -232,7 +285,6 @@ func (c *OpenAIResponsesClient) collectTurnWithRetry(
 
 		select {
 		case <-ctx.Done():
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
 			return nil, "", nil, ctx.Err()
 		case <-time.After(backoff):
 		}
@@ -301,6 +353,68 @@ func (c *OpenAIResponsesClient) collectTurn(
 	}
 
 	return completed, streamedContent.String(), toolCalls, nil
+}
+
+func responseOutputInputs(output []responses.ResponseOutputItemUnion, fallbackToolCalls []responses.ResponseFunctionToolCall, fallbackText string) []responses.ResponseInputItemUnionParam {
+	result := make([]responses.ResponseInputItemUnionParam, 0, len(output)+len(fallbackToolCalls)+1)
+	seenMessage := false
+	seenToolCalls := make(map[string]bool)
+	for _, item := range output {
+		switch item.Type {
+		case "message":
+			message := item.AsMessage()
+			if len(message.Content) == 0 {
+				continue
+			}
+			messageParam := message.ToParam()
+			result = append(result, responses.ResponseInputItemUnionParam{OfOutputMessage: &messageParam})
+			seenMessage = true
+		case "function_call":
+			toolCall := item.AsFunctionCall()
+			result = append(result, responseFunctionCallInput(toolCall))
+			markResponseToolCallSeen(seenToolCalls, toolCall)
+		}
+	}
+	if !seenMessage && fallbackText != "" {
+		result = append(result, responses.ResponseInputItemParamOfMessage(fallbackText, responses.EasyInputMessageRoleAssistant))
+	}
+	for _, tc := range fallbackToolCalls {
+		if responseToolCallSeen(seenToolCalls, tc) {
+			continue
+		}
+		result = append(result, responseFunctionCallInput(tc))
+	}
+	return result
+}
+
+func responseFunctionCallInput(tc responses.ResponseFunctionToolCall) responses.ResponseInputItemUnionParam {
+	item := responses.ResponseInputItemParamOfFunctionCall(tc.Arguments, tc.CallID, tc.Name)
+	if tc.ID != "" {
+		item.OfFunctionCall.ID = param.NewOpt(tc.ID)
+	}
+	if tc.Status != "" {
+		item.OfFunctionCall.Status = tc.Status
+	}
+	return item
+}
+
+func markResponseToolCallSeen(seen map[string]bool, tc responses.ResponseFunctionToolCall) {
+	key := responseToolCallKey(tc)
+	if key != "" {
+		seen[key] = true
+	}
+}
+
+func responseToolCallSeen(seen map[string]bool, tc responses.ResponseFunctionToolCall) bool {
+	key := responseToolCallKey(tc)
+	return key != "" && seen[key]
+}
+
+func responseToolCallKey(tc responses.ResponseFunctionToolCall) string {
+	if tc.CallID != "" {
+		return tc.CallID
+	}
+	return tc.ID
 }
 
 func (c *OpenAIResponsesClient) executeTools(

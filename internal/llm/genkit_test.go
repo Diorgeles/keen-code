@@ -429,7 +429,12 @@ func TestGenkitClient_StreamChat_ToolInvocation(t *testing.T) {
 						Content: []*ai.Part{ai.NewTextPart("Tool result: processed: hello")},
 					},
 				}, nil)
-				yield(&ai.ModelStreamValue{Done: true}, nil)
+				yield(&ai.ModelStreamValue{
+					Done: true,
+					Response: &ai.ModelResponse{
+						Message: &ai.Message{Role: ai.RoleModel},
+					},
+				}, nil)
 			}
 		}
 	}
@@ -553,5 +558,324 @@ func TestGenkitClient_executeTools_Error(t *testing.T) {
 	}
 	if outputMap["error"] != "tool failed" {
 		t.Fatalf("expected error output 'tool failed', got %v", outputMap["error"])
+	}
+}
+
+func TestGenkitClient_PendingState_ErrorMidLoop(t *testing.T) {
+	callCount := 0
+	client := &GenkitClient{
+		g:          &genkit.Genkit{},
+		provider:   Provider(config.ProviderGoogleAI),
+		model:      "googleai/gemini-pro",
+		maxRetries: 1,
+	}
+
+	expectedErr := errors.New("API error")
+	client.streamImpl = func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error] {
+		return func(yield func(*ai.ModelStreamValue, error) bool) {
+			callCount++
+			if callCount == 1 {
+				yield(&ai.ModelStreamValue{
+					Done: true,
+					Response: &ai.ModelResponse{
+						Message: &ai.Message{
+							Role: ai.RoleModel,
+							Content: []*ai.Part{
+								ai.NewToolRequestPart(&ai.ToolRequest{
+									Name:  "success_tool",
+									Input: map[string]any{"message": "hi"},
+									Ref:   "ref-1",
+								}),
+							},
+						},
+					},
+				}, nil)
+			} else {
+				yield(nil, expectedErr)
+			}
+		}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successTool{}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "go"}}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasIncomplete bool
+	var incompleteErr error
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeIncomplete:
+			hasIncomplete = true
+			incompleteErr = ev.Error
+		case StreamEventTypeError:
+			t.Fatalf("expected incomplete, got error: %v", ev.Error)
+		}
+	}
+
+	if !hasIncomplete {
+		t.Fatal("expected incomplete event")
+	}
+	if incompleteErr == nil {
+		t.Fatal("expected error on incomplete event")
+	}
+	if len(client.pendingState) == 0 {
+		t.Fatal("expected pending state to be saved")
+	}
+	if len(client.pendingState) != 2 {
+		t.Fatalf("expected 2 pending messages (model + tool), got %d", len(client.pendingState))
+	}
+	if client.pendingState[0].Role != ai.RoleModel {
+		t.Fatalf("expected first pending message to be model role, got %q", client.pendingState[0].Role)
+	}
+	if client.pendingState[1].Role != ai.RoleTool {
+		t.Fatalf("expected second pending message to be tool role, got %q", client.pendingState[1].Role)
+	}
+}
+
+func TestGenkitClient_PendingState_InjectedOnNextCall(t *testing.T) {
+	callCount := 0
+	var capturedOpts [][]ai.GenerateOption
+	client := &GenkitClient{
+		g:          &genkit.Genkit{},
+		provider:   Provider(config.ProviderGoogleAI),
+		model:      "googleai/gemini-pro",
+		maxRetries: 1,
+	}
+
+	expectedErr := errors.New("API error")
+	client.streamImpl = func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error] {
+		return func(yield func(*ai.ModelStreamValue, error) bool) {
+			callCount++
+			capturedOpts = append(capturedOpts, opts)
+			switch callCount {
+			case 1:
+				yield(&ai.ModelStreamValue{
+					Done: true,
+					Response: &ai.ModelResponse{
+						Message: &ai.Message{
+							Role: ai.RoleModel,
+							Content: []*ai.Part{
+								ai.NewToolRequestPart(&ai.ToolRequest{
+									Name:  "success_tool",
+									Input: map[string]any{"message": "hi"},
+									Ref:   "ref-1",
+								}),
+							},
+						},
+					},
+				}, nil)
+			case 2:
+				yield(nil, expectedErr)
+			default:
+				yield(&ai.ModelStreamValue{
+					Chunk: &ai.ModelResponseChunk{
+						Content: []*ai.Part{ai.NewTextPart("recovered")},
+					},
+				}, nil)
+				yield(&ai.ModelStreamValue{
+					Done: true,
+					Response: &ai.ModelResponse{
+						Message: &ai.Message{Role: ai.RoleModel},
+					},
+				}, nil)
+			}
+		}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successTool{}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "go"}}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range ch {
+	}
+
+	if len(client.pendingState) == 0 {
+		t.Fatal("expected pending state after failed turn")
+	}
+	savedLen := len(client.pendingState)
+
+	ch, err = client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "go"},
+		{Role: RoleUser, Content: "continue"},
+	}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasDone bool
+	var streamed strings.Builder
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeDone:
+			hasDone = true
+		case StreamEventTypeChunk:
+			streamed.WriteString(ev.Content)
+		case StreamEventTypeError:
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if !hasDone {
+		t.Fatal("expected done event")
+	}
+	if streamed.String() != "recovered" {
+		t.Fatalf("expected recovered stream, got %q", streamed.String())
+	}
+	if len(client.pendingState) != 0 {
+		t.Fatal("expected pending state to be cleared after injection")
+	}
+
+	// Recovery call injects pending state (savedLen messages) before "continue"
+	// so total = initial messages (2) + savedLen pending + last "continue" already in initial
+	// Actually injection inserts before the last element:
+	// initial: [system?+user "go", user "continue"] = 2 messages
+	// after injection: [user "go", pending..., user "continue"] = 1 + savedLen + 1
+	if len(capturedOpts) < 3 {
+		t.Fatalf("expected at least 3 stream calls, got %d", len(capturedOpts))
+	}
+	_ = savedLen
+}
+
+func TestGenkitClient_PendingState_PreservedWhenRecoveryFailsBeforeProgress(t *testing.T) {
+	client := &GenkitClient{
+		g:          &genkit.Genkit{},
+		provider:   Provider(config.ProviderGoogleAI),
+		model:      "googleai/gemini-pro",
+		maxRetries: 1,
+		pendingState: []*ai.Message{
+			{Role: ai.RoleModel, Content: []*ai.Part{ai.NewTextPart("prior tool use")}},
+			{Role: ai.RoleTool, Content: []*ai.Part{ai.NewTextPart("prior tool result")}},
+		},
+	}
+
+	wantLen := len(client.pendingState)
+	expectedErr := errors.New("API error")
+	client.streamImpl = func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error] {
+		return func(yield func(*ai.ModelStreamValue, error) bool) {
+			yield(nil, expectedErr)
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "go"},
+		{Role: RoleUser, Content: "continue"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasIncomplete bool
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeIncomplete:
+			hasIncomplete = true
+		case StreamEventTypeError:
+			t.Fatalf("expected incomplete, got error: %v", ev.Error)
+		}
+	}
+
+	if !hasIncomplete {
+		t.Fatal("expected incomplete event")
+	}
+	if len(client.pendingState) != wantLen {
+		t.Fatalf("expected pending state length %d preserved, got %d", wantLen, len(client.pendingState))
+	}
+}
+
+func TestGenkitClient_PendingState_NoAccumulation_EmitsError(t *testing.T) {
+	expectedErr := errors.New("API error")
+	client := &GenkitClient{
+		g:          &genkit.Genkit{},
+		provider:   Provider(config.ProviderGoogleAI),
+		model:      "googleai/gemini-pro",
+		maxRetries: 1,
+	}
+	client.streamImpl = func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error] {
+		return func(yield func(*ai.ModelStreamValue, error) bool) {
+			yield(nil, expectedErr)
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasError bool
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeError:
+			hasError = true
+		case StreamEventTypeIncomplete:
+			t.Fatal("expected error, not incomplete")
+		}
+	}
+
+	if !hasError {
+		t.Fatal("expected error event")
+	}
+	if len(client.pendingState) != 0 {
+		t.Fatal("expected no pending state when nothing accumulated")
+	}
+}
+
+func TestGenkitClient_PendingState_ClearedOnSuccess(t *testing.T) {
+	client := &GenkitClient{
+		g:        &genkit.Genkit{},
+		provider: Provider(config.ProviderGoogleAI),
+		model:    "googleai/gemini-pro",
+		pendingState: []*ai.Message{
+			{Role: ai.RoleModel, Content: []*ai.Part{ai.NewTextPart("prior tool use")}},
+			{Role: ai.RoleTool, Content: []*ai.Part{ai.NewTextPart("prior tool result")}},
+		},
+	}
+
+	client.streamImpl = func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error] {
+		return func(yield func(*ai.ModelStreamValue, error) bool) {
+			yield(&ai.ModelStreamValue{
+				Chunk: &ai.ModelResponseChunk{
+					Content: []*ai.Part{ai.NewTextPart("done")},
+				},
+			}, nil)
+			yield(&ai.ModelStreamValue{
+				Done: true,
+				Response: &ai.ModelResponse{
+					Message: &ai.Message{Role: ai.RoleModel},
+				},
+			}, nil)
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "original"},
+		{Role: RoleUser, Content: "continue"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasDone bool
+	for ev := range ch {
+		if ev.Type == StreamEventTypeDone {
+			hasDone = true
+		}
+	}
+
+	if !hasDone {
+		t.Fatal("expected done event")
+	}
+	if len(client.pendingState) != 0 {
+		t.Fatal("expected pending state to be cleared after successful completion")
 	}
 }

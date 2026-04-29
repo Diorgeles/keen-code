@@ -34,6 +34,7 @@ type OpenAICodexClient struct {
 	responseStreamImpl responseStreamFactory
 	authManager        *auth.OAuthManager
 	userAgent          string
+	pendingState       []responses.ResponseInputItemUnionParam
 }
 
 func NewOpenAICodexClient(cfg *ClientConfig) (*OpenAICodexClient, error) {
@@ -75,6 +76,8 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 		defer close(eventCh)
 
 		instructions, input := codexInstructionsAndInput(messages)
+		input, injectedPending := c.injectPendingState(input)
+		turnStartLen := len(input)
 		responseTools := toOpenAIResponseTools(toolRegistry)
 
 		for range maxToolTurns {
@@ -97,10 +100,11 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 
 			completed, streamedContent, toolCalls, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
+				c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, err)
 				return
 			}
 			if completed == nil {
-				eventCh <- StreamEvent{Type: StreamEventTypeDone}
+				c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, nil)
 				return
 			}
 
@@ -122,11 +126,11 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 				return
 			}
 
-			input = append(input, codexFunctionCallInputs(toolCalls)...)
+			input = append(input, responseOutputInputs(completed.Output, toolCalls, streamedContent)...)
 			input = append(input, c.executeTools(ctx, toolCalls, toolRegistry, eventCh)...)
 		}
 
-		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+		c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, nil)
 	}()
 
 	return eventCh, nil
@@ -148,6 +152,59 @@ func codexInstructionsAndInput(messages []Message) (string, []responses.Response
 	return strings.Join(instructions, "\n\n"), toOpenAIResponseInput(inputMessages)
 }
 
+func (c *OpenAICodexClient) injectPendingState(input []responses.ResponseInputItemUnionParam) ([]responses.ResponseInputItemUnionParam, []responses.ResponseInputItemUnionParam) {
+	if len(c.pendingState) == 0 {
+		return input, nil
+	}
+
+	injectedPending := append([]responses.ResponseInputItemUnionParam(nil), c.pendingState...)
+
+	slog.Debug("Injecting pending state", "pending_messages", len(c.pendingState), "total_messages", len(input))
+	if prettyJSON, err := json.MarshalIndent(c.pendingState, "", "  "); err == nil {
+		slog.Debug("Pending state contents:\n" + string(prettyJSON))
+	}
+
+	if len(input) > 0 {
+		last := input[len(input)-1]
+		input = append(input[:len(input)-1], injectedPending...)
+		input = append(input, last)
+	} else {
+		input = append(input, injectedPending...)
+	}
+	c.pendingState = nil
+	return input, injectedPending
+}
+
+func (c *OpenAICodexClient) exitIncomplete(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, injectedPending []responses.ResponseInputItemUnionParam, err error) {
+	c.savePendingIfAccumulated(input, turnStartLen, injectedPending)
+	c.emitTerminalEvent(eventCh, input, turnStartLen, injectedPending, err)
+}
+
+func (c *OpenAICodexClient) savePendingIfAccumulated(input []responses.ResponseInputItemUnionParam, turnStartLen int, injectedPending []responses.ResponseInputItemUnionParam) {
+	if len(injectedPending) == 0 && len(input) <= turnStartLen {
+		return
+	}
+
+	newDelta := []responses.ResponseInputItemUnionParam(nil)
+	if len(input) > turnStartLen {
+		newDelta = input[turnStartLen:]
+	}
+
+	c.pendingState = make([]responses.ResponseInputItemUnionParam, 0, len(injectedPending)+len(newDelta))
+	c.pendingState = append(c.pendingState, injectedPending...)
+	c.pendingState = append(c.pendingState, newDelta...)
+}
+
+func (c *OpenAICodexClient) emitTerminalEvent(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, injectedPending []responses.ResponseInputItemUnionParam, err error) {
+	if len(injectedPending) > 0 || len(input) > turnStartLen {
+		eventCh <- StreamEvent{Type: StreamEventTypeIncomplete, Error: err}
+	} else if err != nil {
+		eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+	} else {
+		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+	}
+}
+
 func (c *OpenAICodexClient) collectTurnWithRetry(
 	ctx context.Context,
 	params responses.ResponseNewParams,
@@ -160,7 +217,6 @@ func (c *OpenAICodexClient) collectTurnWithRetry(
 			return completed, streamedContent, toolCalls, nil
 		}
 		if !isRetryableError(err) || attempt == maxRetries {
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
 			return nil, "", nil, err
 		}
 
@@ -170,7 +226,6 @@ func (c *OpenAICodexClient) collectTurnWithRetry(
 
 		select {
 		case <-ctx.Done():
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
 			return nil, "", nil, ctx.Err()
 		case <-time.After(backoff):
 		}
@@ -366,21 +421,6 @@ func appendCodexToolCall(toolCalls []responses.ResponseFunctionToolCall, seen ma
 		seen[key] = true
 	}
 	return append(toolCalls, toolCall)
-}
-
-func codexFunctionCallInputs(toolCalls []responses.ResponseFunctionToolCall) []responses.ResponseInputItemUnionParam {
-	result := make([]responses.ResponseInputItemUnionParam, 0, len(toolCalls))
-	for _, tc := range toolCalls {
-		item := responses.ResponseInputItemParamOfFunctionCall(tc.Arguments, tc.CallID, tc.Name)
-		if tc.ID != "" {
-			item.OfFunctionCall.ID = param.NewOpt(tc.ID)
-		}
-		if tc.Status != "" {
-			item.OfFunctionCall.Status = tc.Status
-		}
-		result = append(result, item)
-	}
-	return result
 }
 
 func (c *OpenAICodexClient) executeTools(

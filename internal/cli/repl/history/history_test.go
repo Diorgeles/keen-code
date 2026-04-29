@@ -20,13 +20,24 @@ func TestInputHistory_Push_BlankIgnored(t *testing.T) {
 	}
 }
 
-func TestInputHistory_Push_SlashCommandIgnored(t *testing.T) {
+func TestInputHistory_Push_SlashCommandStored(t *testing.T) {
 	var h history.InputHistory
 	h.Push("/clear")
 	h.Push("/help")
-	_, ok := h.NavigateUp("")
-	if ok {
-		t.Fatal("expected slash commands to be ignored")
+
+	val, ok := h.NavigateUp("")
+	if !ok {
+		t.Fatal("expected slash commands to be stored")
+	}
+	if val != "/help" {
+		t.Fatalf("expected '/help', got %q", val)
+	}
+	val, ok = h.NavigateUp(val)
+	if !ok {
+		t.Fatal("expected second slash command to be stored")
+	}
+	if val != "/clear" {
+		t.Fatalf("expected '/clear', got %q", val)
 	}
 }
 

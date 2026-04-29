@@ -35,6 +35,7 @@ Keen Code is an experiment to play with the *new way of working* where engineers
 - [Run Keen](#run-keen)
 - [Supported Providers](#supported-providers)
 - [Built-in Tools](#built-in-tools)
+- [Context Handling](#context-handling)
 
 ## Development Philosophy
 
@@ -141,3 +142,17 @@ Keen Code aims to support minimal set of useful tools for coding. Currently, the
 - `write_file` — create or overwrite files
 - `edit_file` — replace specific text in existing files
 - `bash` — run shell commands
+
+## Context Handling
+
+Keen takes a deliberately lean approach to cross-turn context. Within a single assistant turn the model has full access to its tool calls and results, but once the turn completes Keen does **not** carry the raw tool trace forward. Instead, it distills a compact `TurnMemory` summary that records only the outcomes most likely to matter later — currently which files were changed and which bash commands failed.
+
+Subsequent turns therefore receive:
+
+- prior user and assistant messages
+- the compact `TurnMemory` summary from earlier turns
+- any pending state from a turn that failed mid-loop, so the model can resume instead of starting over
+
+The tradeoff is intentional: smaller context and a better signal-to-noise ratio, at the cost of occasionally re-reading files or re-running searches when older observations are needed again. Read-only facts are cheap to recompute; mutated state and failures are what deserve durable memory.
+
+For the full rationale, lifecycle, and comparison with other coding agents, see [`docs/turn-memory.md`](docs/turn-memory.md).

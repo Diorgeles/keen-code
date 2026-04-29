@@ -637,3 +637,252 @@ func TestAnthropicClient_NoThinkingEffort_DisablesThinking(t *testing.T) {
 		t.Errorf("expected anthropicMaxTokens %d, got %d", anthropicMaxTokens, capturedParams.MaxTokens)
 	}
 }
+
+func TestAnthropicClient_PendingState_ErrorMidLoop(t *testing.T) {
+	callCount := 0
+	firstEvents := []anthropic.MessageStreamEventUnion{
+		makeToolUseStartEvent(0, "toolu_01", "success_tool"),
+		makeInputJSONDeltaEvent(0, `{"message":"hi"}`),
+		makeContentBlockStopEvent(0),
+	}
+
+	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		callCount++
+		if callCount == 1 {
+			return &mockAnthropicStream{events: firstEvents}
+		}
+		return &mockAnthropicStream{err: errors.New("API error")}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successTool{}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	ch, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "go"}}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasIncomplete bool
+	var incompleteErr error
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeIncomplete:
+			hasIncomplete = true
+			incompleteErr = ev.Error
+		case StreamEventTypeError:
+			t.Fatalf("expected incomplete, got error: %v", ev.Error)
+		}
+	}
+
+	if !hasIncomplete {
+		t.Fatal("expected incomplete event")
+	}
+	if incompleteErr == nil {
+		t.Fatal("expected error on incomplete event")
+	}
+	if len(c.pendingState) == 0 {
+		t.Fatal("expected pending state to be saved")
+	}
+	// assistant message (tool use) + user message (tool result)
+	if len(c.pendingState) != 2 {
+		t.Fatalf("expected 2 pending messages, got %d", len(c.pendingState))
+	}
+}
+
+func TestAnthropicClient_PendingState_InjectedOnNextCall(t *testing.T) {
+	callCount := 0
+	var capturedParams []anthropic.MessageNewParams
+
+	firstEvents := []anthropic.MessageStreamEventUnion{
+		makeToolUseStartEvent(0, "toolu_01", "success_tool"),
+		makeInputJSONDeltaEvent(0, `{"message":"hi"}`),
+		makeContentBlockStopEvent(0),
+	}
+	recoveryEvents := []anthropic.MessageStreamEventUnion{
+		makeTextDeltaEvent(0, "recovered"),
+		makeContentBlockStopEvent(0),
+	}
+
+	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		callCount++
+		capturedParams = append(capturedParams, params)
+		switch callCount {
+		case 1:
+			return &mockAnthropicStream{events: firstEvents}
+		case 2:
+			return &mockAnthropicStream{err: errors.New("API error")}
+		default:
+			return &mockAnthropicStream{events: recoveryEvents}
+		}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successTool{}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	ch, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "go"}}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range ch {
+	}
+
+	if len(c.pendingState) == 0 {
+		t.Fatal("expected pending state after failed turn")
+	}
+	savedLen := len(c.pendingState)
+
+	ch, err = c.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "go"},
+		{Role: RoleAssistant, Content: "working on it"},
+		{Role: RoleUser, Content: "continue"},
+	}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasDone bool
+	var streamed []string
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeDone:
+			hasDone = true
+		case StreamEventTypeChunk:
+			streamed = append(streamed, ev.Content)
+		case StreamEventTypeError:
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if !hasDone {
+		t.Fatal("expected done event")
+	}
+	if len(streamed) == 0 || streamed[0] != "recovered" {
+		t.Fatalf("expected recovered chunk, got %v", streamed)
+	}
+	if len(c.pendingState) != 0 {
+		t.Fatal("expected pending state to be cleared after injection")
+	}
+
+	// Recovery call: 3 original messages → inject savedLen before last → 2 + savedLen + 1
+	recoveryParams := capturedParams[len(capturedParams)-1]
+	if len(recoveryParams.Messages) != 2+savedLen+1 {
+		t.Fatalf("expected %d messages in recovery call, got %d", 2+savedLen+1, len(recoveryParams.Messages))
+	}
+}
+
+func TestAnthropicClient_PendingState_PreservedWhenRecoveryFailsBeforeProgress(t *testing.T) {
+	c := &AnthropicClient{
+		model:      "claude-3-haiku-20240307",
+		maxRetries: 1,
+		pendingState: []anthropic.MessageParam{
+			anthropic.NewAssistantMessage(anthropic.NewTextBlock("prior tool use")),
+			anthropic.NewUserMessage(anthropic.NewTextBlock("prior tool result")),
+		},
+	}
+
+	wantLen := len(c.pendingState)
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		return &mockAnthropicStream{err: errors.New("API error")}
+	}
+
+	ch, err := c.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "go"},
+		{Role: RoleUser, Content: "continue"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasIncomplete bool
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeIncomplete:
+			hasIncomplete = true
+		case StreamEventTypeError:
+			t.Fatalf("expected incomplete, got error: %v", ev.Error)
+		}
+	}
+
+	if !hasIncomplete {
+		t.Fatal("expected incomplete event")
+	}
+	if len(c.pendingState) != wantLen {
+		t.Fatalf("expected pending state length %d preserved, got %d", wantLen, len(c.pendingState))
+	}
+}
+
+func TestAnthropicClient_PendingState_NoAccumulation_EmitsError(t *testing.T) {
+	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		return &mockAnthropicStream{err: errors.New("API error")}
+	}
+
+	ch, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasError bool
+	for ev := range ch {
+		switch ev.Type {
+		case StreamEventTypeError:
+			hasError = true
+		case StreamEventTypeIncomplete:
+			t.Fatal("expected error, not incomplete")
+		}
+	}
+
+	if !hasError {
+		t.Fatal("expected error event")
+	}
+	if len(c.pendingState) != 0 {
+		t.Fatal("expected no pending state when nothing accumulated")
+	}
+}
+
+func TestAnthropicClient_PendingState_ClearedOnSuccess(t *testing.T) {
+	c := &AnthropicClient{
+		model: "claude-3-haiku-20240307",
+		pendingState: []anthropic.MessageParam{
+			anthropic.NewAssistantMessage(anthropic.NewTextBlock("prior tool use")),
+			anthropic.NewUserMessage(anthropic.NewTextBlock("prior tool result")),
+		},
+	}
+
+	successEvents := []anthropic.MessageStreamEventUnion{
+		makeMessageStartEvent(100, 20, 0, 0),
+		makeTextDeltaEvent(0, "done"),
+		makeContentBlockStopEvent(0),
+	}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		return &mockAnthropicStream{events: successEvents}
+	}
+
+	ch, err := c.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "original"},
+		{Role: RoleUser, Content: "continue"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var hasDone bool
+	for ev := range ch {
+		if ev.Type == StreamEventTypeDone {
+			hasDone = true
+		}
+	}
+
+	if !hasDone {
+		t.Fatal("expected done event")
+	}
+	if len(c.pendingState) != 0 {
+		t.Fatal("expected pending state to be cleared after successful completion")
+	}
+}

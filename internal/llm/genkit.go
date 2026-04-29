@@ -27,6 +27,7 @@ type GenkitClient struct {
 	thinkingEffort string
 	maxRetries     int
 	streamImpl     streamFunc
+	pendingState   []*ai.Message
 }
 
 func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
@@ -113,7 +114,6 @@ func (c *GenkitClient) collectTurnWithRetry(
 			return modelResponse, nil
 		}
 		if !isRetryableError(err) || attempt == maxRetries {
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
 			return nil, err
 		}
 
@@ -123,7 +123,6 @@ func (c *GenkitClient) collectTurnWithRetry(
 
 		select {
 		case <-ctx.Done():
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
 			return nil, ctx.Err()
 		case <-time.After(backoff):
 		}
@@ -180,6 +179,8 @@ func (c *GenkitClient) StreamChat(
 		defer close(eventCh)
 
 		aiMessages := toGenkitMessages(messages)
+		aiMessages, injectedPending := c.injectPendingState(aiMessages)
+		turnStartLen := len(aiMessages)
 
 		var genkitTools []ai.ToolRef
 		if toolRegistry != nil && toolRegistry.Count() > 0 {
@@ -211,11 +212,12 @@ func (c *GenkitClient) StreamChat(
 
 			modelResponse, err := c.collectTurnWithRetry(ctx, opts, eventCh)
 			if err != nil {
+				c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, err)
 				return
 			}
 
 			if modelResponse == nil || modelResponse.Message == nil {
-				eventCh <- StreamEvent{Type: StreamEventTypeDone}
+				c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, nil)
 				return
 			}
 
@@ -248,10 +250,60 @@ func (c *GenkitClient) StreamChat(
 			}
 		}
 
-		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+		c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, nil)
 	}()
 
 	return eventCh, nil
+}
+
+func (c *GenkitClient) injectPendingState(aiMessages []*ai.Message) ([]*ai.Message, []*ai.Message) {
+	if len(c.pendingState) == 0 {
+		return aiMessages, nil
+	}
+
+	injectedPending := append([]*ai.Message(nil), c.pendingState...)
+
+	slog.Debug("Injecting pending state", "pending_messages", len(c.pendingState), "total_messages", len(aiMessages))
+
+	if len(aiMessages) > 0 {
+		last := aiMessages[len(aiMessages)-1]
+		aiMessages = append(aiMessages[:len(aiMessages)-1], injectedPending...)
+		aiMessages = append(aiMessages, last)
+	} else {
+		aiMessages = append(aiMessages, injectedPending...)
+	}
+	c.pendingState = nil
+	return aiMessages, injectedPending
+}
+
+func (c *GenkitClient) savePendingIfAccumulated(aiMessages []*ai.Message, turnStartLen int, injectedPending []*ai.Message) {
+	if len(injectedPending) == 0 && len(aiMessages) <= turnStartLen {
+		return
+	}
+
+	newDelta := []*ai.Message(nil)
+	if len(aiMessages) > turnStartLen {
+		newDelta = aiMessages[turnStartLen:]
+	}
+
+	c.pendingState = make([]*ai.Message, 0, len(injectedPending)+len(newDelta))
+	c.pendingState = append(c.pendingState, injectedPending...)
+	c.pendingState = append(c.pendingState, newDelta...)
+}
+
+func (c *GenkitClient) emitTerminalEvent(eventCh chan<- StreamEvent, aiMessages []*ai.Message, turnStartLen int, injectedPending []*ai.Message, err error) {
+	if len(injectedPending) > 0 || len(aiMessages) > turnStartLen {
+		eventCh <- StreamEvent{Type: StreamEventTypeIncomplete, Error: err}
+	} else if err != nil {
+		eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+	} else {
+		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+	}
+}
+
+func (c *GenkitClient) exitIncomplete(eventCh chan<- StreamEvent, aiMessages []*ai.Message, turnStartLen int, injectedPending []*ai.Message, err error) {
+	c.savePendingIfAccumulated(aiMessages, turnStartLen, injectedPending)
+	c.emitTerminalEvent(eventCh, aiMessages, turnStartLen, injectedPending, err)
 }
 
 func (c *GenkitClient) executeTools(

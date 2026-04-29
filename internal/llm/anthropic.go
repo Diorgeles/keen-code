@@ -51,6 +51,7 @@ type AnthropicClient struct {
 	thinkingEffort string
 	maxRetries     int
 	streamImpl     anthropicStreamFactory
+	pendingState   []anthropic.MessageParam
 }
 
 func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
@@ -143,7 +144,6 @@ func (c *AnthropicClient) collectTurnWithRetry(
 			return assistantBlocks, toolUses, usage, nil
 		}
 		if !isRetryableError(err) || attempt == maxRetries {
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
 			return nil, nil, nil, err
 		}
 
@@ -153,7 +153,6 @@ func (c *AnthropicClient) collectTurnWithRetry(
 
 		select {
 		case <-ctx.Done():
-			eventCh <- StreamEvent{Type: StreamEventTypeError, Error: ctx.Err()}
 			return nil, nil, nil, ctx.Err()
 		case <-time.After(backoff):
 		}
@@ -333,6 +332,8 @@ func (c *AnthropicClient) StreamChat(
 		defer close(eventCh)
 
 		systemBlocks, msgParams := toAnthropicMessages(messages)
+		msgParams, injectedPending := c.injectPendingState(msgParams)
+		turnStartLen := len(msgParams)
 		anthropicTools := toAnthropicTools(toolRegistry)
 
 		for range maxToolTurns {
@@ -353,6 +354,7 @@ func (c *AnthropicClient) StreamChat(
 
 			assistantBlocks, toolUses, usage, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
+				c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, err)
 				return
 			}
 
@@ -380,10 +382,60 @@ func (c *AnthropicClient) StreamChat(
 			msgParams = append(msgParams, anthropic.NewUserMessage(toolResultBlocks...))
 		}
 
-		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+		c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, nil)
 	}()
 
 	return eventCh, nil
+}
+
+func (c *AnthropicClient) injectPendingState(msgParams []anthropic.MessageParam) ([]anthropic.MessageParam, []anthropic.MessageParam) {
+	if len(c.pendingState) == 0 {
+		return msgParams, nil
+	}
+
+	injectedPending := append([]anthropic.MessageParam(nil), c.pendingState...)
+
+	slog.Debug("Injecting pending state", "pending_messages", len(c.pendingState), "total_messages", len(msgParams))
+
+	if len(msgParams) > 0 {
+		last := msgParams[len(msgParams)-1]
+		msgParams = append(msgParams[:len(msgParams)-1], injectedPending...)
+		msgParams = append(msgParams, last)
+	} else {
+		msgParams = append(msgParams, injectedPending...)
+	}
+	c.pendingState = nil
+	return msgParams, injectedPending
+}
+
+func (c *AnthropicClient) savePendingIfAccumulated(msgParams []anthropic.MessageParam, turnStartLen int, injectedPending []anthropic.MessageParam) {
+	if len(injectedPending) == 0 && len(msgParams) <= turnStartLen {
+		return
+	}
+
+	newDelta := []anthropic.MessageParam(nil)
+	if len(msgParams) > turnStartLen {
+		newDelta = msgParams[turnStartLen:]
+	}
+
+	c.pendingState = make([]anthropic.MessageParam, 0, len(injectedPending)+len(newDelta))
+	c.pendingState = append(c.pendingState, injectedPending...)
+	c.pendingState = append(c.pendingState, newDelta...)
+}
+
+func (c *AnthropicClient) emitTerminalEvent(eventCh chan<- StreamEvent, msgParams []anthropic.MessageParam, turnStartLen int, injectedPending []anthropic.MessageParam, err error) {
+	if len(injectedPending) > 0 || len(msgParams) > turnStartLen {
+		eventCh <- StreamEvent{Type: StreamEventTypeIncomplete, Error: err}
+	} else if err != nil {
+		eventCh <- StreamEvent{Type: StreamEventTypeError, Error: err}
+	} else {
+		eventCh <- StreamEvent{Type: StreamEventTypeDone}
+	}
+}
+
+func (c *AnthropicClient) exitIncomplete(eventCh chan<- StreamEvent, msgParams []anthropic.MessageParam, turnStartLen int, injectedPending []anthropic.MessageParam, err error) {
+	c.savePendingIfAccumulated(msgParams, turnStartLen, injectedPending)
+	c.emitTerminalEvent(eventCh, msgParams, turnStartLen, injectedPending, err)
 }
 
 func (c *AnthropicClient) executeTools(

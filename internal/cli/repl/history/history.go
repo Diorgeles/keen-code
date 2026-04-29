@@ -19,9 +19,6 @@ func (h *InputHistory) Push(entry string) {
 	if strings.TrimSpace(entry) == "" {
 		return
 	}
-	if strings.HasPrefix(entry, "/") {
-		return
-	}
 	if len(h.entries) > 0 && h.entries[len(h.entries)-1] == entry {
 		return
 	}
