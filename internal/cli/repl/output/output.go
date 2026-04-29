@@ -42,12 +42,31 @@ func (ob *OutputBuilder) AddEmptyLine() {
 	ob.lines = append(ob.lines, "")
 }
 
+func (ob *OutputBuilder) SetWidth(width int) {
+	ob.width = width
+}
+
 func (ob *OutputBuilder) AddUserInput(input string, promptStyle lipgloss.Style) {
 	inputLines := strings.Split(input, "\n")
-	wrapStyle := lipgloss.NewStyle().Width(ob.width - 4)
-	ob.lines = append(ob.lines, promptStyle.Render("> ")+wrapStyle.Render(inputLines[0]))
+	wrapWidth := ob.width - 3
+	if wrapWidth < 1 {
+		wrapWidth = 1
+	}
+
+	bg := repltheme.UserInputBlockBackground
+	wrapStyle := lipgloss.NewStyle().Width(wrapWidth).Background(bg)
+	indentStyle := lipgloss.NewStyle().Background(bg)
+	prompt := promptStyle.UnsetMarginTop().Background(bg).Render(" ▶ ")
+
+	bodyLines := []string{prompt + wrapStyle.Render(inputLines[0])}
 	for i := 1; i < len(inputLines); i++ {
-		ob.lines = append(ob.lines, "  "+wrapStyle.Render(inputLines[i]))
+		bodyLines = append(bodyLines, indentStyle.Render("   ")+wrapStyle.Render(inputLines[i]))
+	}
+	body := strings.Join(bodyLines, "\n")
+
+	rendered := repltheme.UserInputBlockStyle.Width(ob.width).Render(body)
+	for _, line := range strings.Split(rendered, "\n") {
+		ob.lines = append(ob.lines, line)
 	}
 	ob.AddEmptyLine()
 }

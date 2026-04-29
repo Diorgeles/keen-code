@@ -143,12 +143,13 @@ func TestOutputBuilder_AddUserInput(t *testing.T) {
 	ob.AddUserInput("hello", style)
 
 	lines := ob.GetLines()
-	if len(lines) != 2 {
-		t.Errorf("len(lines) = %d, want 2 (input + empty)", len(lines))
+	// 1 top padding + 1 content line + 1 bottom padding + 1 trailing empty line
+	if len(lines) != 4 {
+		t.Errorf("len(lines) = %d, want 4 (top pad + content + bottom pad + empty)", len(lines))
 	}
 
-	if !strings.Contains(lines[0], "hello") {
-		t.Errorf("lines[0] should contain 'hello', got %q", lines[0])
+	if !strings.Contains(ob.Join(), "hello") {
+		t.Errorf("output should contain 'hello', got %q", ob.Join())
 	}
 }
 
@@ -159,16 +160,18 @@ func TestOutputBuilder_AddUserInput_MultiLine(t *testing.T) {
 	ob.AddUserInput("line1\nline2", style)
 
 	lines := ob.GetLines()
-	if len(lines) != 3 {
-		t.Errorf("len(lines) = %d, want 3", len(lines))
+	// 1 top padding + 2 content lines + 1 bottom padding + 1 trailing empty line
+	if len(lines) != 5 {
+		t.Errorf("len(lines) = %d, want 5", len(lines))
 	}
 
-	if !strings.Contains(lines[0], "line1") {
-		t.Errorf("lines[0] should contain 'line1', got %q", lines[0])
+	joined := ob.Join()
+	if !strings.Contains(joined, "line1") {
+		t.Errorf("output should contain 'line1', got %q", joined)
 	}
 
-	if !strings.Contains(lines[1], "line2") {
-		t.Errorf("lines[1] should contain 'line2', got %q", lines[1])
+	if !strings.Contains(joined, "line2") {
+		t.Errorf("output should contain 'line2', got %q", joined)
 	}
 }
 

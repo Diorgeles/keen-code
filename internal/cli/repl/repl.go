@@ -189,11 +189,11 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	ta.SetHeight(maxHeight)
 	ta.MaxHeight = 0
 	ta.ShowLineNumbers = false
-	ta.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+	ta.SetPromptFunc(3, func(info textarea.PromptInfo) string {
 		if info.LineNumber == 0 {
-			return "> "
+			return " ▶ "
 		}
-		return "  "
+		return "   "
 	})
 
 	styles := ta.Styles()
@@ -700,6 +700,9 @@ func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
 	m.textarea.SetWidth(msg.Width - 3)
 	if m.mdRenderer != nil {
 		m.mdRenderer.UpdateWidth(msg.Width)
+	}
+	if m.output != nil {
+		m.output.SetWidth(msg.Width)
 	}
 	m.viewport.SetWidth(msg.Width)
 	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())

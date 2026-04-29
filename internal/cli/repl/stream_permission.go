@@ -158,7 +158,7 @@ func renderPermissionCard(seg *streamSegment, width int) []string {
 	choices := replpermissions.Choices(req.IsDangerous)
 	for i, choice := range choices {
 		if i == seg.permissionCursor {
-			sb.WriteString(wrapTextWithStyle("> "+choice, repltheme.UserPromptSelectionStyle, contentWidth))
+			sb.WriteString(wrapTextWithStyle("▶ "+choice, repltheme.UserPromptSelectionStyle, contentWidth))
 			sb.WriteString("\n")
 		} else {
 			sb.WriteString(wrapTextWithStyle("  "+choice, repltheme.NormalStyle, contentWidth))

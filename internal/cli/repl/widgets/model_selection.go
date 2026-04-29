@@ -406,7 +406,7 @@ func (m *Model) renderBaseURLInput() string {
 	view.WriteString(repltheme.UserPromptStyle.Render(title))
 	view.WriteString("\n\n")
 
-	view.WriteString(repltheme.PromptStyle.Render("> ") + m.BaseURLInput)
+	view.WriteString(repltheme.PromptStyle.Render(" ▶ ") + m.BaseURLInput)
 	view.WriteString("\n\n" + repltheme.HintStyle.Render("[Enter to confirm, Esc to cancel]"))
 
 	if m.BaseURLError != "" {
@@ -428,7 +428,7 @@ func (m *Model) renderAPIKeyInput() string {
 	view.WriteString("\n\n")
 
 	maskedKey := strings.Repeat("•", len(m.APIKeyInput))
-	view.WriteString(repltheme.PromptStyle.Render("> ") + maskedKey)
+	view.WriteString(repltheme.PromptStyle.Render(" ▶ ") + maskedKey)
 	view.WriteString("\n\n" + repltheme.HintStyle.Render("[Enter to confirm, Esc to cancel]"))
 
 	if m.ErrorMessage != "" {
@@ -463,7 +463,7 @@ func (m *Model) renderList(cursor int, getName func(int) string, count int) stri
 	var view strings.Builder
 	for i := 0; i < count; i++ {
 		if i == cursor {
-			view.WriteString(repltheme.ModelSelectionStyle.Render("> " + getName(i)))
+			view.WriteString(repltheme.ModelSelectionStyle.Render("▶ " + getName(i)))
 			view.WriteString("\n")
 			continue
 		}

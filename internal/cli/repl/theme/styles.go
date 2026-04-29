@@ -39,6 +39,10 @@ var (
 		Light: lipgloss.Color("#bdbdbd"),
 		Dark:  lipgloss.Color("#3b3b3b"),
 	}
+	UserInputBlockBackground = compat.AdaptiveColor{
+		Light: lipgloss.Color("#E0E0E0"),
+		Dark:  lipgloss.Color("#2E2E2E"),
+	}
 
 	ErrorColor = compat.AdaptiveColor{Light: lipgloss.Color("#D32F2F"), Dark: lipgloss.Color("#EF5350")}
 	WhiteColor = compat.AdaptiveColor{Light: lipgloss.Color("#FFFFFF"), Dark: lipgloss.Color("#FFFFFF")}
@@ -75,7 +79,10 @@ var (
 			Bold(true).
 			Foreground(PrimaryColor).
 			MarginTop(2)
-	InputRuleStyle = lipgloss.NewStyle().Foreground(PrimaryColor)
+	InputRuleStyle      = lipgloss.NewStyle().Foreground(PrimaryColor)
+	UserInputBlockStyle = lipgloss.NewStyle().
+				Background(UserInputBlockBackground).
+				Padding(1, 0)
 
 	InfoLabelStyle = lipgloss.NewStyle().Foreground(MutedColor).Width(18)
 	InfoValueStyle = lipgloss.NewStyle().Foreground(TextDimColor)

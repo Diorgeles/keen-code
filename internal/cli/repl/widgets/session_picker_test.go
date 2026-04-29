@@ -46,7 +46,7 @@ func TestFormatSessionPickerCard_KeepsSelectedItemVisible(t *testing.T) {
 	picker.cursor = 9
 
 	card := FormatSessionPickerCard(picker, 80, 12)
-	if !strings.Contains(card, "> session 9") {
+	if !strings.Contains(card, "▶ session 9") {
 		t.Fatalf("expected selected item to remain visible, got %q", card)
 	}
 }

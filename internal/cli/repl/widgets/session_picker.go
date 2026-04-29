@@ -98,7 +98,7 @@ func FormatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string
 		prefix := "  "
 		style := repltheme.NormalStyle
 		if i == picker.cursor {
-			prefix = "> "
+			prefix = "▶ "
 			style = repltheme.UserPromptSelectionStyle
 		}
 

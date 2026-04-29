@@ -383,7 +383,7 @@ func TestBuildInitialScreen_HighlightsModelOnly(t *testing.T) {
 }
 
 func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
-	wide := renderInputArea("> hello", 80)
+	wide := renderInputArea("▶ hello", 80)
 	wideLines := strings.Split(strings.TrimRight(wide, "\n"), "\n")
 	if len(wideLines) != 3 {
 		t.Fatalf("expected 3 input-area lines, got %v", wideLines)
@@ -395,7 +395,7 @@ func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
 		t.Fatalf("expected wide input rules to match viewport width, got width %d", wideRuleWidth)
 	}
 
-	narrow := renderInputArea("> hi", 24)
+	narrow := renderInputArea("▶ hi", 24)
 	narrowLines := strings.Split(strings.TrimRight(narrow, "\n"), "\n")
 	if len(narrowLines) != 3 {
 		t.Fatalf("expected 3 narrow input-area lines, got %v", narrowLines)
