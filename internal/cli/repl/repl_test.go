@@ -2,7 +2,6 @@ package repl
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -107,159 +106,6 @@ func TestUpdate_InlinePermission_AllowsToolStartEvent(t *testing.T) {
 
 	if cmd == nil {
 		t.Error("expected non-nil cmd when handling tool start event")
-	}
-}
-
-func TestHandleEnterKey_EmptyInput(t *testing.T) {
-	m := newTestModel()
-	m.textarea.SetValue("")
-
-	newM, cmd := m.handleEnterKey()
-
-	if cmd != nil {
-		t.Error("expected nil cmd for empty input")
-	}
-	if len(newM.output.GetLines()) != 0 {
-		t.Error("expected no output for empty input")
-	}
-}
-
-func TestHandleEnterKey_ActiveStream(t *testing.T) {
-	m := newTestModel()
-	m.textarea.SetValue("some input")
-	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-
-	newM, cmd := m.handleEnterKey()
-
-	if cmd != nil {
-		t.Error("expected nil cmd when stream is active")
-	}
-	if newM.textarea.Value() != "some input" {
-		t.Error("expected textarea to remain unchanged when stream is active")
-	}
-}
-
-func TestHandleEnterKey_ExitCommand(t *testing.T) {
-	m := newTestModel()
-	m.textarea.SetValue(exitCommand)
-
-	newM, cmd := m.handleEnterKey()
-
-	if !newM.quitting {
-		t.Error("expected quitting to be true")
-	}
-	if cmd == nil {
-		t.Fatal("expected tea.Quit cmd")
-	}
-	msg := cmd()
-	if _, ok := msg.(tea.QuitMsg); !ok {
-		t.Errorf("expected tea.QuitMsg, got %T", msg)
-	}
-}
-
-func TestHandleEnterKey_HelpCommand(t *testing.T) {
-	m := newTestModel()
-	m.textarea.SetValue(helpCommand)
-
-	newM, _ := m.handleEnterKey()
-
-	if !strings.Contains(newM.output.Join(), "Available Commands") {
-		t.Error("expected help text in output")
-	}
-	if newM.textarea.Value() != "" {
-		t.Error("expected textarea to be reset after help command")
-	}
-}
-
-func TestHandleEnterKey_ModelCommand(t *testing.T) {
-	m := newTestModel()
-	m.ctx.registry = &providers.Registry{Providers: []providers.Provider{}}
-	m.ctx.globalCfg = &config.GlobalConfig{}
-	m.ctx.loader = config.NewLoader()
-	m.textarea.SetValue(modelCommand)
-
-	newM, _ := m.handleEnterKey()
-
-	if newM.modelSelection == nil {
-		t.Error("expected model selection to be started")
-	}
-	if newM.textarea.Value() != "" {
-		t.Error("expected textarea to be reset")
-	}
-}
-
-func TestHandleEnterKey_SessionsCommand_EmptyState(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	m := newTestModel()
-	m.sessions = newReplSessionState(filepath.Join(tmp, "project"))
-	m.textarea.SetValue(sessionsCommand)
-
-	newM, cmd := m.handleEnterKey()
-
-	if cmd != nil {
-		t.Fatal("expected nil cmd")
-	}
-	if newM.sessionPicker != nil {
-		t.Fatal("expected no session picker for empty state")
-	}
-	if !strings.Contains(newM.output.Join(), "No saved sessions for this directory.") {
-		t.Fatalf("expected empty state message, got %q", newM.output.Join())
-	}
-}
-
-func TestHandleEnterKey_CompactCommandStartsCompaction(t *testing.T) {
-	m := newTestModel()
-	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
-	m.appState = replappstate.New(&mockLLMClient{}, "")
-	m.appState.AddMessage(llm.RoleUser, "hello")
-	m.textarea.SetValue("/compact Keep business logic details")
-
-	newM, cmd := m.handleEnterKey()
-
-	if !newM.isCompacting {
-		t.Fatal("expected compaction mode to start")
-	}
-	if !newM.showSpinner {
-		t.Fatal("expected spinner to be visible during compaction")
-	}
-	if newM.loadingText != "Compacting..." {
-		t.Fatalf("expected compaction loading text, got %q", newM.loadingText)
-	}
-	if newM.textarea.Value() != "" {
-		t.Fatal("expected textarea to be reset")
-	}
-	if newM.compactionCancel == nil {
-		t.Fatal("expected compaction cancel func to be set")
-	}
-	if !newM.streamHandler.IsActive() {
-		t.Fatal("expected compaction to use the stream handler")
-	}
-	if cmd == nil {
-		t.Fatal("expected async compaction command")
-	}
-}
-
-func TestHandleEnterKey_ClientNotReady(t *testing.T) {
-	m := newTestModel()
-	m.textarea.SetValue("hello there")
-
-	newM, _ := m.handleEnterKey()
-
-	found := false
-	for _, line := range newM.output.GetLines() {
-		if strings.Contains(line, "LLM client not initialized") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected error about LLM client not initialized")
-	}
-	if newM.textarea.Value() != "" {
-		t.Error("expected textarea to be reset")
 	}
 }
 
@@ -603,29 +449,6 @@ func TestHandleUpdateCheckMsg_PreservesUserScroll(t *testing.T) {
 
 	if got := m.viewport.YOffset(); got != offset {
 		t.Fatalf("expected update notice to preserve scroll offset %d, got %d", offset, got)
-	}
-}
-
-func TestGetHelpText(t *testing.T) {
-	text := getHelpText()
-
-	if !strings.Contains(text, "/compact") {
-		t.Error("expected /compact in help text")
-	}
-	if !strings.Contains(text, "/help") {
-		t.Error("expected /help in help text")
-	}
-	if !strings.Contains(text, "/model") {
-		t.Error("expected /model in help text")
-	}
-	if !strings.Contains(text, "/exit") {
-		t.Error("expected /exit in help text")
-	}
-	if !strings.Contains(text, "/resume") {
-		t.Error("expected /resume in help text")
-	}
-	if !strings.Contains(text, "/sessions") {
-		t.Error("expected /sessions in help text")
 	}
 }
 

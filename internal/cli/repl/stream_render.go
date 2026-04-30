@@ -13,6 +13,22 @@ import (
 const bashOutputMaxLines = 30
 const diffRightPadding = 2
 
+// wrapAndIndent wraps an already-styled string to wrapWidth and prefixes every
+// produced sub-line with two spaces so wrapped continuations stay aligned with
+// the first line.
+func wrapAndIndent(styled string, wrapWidth int) []string {
+	if wrapWidth < 1 {
+		wrapWidth = 1
+	}
+	wrapped := lipgloss.NewStyle().Width(wrapWidth).Render(styled)
+	parts := strings.Split(wrapped, "\n")
+	out := make([]string, len(parts))
+	for i, p := range parts {
+		out[i] = "  " + p
+	}
+	return out
+}
+
 func (sh *StreamHandler) renderViewLines(width int) []string {
 	lines := make([]string, 0)
 
@@ -128,13 +144,9 @@ func (sh *StreamHandler) renderAssistantViewLines(content string, width int) []s
 
 	responseLines := strings.Split(content, "\n")
 	wrapWidth := width - 4
-	if wrapWidth < 1 {
-		wrapWidth = 1
-	}
-	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 	formatted := make([]string, 0, len(responseLines))
 	for _, line := range responseLines {
-		formatted = append(formatted, "  "+wrapStyle.Render(repltheme.AssistantStyle.Render(line)))
+		formatted = append(formatted, wrapAndIndent(repltheme.AssistantStyle.Render(line), wrapWidth)...)
 	}
 	return formatted
 }
@@ -167,13 +179,9 @@ func (sh *StreamHandler) renderReasoningViewLines(content string, width int) []s
 
 	responseLines := strings.Split(content, "\n")
 	wrapWidth := width - 4
-	if wrapWidth < 1 {
-		wrapWidth = 1
-	}
-	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 	formatted := make([]string, 0, len(responseLines))
 	for _, line := range responseLines {
-		formatted = append(formatted, "  "+wrapStyle.Render(repltheme.ReasoningStyle.Render(line)))
+		formatted = append(formatted, wrapAndIndent(repltheme.ReasoningStyle.Render(line), wrapWidth)...)
 	}
 	return formatted
 }
@@ -188,11 +196,10 @@ func (sh *StreamHandler) renderReasoningTranscriptLines(content string) []string
 	if wrapWidth < 1 {
 		wrapWidth = 120
 	}
-	wrapStyle := lipgloss.NewStyle().Width(wrapWidth)
 
 	result := make([]string, 0, len(lines))
 	for _, line := range lines {
-		result = append(result, "  "+wrapStyle.Render(repltheme.ReasoningStyle.Render(line)))
+		result = append(result, wrapAndIndent(repltheme.ReasoningStyle.Render(line), wrapWidth)...)
 	}
 	return result
 }
@@ -237,8 +244,7 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 		}
 		for _, line := range visible {
 			if width > 0 {
-				wrapStyle := lipgloss.NewStyle().Width(width - 4)
-				lines = append(lines, "  "+repltheme.BashOutputStyle.Render(wrapStyle.Render(line)))
+				lines = append(lines, wrapAndIndent(repltheme.BashOutputStyle.Render(line), width-4)...)
 			} else {
 				lines = append(lines, "  "+repltheme.BashOutputStyle.Render(line))
 			}
