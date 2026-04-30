@@ -251,8 +251,6 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
 }
 
-
-
 func (m *replModel) updateViewportContent() {
 	if m.viewport.Width() == 0 {
 		return

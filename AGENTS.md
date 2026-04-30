@@ -46,6 +46,7 @@ Guard checks paths before filesystem operations:
 - Test critical paths, not aiming for 100% coverage
 - Always run the tests after each change
 - Always run `go mod tidy` after each change
+- Always run `gofmt` on modified Go files before committing
 - Commit messages should be concise and focus on the key changes with bullet points
 - Commit messages should follow the `feat(category): description` format
 - Always check both tracked and untracked files for creating the commit message
