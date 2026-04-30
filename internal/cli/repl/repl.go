@@ -3,10 +3,8 @@ package repl
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -14,7 +12,6 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	keenauth "github.com/user/keen-code/internal/auth"
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
 	replfilesearch "github.com/user/keen-code/internal/cli/repl/filesearch"
 	replhistory "github.com/user/keen-code/internal/cli/repl/history"
@@ -28,7 +25,6 @@ import (
 	"github.com/user/keen-code/internal/filesystem"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
-	"github.com/user/keen-code/internal/updater"
 	"github.com/user/keen-code/providers"
 )
 
@@ -47,88 +43,6 @@ const (
 	defaultWidth = 120
 	maxHeight    = 3
 )
-
-var loadingTexts = []string{
-	"Accio...",
-	"Aguamenti...",
-	"Alohomora...",
-	"Anapneo...",
-	"Aparecium...",
-	"Ascendio...",
-	"Avis...",
-	"Bombarda...",
-	"Colloportus...",
-	"Confundo...",
-	"Confringo...",
-	"Defodio...",
-	"Depulso...",
-	"Descendo...",
-	"Diffindo...",
-	"Duro...",
-	"Engorgio...",
-	"Episkey...",
-	"Evanesco...",
-	"Expelliarmus...",
-	"Expulso...",
-	"Ferula...",
-	"Finite...",
-	"Flagrate...",
-	"Flipendo...",
-	"Geminio...",
-	"Homenum Revelio...",
-	"Impedimenta...",
-	"Impervius...",
-	"Incendio...",
-	"Langlock...",
-	"Levicorpus...",
-	"Liberacorpus...",
-	"Locomotor...",
-	"Lumos...",
-	"Muffliato...",
-	"Nox...",
-	"Obliviate...",
-	"Obscuro...",
-	"Oppugno...",
-	"Orchideous...",
-	"Petrificus Totalus...",
-	"Protego...",
-	"Quietus...",
-	"Reducio...",
-	"Reducto...",
-	"Reparo...",
-	"Revelio...",
-	"Rictusempra...",
-	"Ridikulus...",
-	"Scourgify...",
-	"Sectumsempra...",
-	"Serpensortia...",
-	"Silencio...",
-	"Sonorus...",
-	"Stupefy...",
-	"Tarantallegra...",
-	"Tergeo...",
-	"Waddiwasi...",
-	"Wingardium Leviosa...",
-}
-
-var loadingSpinners = []spinner.Spinner{
-	spinner.Line,
-	spinner.Dot,
-	spinner.MiniDot,
-	spinner.Jump,
-	spinner.Pulse,
-	spinner.Points,
-	spinner.Meter,
-	spinner.Hamburger,
-}
-
-func nextLoadingText() string {
-	return loadingTexts[rand.Intn(len(loadingTexts))]
-}
-
-func nextLoadingSpinner() spinner.Spinner {
-	return loadingSpinners[rand.Intn(len(loadingSpinners))]
-}
 
 type replContext struct {
 	version    string
@@ -167,17 +81,6 @@ type replModel struct {
 	compactionCancel    context.CancelFunc
 	contextStatus       contextStatus
 	history             replhistory.InputHistory
-}
-
-func abbreviateHome(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	if strings.HasPrefix(path, home) {
-		return "~" + strings.TrimPrefix(path, home)
-	}
-	return path
 }
 
 func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) replModel {
@@ -280,104 +183,8 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	return model
 }
 
-func buildInitialScreen(ctx *replContext) []string {
-	var lines []string
-
-	asciiArt := []string{
-		"░█░█░█▀▀░█▀▀░█▀█░░░█▀▀░█▀█░█▀▄░█▀▀",
-		"░█▀▄░█▀▀░█▀▀░█░█░░░█░░░█░█░█░█░█▀▀",
-		"░▀░▀░▀▀▀░▀▀▀░▀░▀░░░▀▀▀░▀▀▀░▀▀░░▀▀▀",
-	}
-
-	colors := []string{
-		"#9FA8DA", "#7986CB", "#5C6BC0", "#3F51B5", "#3949AB", "#303F9F", "#283593",
-	}
-
-	lines = append(lines, "")
-	for i, line := range asciiArt {
-		color := colors[i%len(colors)]
-		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Render(line))
-	}
-
-	lines = append(lines, "")
-	lines = append(lines, "  "+repltheme.TitleStyle.Render("✦︎ Keen v"+ctx.version+" .✦ ݁˖"))
-	lines = append(lines, "")
-
-	displayDir := abbreviateHome(ctx.workingDir)
-	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Directory:")+" "+repltheme.InfoValueStyle.Render(displayDir))
-	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Provider:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.Provider))
-	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Model:")+" "+repltheme.HighlightStyle.Render(ctx.cfg.Model))
-	if ctx.cfg.ThinkingEffort != "" && ctx.registry != nil {
-		if modelMeta, ok := ctx.registry.GetModel(ctx.cfg.Provider, ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
-			lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Thinking:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.ThinkingEffort))
-		}
-	}
-	lines = append(lines, "")
-
-	tips := []string{
-		"Use /help  for available commands",
-		"Use /model to change provider or model",
-		"Press Enter to send, Shift+Enter for new line",
-		"Shift+click to select and copy text",
-	}
-	tipsBox := repltheme.BoxStyle.Render(repltheme.TipStyle.Render(strings.Join(tips, "\n")))
-	lines = append(lines, tipsBox)
-	lines = append(lines, "")
-
-	return lines
-}
-
 func (m replModel) Init() tea.Cmd {
 	return tea.Batch(textarea.Blink, checkForUpdate(m.ctx.version))
-}
-
-func checkForUpdate(currentVersion string) tea.Cmd {
-	return func() tea.Msg {
-		latest, newer, err := updater.CheckLatest(context.Background(), currentVersion, "mochow13", "keen-code")
-		if err != nil || !newer {
-			return updateCheckMsg{}
-		}
-		return updateCheckMsg{latest: latest}
-	}
-}
-
-func (m *replModel) spinnerHeight() int {
-	if m.showSpinner {
-		return 2
-	}
-	return 0
-}
-
-func (m *replModel) adjustTextareaHeight() {
-	if m.height <= 0 {
-		return
-	}
-	m.textarea.SetHeight(maxHeight)
-	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())
-}
-
-func (m replModel) isAtTopOfInput() bool {
-	return m.textarea.Line() == 0
-}
-
-func (m replModel) isAtBottomOfInput() bool {
-	return m.textarea.Line() >= m.textarea.LineCount()-1
-}
-
-func (m *replModel) startModelSelection() replModel {
-	onComplete := func(provider, model, apiKey string) error {
-		return m.updateLLMClient()
-	}
-	m.modelSelection = replwidgets.New(
-		m.ctx.registry,
-		m.ctx.globalCfg,
-		m.ctx.loader,
-		m.ctx.cfg,
-		onComplete,
-	)
-	m.updateViewportContent()
-	m.viewport.GotoBottom()
-	return *m
 }
 
 func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
@@ -397,74 +204,8 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	m.output.AddUserInput(input, repltheme.PromptStyle)
 	m.history.Push(input)
 
-	if input == exitCommand {
-		m.quitting = true
-		_ = m.history.Flush()
-		return *m, tea.Quit
-	}
-
-	if input == helpCommand {
-		m.output.AddLine(getHelpText())
-		m.output.AddEmptyLine()
-		m.textarea.Reset()
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-
-	if input == modelCommand {
-		m.textarea.Reset()
-		return m.startModelSelection(), nil
-	}
-
-	if input == logoutCommand {
-		m.textarea.Reset()
-		return m.handleLogout(), nil
-	}
-
-	if input == sessionsCommand || input == resumeCommand {
-		m.textarea.Reset()
-		summaries, err := m.sessions.listSessions()
-		if err != nil {
-			m.output.AddError("Failed to load sessions: "+err.Error(), repltheme.ErrorStyle)
-			m.updateViewportContent()
-			m.viewport.GotoBottom()
-			return *m, nil
-		}
-		if len(summaries) == 0 {
-			m.output.AddStyledLine("  No saved sessions for this directory.", lipgloss.NewStyle().Foreground(repltheme.MutedColor))
-			m.output.AddEmptyLine()
-			m.updateViewportContent()
-			m.viewport.GotoBottom()
-			return *m, nil
-		}
-		m.sessionPicker = replwidgets.NewSessionPicker(summaries)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-
-	if input == clearCommand || input == newCommand {
-		m.textarea.Reset()
-		return m.handleClear(), nil
-	}
-
-	if input == thinkingCommand || strings.HasPrefix(input, thinkingCommand+" ") {
-		m.textarea.Reset()
-		return m.handleThinkingCommand(input)
-	}
-
-	if input == compactCommand || strings.HasPrefix(input, compactCommand+" ") {
-		extraPrompt := strings.TrimSpace(strings.TrimPrefix(input, compactCommand))
-		if !m.appState.IsClientReady(m.ctx.cfg) {
-			m.output.AddError("LLM client not initialized. Use /model to configure.", repltheme.ErrorStyle)
-			m.textarea.Reset()
-			m.updateViewportContent()
-			m.viewport.GotoBottom()
-			return *m, nil
-		}
-		m.textarea.Reset()
-		return m.startCompaction(extraPrompt)
+	if updated, cmd, handled := m.dispatchCommand(input); handled {
+		return updated, cmd
 	}
 
 	if !m.appState.IsClientReady(m.ctx.cfg) {
@@ -510,56 +251,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
 }
 
-func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
-	if m.compactionCancel != nil {
-		m.compactionCancel()
-	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	eventCh, err := m.appState.StreamCompact(ctx, m.ctx.cfg, extraPrompt)
-	if err != nil {
-		cancel()
-		m.output.AddError(err.Error(), repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-	if eventCh == nil {
-		cancel()
-		m.output.AddError("compaction stream unavailable", repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-
-	m.compactionCancel = cancel
-	m.isCompacting = true
-	m.showSpinner = true
-	m.spinner.Spinner = nextLoadingSpinner()
-	m.loadingText = "Compacting..."
-	m.clearTurnMemory()
-	m.streamHandler.Start(eventCh, m.loadingText)
-	m.userScrolled = false
-	m.adjustTextareaHeight()
-	m.updateViewportContent()
-	m.viewport.GotoBottom()
-
-	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
-}
-
-func (m *replModel) startStreamContext() context.Context {
-	if m.streamCancel != nil {
-		m.streamCancel()
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	m.streamCancel = cancel
-	return ctx
-}
-
-func (m *replModel) clearStreamCancel() {
-	m.streamCancel = nil
-}
 
 func (m *replModel) updateViewportContent() {
 	if m.viewport.Width() == 0 {
@@ -592,12 +284,6 @@ func (m *replModel) updateViewportContent() {
 	m.viewport.SetContent(content.String())
 }
 
-func (m *replModel) scrollToBottomIfFollowing() {
-	if !m.userScrolled {
-		m.viewport.GotoBottom()
-	}
-}
-
 func (m replModel) waitForAsyncEvent() tea.Cmd {
 	if m.streamHandler == nil || !m.streamHandler.IsActive() || m.streamHandler.eventCh == nil {
 		return nil
@@ -615,97 +301,6 @@ func (m replModel) waitForAsyncEvent() tea.Cmd {
 		permissionCh,
 		diffCh,
 	)
-}
-
-func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpermissions.Request, diffCh <-chan repltooling.DiffRequest) tea.Cmd {
-	if llmCh == nil {
-		return nil
-	}
-
-	return func() tea.Msg {
-		select {
-		case req := <-permissionCh:
-			return permissionReadyMsg{req: req}
-		case req := <-diffCh:
-			return diffReadyMsg{req: req}
-		case event, ok := <-llmCh:
-			if !ok {
-				return llmDoneMsg{}
-			}
-
-			switch event.Type {
-			case llm.StreamEventTypeChunk:
-				return llmChunkMsg(event.Content)
-			case llm.StreamEventTypeReasoningChunk:
-				return llmReasoningChunkMsg(event.Content)
-			case llm.StreamEventTypeDone:
-				return llmDoneMsg{}
-			case llm.StreamEventTypeError:
-				return llmErrorMsg{err: event.Error}
-			case llm.StreamEventTypeIncomplete:
-				return llmIncompleteMsg{err: event.Error}
-			case llm.StreamEventTypeToolStart:
-				return llmToolStartMsg{toolCall: event.ToolCall}
-			case llm.StreamEventTypeToolEnd:
-				return llmToolEndMsg{toolCall: event.ToolCall}
-			case llm.StreamEventTypeUsage:
-				return llmUsageMsg{usage: event.Usage}
-			case llm.StreamEventTypeRetry:
-				return llmRetryMsg{err: event.Error, attempt: event.Attempt}
-			default:
-				return llmDoneMsg{}
-			}
-		}
-	}
-}
-
-func formatModelSelectionCard(ms *replwidgets.Model, width int) string {
-	ruleWidth := defaultWidth
-	if width > 0 {
-		ruleWidth = width
-	}
-	if ruleWidth < 1 {
-		ruleWidth = 1
-	}
-
-	rule := repltheme.ModelSelectionRuleStyle.Render(strings.Repeat("─", ruleWidth))
-	lines := strings.Split(strings.TrimRight(ms.ViewString(), "\n"), "\n")
-	var sb strings.Builder
-	sb.WriteString("\n")
-	sb.WriteString(rule + "\n\n")
-	for _, l := range lines {
-		sb.WriteString("  " + l + "\n")
-	}
-	sb.WriteString("\n")
-	sb.WriteString(rule + "\n")
-	return sb.String()
-}
-
-func renderInputArea(content string, width int) string {
-	ruleWidth := defaultWidth
-	if width > 0 {
-		ruleWidth = width
-	}
-	if ruleWidth < 1 {
-		ruleWidth = 1
-	}
-
-	rule := repltheme.InputRuleStyle.Render(strings.Repeat("─", ruleWidth))
-	return rule + "\n" + content + "\n" + rule
-}
-
-func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
-	m.width = msg.Width
-	m.height = msg.Height
-	m.textarea.SetWidth(msg.Width - 3)
-	if m.mdRenderer != nil {
-		m.mdRenderer.UpdateWidth(msg.Width)
-	}
-	if m.output != nil {
-		m.output.SetWidth(msg.Width)
-	}
-	m.viewport.SetWidth(msg.Width)
-	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())
 }
 
 func (m replModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -932,135 +527,6 @@ func (m replModel) inputMetaView() string {
 	}
 
 	return leftPad + left
-}
-
-func getHelpText() string {
-	cmds := []struct{ cmd, desc string }{
-		{"/clear", "Start a new session (also /new)"},
-		{"/compact", "Compact conversation context"},
-		{"/help", "Show available commands"},
-		{"/logout", "Sign out of the current OAuth provider"},
-		{"/model", "Change provider or model"},
-		{"/new", "Start a new session (also /clear)"},
-		{"/resume", "Open the session picker"},
-		{"/sessions", "List saved sessions for this directory"},
-		{"/thinking", "Change thinking effort for the current model"},
-		{"/exit", "Quit Keen"},
-	}
-
-	var lines []string
-	lines = append(lines, repltheme.TitleStyle.Render("Available Commands"))
-	lines = append(lines, "")
-	for _, c := range cmds {
-		lines = append(lines, "  "+repltheme.HelpCmdStyle.Render(c.cmd)+" "+repltheme.HelpDescStyle.Render(c.desc))
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
-	effort := strings.TrimSpace(strings.TrimPrefix(input, thinkingCommand))
-
-	modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model)
-	if !ok || !modelMeta.SupportsThinkingEffort() {
-		m.output.AddError("Current model does not support configurable thinking", repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-
-	if !slices.Contains(modelMeta.ThinkingEfforts, effort) {
-		m.output.AddError("Usage: /thinking "+strings.Join(modelMeta.ThinkingEfforts, "|"), repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-
-	m.ctx.cfg.ThinkingEffort = effort
-	m.ctx.globalCfg.ThinkingEffort = effort
-	if err := m.ctx.loader.Save(m.ctx.globalCfg); err != nil {
-		m.output.AddError("Failed to save config: "+err.Error(), repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-
-	if err := m.updateLLMClient(); err != nil {
-		m.output.AddError("Failed to reinitialize LLM client: "+err.Error(), repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m, nil
-	}
-
-	m.output.AddStyledLine("  ✓ Thinking effort set to: "+effort, repltheme.HighlightStyle)
-	m.output.AddEmptyLine()
-	m.updateViewportContent()
-	m.viewport.GotoBottom()
-	return *m, nil
-}
-
-func (m *replModel) handleLogout() replModel {
-	if m.ctx == nil || m.ctx.cfg == nil || m.ctx.cfg.Provider == "" {
-		m.output.AddError("No provider is configured.", repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m
-	}
-	if config.AuthModeForProvider(m.ctx.cfg.Provider) != config.AuthModeOAuth {
-		m.output.AddError("Current provider does not use OAuth.", repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m
-	}
-	if err := keenauth.NewStore().Remove(m.ctx.cfg.Provider); err != nil {
-		m.output.AddError("Failed to remove OAuth credentials: "+err.Error(), repltheme.ErrorStyle)
-		m.updateViewportContent()
-		m.viewport.GotoBottom()
-		return *m
-	}
-	m.appState.UpdateClient(nil)
-	m.output.AddStyledLine("  ✓ Signed out of "+m.ctx.cfg.Provider, repltheme.HighlightStyle)
-	m.output.AddEmptyLine()
-	m.updateViewportContent()
-	m.viewport.GotoBottom()
-	return *m
-}
-
-func (m *replModel) handleClear() replModel {
-	m.appState.ClearMessages()
-	m.appState.ClearContextMetrics()
-	m.sessions.resetSession()
-	m.history.Reset()
-
-	newOutput := reploutput.NewOutputBuilder(m.width, m.ctx.workingDir)
-	initialLines := buildInitialScreen(m.ctx)
-	for _, line := range initialLines {
-		newOutput.AddLine(line)
-	}
-	newOutput.AddStyledLine("  ✓ New session started", repltheme.CompactionSuccessStyle)
-	newOutput.AddEmptyLine()
-	m.output = newOutput
-
-	m.refreshContextStatus()
-	m.updateViewportContent()
-	m.viewport.GotoBottom()
-	return *m
-}
-
-func (m *replModel) updateLLMClient() error {
-	client, err := llm.NewClient(m.ctx.cfg)
-	if err != nil {
-		return err
-	}
-	m.appState.UpdateClient(client)
-	return nil
-}
-
-func (m *replModel) handleSessionPersistenceError(err error) {
-	if err == nil {
-		return
-	}
-	m.output.AddError("Session persistence failed: "+err.Error(), repltheme.ErrorStyle)
 }
 
 func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {

@@ -171,6 +171,31 @@ func (sh *StreamHandler) ResetContent() {
 	sh.segments = make([]streamSegment, 0)
 }
 
+// RewindForRetry discards only the in-flight assistant/reasoning chunks from a
+// failed stream attempt so the upcoming retry does not duplicate them. Segments
+// from completed prior tool-loop iterations (tool calls, bash output, diffs,
+// permissions) are preserved. The accumulated response strings are rebuilt
+// from the surviving assistant segments so they match what the user still sees.
+func (sh *StreamHandler) RewindForRetry() {
+	for len(sh.segments) > 0 {
+		last := sh.segments[len(sh.segments)-1]
+		if last.kind == segmentAssistant || last.kind == segmentReasoning {
+			sh.segments = sh.segments[:len(sh.segments)-1]
+			continue
+		}
+		break
+	}
+
+	var rebuilt strings.Builder
+	for _, seg := range sh.segments {
+		if seg.kind == segmentAssistant {
+			rebuilt.WriteString(seg.content)
+		}
+	}
+	sh.currentResponse = rebuilt.String()
+	sh.rawResponse = sh.currentResponse
+}
+
 func (sh *StreamHandler) View(width int) string {
 	sh.lastWidth = width
 

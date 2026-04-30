@@ -10,7 +10,7 @@
 </div>
 
 <div align="center">
-<img src="./assets/keen-demo.gif" alt="Keen Code demo" style="width: 100%; height: auto;"/>
+<img src="./assets/keen-demo-2.gif" alt="Keen Code demo" style="width: 100%; height: auto;"/>
 </div>
 
 **Keen Code** is a terminal-based AI coding agent like Claude Code or OpenCode. Written in Go, it is simpler, lighter, and avoids feature bloat. It is designed to be a minimalistic but useful coding agent for typical software engineering tasks.

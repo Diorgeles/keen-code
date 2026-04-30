@@ -114,6 +114,109 @@ func TestStreamHandler_HandleError(t *testing.T) {
 	}
 }
 
+func TestStreamHandler_RewindForRetry_PreservesSealedSegments(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+
+	// Iteration 1: assistant text + a completed tool call.
+	sh.HandleChunk("Let me read the file. ")
+	sh.HandleToolStart(&llm.ToolCall{Name: "read_file"})
+	sh.HandleToolEnd(&llm.ToolCall{Name: "read_file", Duration: 5})
+
+	// Iteration 2: in-flight reasoning + assistant chunks before a stream failure.
+	sh.HandleReasoningChunk("checking the contents")
+	sh.HandleChunk("Based on the file, I think")
+
+	sh.RewindForRetry()
+
+	// The two completed iteration-1 segments (assistant + tool start/end pair) survive;
+	// the trailing in-flight reasoning + assistant segments are dropped.
+	if len(sh.segments) != 3 {
+		t.Fatalf("expected 3 surviving segments after rewind, got %d", len(sh.segments))
+	}
+	if sh.segments[0].kind != segmentAssistant || sh.segments[0].content != "Let me read the file. " {
+		t.Fatalf("expected first segment to be the iteration-1 assistant message, got %+v", sh.segments[0])
+	}
+	if sh.segments[1].kind != segmentToolStart || sh.segments[2].kind != segmentToolEnd {
+		t.Fatalf("expected tool start/end pair to remain, got %q/%q", sh.segments[1].kind, sh.segments[2].kind)
+	}
+
+	// currentResponse and rawResponse must be rebuilt to match what's still in the slice,
+	// so the upcoming retry's chunks accumulate on top of iteration-1 text only.
+	if got := sh.GetResponse(); got != "Let me read the file. " {
+		t.Fatalf("expected rebuilt response %q, got %q", "Let me read the file. ", got)
+	}
+	if got := sh.GetRawResponse(); got != "Let me read the file. " {
+		t.Fatalf("expected rebuilt raw response %q, got %q", "Let me read the file. ", got)
+	}
+}
+
+func TestStreamHandler_RewindForRetry_EmptyStream(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+
+	sh.HandleChunk("partial")
+	sh.HandleReasoningChunk("hmm")
+
+	sh.RewindForRetry()
+
+	if len(sh.segments) != 0 {
+		t.Fatalf("expected no segments after rewinding a stream with no sealed work, got %d", len(sh.segments))
+	}
+	if sh.GetResponse() != "" || sh.GetRawResponse() != "" {
+		t.Fatalf("expected response strings to be cleared, got %q / %q", sh.GetResponse(), sh.GetRawResponse())
+	}
+}
+
+func TestStreamHandler_RewindForRetry_PreservesResolvedPermissionAndDiff(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+
+	sh.HandleChunk("I'll edit this. ")
+	sh.HandleDiff([]tools.EditDiffLine{{Kind: tools.DiffLineAdded, Content: "new line", NewLineNum: 1}})
+	req := makeTestPermissionRequest(false)
+	sh.HandlePermissionRequest(req)
+	sh.ResolvePendingPermission(replpermissions.StatusAllowed)
+	sh.HandleReasoningChunk("checking result")
+	sh.HandleChunk("The edit completed")
+
+	sh.RewindForRetry()
+
+	if len(sh.segments) != 3 {
+		t.Fatalf("expected 3 surviving segments after rewind, got %d", len(sh.segments))
+	}
+	if sh.segments[0].kind != segmentAssistant || sh.segments[1].kind != segmentDiff || sh.segments[2].kind != segmentPermission {
+		t.Fatalf("expected assistant/diff/permission segments to remain, got %q/%q/%q", sh.segments[0].kind, sh.segments[1].kind, sh.segments[2].kind)
+	}
+	if sh.segments[2].permissionReq.Status != replpermissions.StatusAllowed {
+		t.Fatalf("expected resolved permission to remain allowed, got %q", sh.segments[2].permissionReq.Status)
+	}
+	if got := sh.GetResponse(); got != "I'll edit this. " {
+		t.Fatalf("expected rebuilt response %q, got %q", "I'll edit this. ", got)
+	}
+}
+
+func TestStreamHandler_RewindForRetry_LeavesSealedTailUnchanged(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+
+	sh.HandleChunk("Running tests. ")
+	sh.HandleBashStart("go test ./...", "run tests")
+	sh.HandleBashEnd(&llm.ToolCall{Output: map[string]any{"stdout": "ok"}})
+
+	sh.RewindForRetry()
+
+	if len(sh.segments) != 2 {
+		t.Fatalf("expected sealed assistant/bash segments to remain, got %d", len(sh.segments))
+	}
+	if sh.segments[0].kind != segmentAssistant || sh.segments[1].kind != segmentBash {
+		t.Fatalf("expected assistant/bash segments to remain, got %q/%q", sh.segments[0].kind, sh.segments[1].kind)
+	}
+	if got := sh.GetResponse(); got != "Running tests. " {
+		t.Fatalf("expected response to remain %q, got %q", "Running tests. ", got)
+	}
+}
+
 func TestStreamHandler_HandleDone_MixedSegmentsChronological(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	eventCh := make(chan llm.StreamEvent)

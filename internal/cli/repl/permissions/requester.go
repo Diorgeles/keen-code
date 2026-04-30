@@ -105,3 +105,7 @@ func (r *Requester) HasPendingRequest() bool {
 func (r *Requester) IsSessionAllowed(toolName string) bool {
 	return r.sessionAllowedTools[toolName]
 }
+
+func (r *Requester) ResetSessionPermissions() {
+	r.sessionAllowedTools = make(map[string]bool)
+}
