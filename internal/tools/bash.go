@@ -43,8 +43,20 @@ Use this for: running tests, installing dependencies, git operations, build comm
 and other shell-native tasks not covered by dedicated tools.
 
 IMPORTANT:
-- Set isDangerous=true for any potentially dangerous commands like removing files, pushing to remote, etc.
-  This will always prompt for user permission. Note that linting code is not a dangerous command.
+- Set isDangerous=true for any potentially dangerous commands. This will always prompt for user permission.
+- Examples of dangerous commands:
+  - removing files or directories
+  - git operations that modify the repository like commit, push, reset, rebase, etc.
+  - killing processes
+  - modifying system files
+  - accessing environment variables
+- Examples of non-dangerous commands:
+  - adding to git stage (git add)
+  - linting code
+  - running tests
+  - building the project
+  - running the project
+  - installing dependencies
 - Commands time out after 180 seconds.
 - Quote paths that may contain spaces.
 - Prefer single commands over long chains. For independent commands, use parallel
