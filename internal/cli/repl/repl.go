@@ -71,6 +71,8 @@ type replModel struct {
 	contextStatus       contextStatus
 	showThinking        bool
 	history             replhistory.InputHistory
+	selection           viewportSelection
+	inputSelection      viewportSelection
 }
 
 func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) replModel {
@@ -274,7 +276,9 @@ func (m *replModel) updateViewportContent() {
 		content.WriteString(replwidgets.FormatSessionPickerCard(m.sessionPicker, m.viewport.Width(), m.viewport.Height()))
 	}
 
-	m.viewport.SetContent(content.String())
+	viewportContent := content.String()
+	m.viewport.SetContent(viewportContent)
+	m.selection.setContent(viewportContent)
 }
 
 func (m replModel) waitForAsyncEvent() tea.Cmd {
@@ -353,7 +357,41 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if m.inputSelection.hasSelection() {
+			if isSelectionCopyKey(msg) {
+				return m, copySelectedTextCmd(m.inputSelection.selectedText())
+			}
+			if msg.String() == keyEsc {
+				m.inputSelection.clear()
+				return m, nil
+			}
+			m.inputSelection.clear()
+		}
+		if m.selection.hasSelection() {
+			if isSelectionCopyKey(msg) {
+				return m, copySelectedTextCmd(m.selection.selectedText())
+			}
+			if msg.String() == keyEsc {
+				m.selection.clear()
+				return m, nil
+			}
+		}
 		return m.handleKeyMsg(msg)
+
+	case tea.MouseClickMsg:
+		if handled, cmd := m.handleMouseDown(msg); handled {
+			return m, cmd
+		}
+
+	case tea.MouseMotionMsg:
+		if handled := m.handleMouseDrag(msg); handled {
+			return m, nil
+		}
+
+	case tea.MouseReleaseMsg:
+		if handled, cmd := m.handleMouseUp(); handled {
+			return m, cmd
+		}
 
 	case tea.MouseWheelMsg:
 		switch msg.Button {
@@ -421,7 +459,8 @@ func (m replModel) View() tea.View {
 	} else {
 		var view strings.Builder
 
-		view.WriteString(m.viewport.View())
+		viewportView := m.selection.render(m.viewport.View(), m.viewport.Width(), m.viewport.Height(), m.viewport.YOffset())
+		view.WriteString(viewportView)
 		view.WriteString("\n")
 
 		if m.showSpinner {
@@ -431,7 +470,8 @@ func (m replModel) View() tea.View {
 			view.WriteString("\n")
 		}
 
-		view.WriteString(renderInputArea(m.textarea.View(), m.width))
+		textareaView := m.inputSelection.renderWithColumnOffset(m.textarea.View(), m.textarea.Width()+inputPromptWidth, m.textarea.Height(), m.textarea.ScrollYOffset(), inputPromptWidth)
+		view.WriteString(renderInputArea(textareaView, m.width))
 		view.WriteString("\n")
 		if m.suggestion.Visible() {
 			view.WriteString(m.suggestion.View(m.width))
