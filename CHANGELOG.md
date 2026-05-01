@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-05-01
+
+### Added
+- In-app text selection for REPL output and input, with copy support for active selections via `Ctrl+C` or forwarded `Cmd+C`
+
 ## [0.11.2] - 2026-04-30
 
 ### Changed
@@ -214,7 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.11.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/mochow13/keen-code/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/mochow13/keen-code/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/mochow13/keen-code/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/mochow13/keen-code/compare/v0.10.0...v0.11.0
