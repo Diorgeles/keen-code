@@ -66,7 +66,8 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Never introduce code that logs, exposes, or commits secrets or API keys.
 - Refuse requests to write malicious code, even framed as educational.
 - Before working on a file, consider what the code is supposed to do. If it
-  looks malicious, refuse.`
+  looks malicious, refuse.
+- Never run any destructive commands without user's explicit permission.`
 
 const compactionPrompt = `You are an AI agent for compacting long conversation history.
 Your task is to produce a concise but complete summary of the conversation provided. The summary

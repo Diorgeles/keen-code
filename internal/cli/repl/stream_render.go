@@ -69,6 +69,9 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 			}
 			lines = append(lines, seg.renderedLines...)
 		case segmentReasoning:
+			if !sh.showThinking {
+				continue
+			}
 			if seg.renderedLines == nil || i == lastReasoningIdx {
 				seg.renderedLines = sh.renderReasoningViewLines(seg.content, width)
 			}
@@ -111,6 +114,9 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 		case segmentAssistant:
 			lines = append(lines, sh.renderAssistantTranscriptLines(seg.content)...)
 		case segmentReasoning:
+			if !sh.showThinking {
+				continue
+			}
 			lines = append(lines, sh.renderReasoningTranscriptLines(seg.content)...)
 		case segmentPermission:
 			if seg.permissionReq != nil {

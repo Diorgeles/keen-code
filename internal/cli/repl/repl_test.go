@@ -43,6 +43,7 @@ func newTestModel() replModel {
 		spinner:             spinner.New(),
 		width:               80,
 		height:              30,
+		showThinking:        true,
 	}
 }
 

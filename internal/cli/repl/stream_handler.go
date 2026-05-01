@@ -18,12 +18,14 @@ type StreamHandler struct {
 	workingDir      string
 	mdRenderer      *replmarkdown.Renderer
 	segments        []streamSegment
+	showThinking    bool
 }
 
 func NewStreamHandler(mdRenderer *replmarkdown.Renderer) *StreamHandler {
 	return &StreamHandler{
-		mdRenderer: mdRenderer,
-		segments:   make([]streamSegment, 0),
+		mdRenderer:   mdRenderer,
+		segments:     make([]streamSegment, 0),
+		showThinking: true,
 	}
 }
 

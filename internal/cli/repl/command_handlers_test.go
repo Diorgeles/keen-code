@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	replcommands "github.com/user/keen-code/internal/cli/repl/commands"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
@@ -44,7 +45,7 @@ func TestHandleEnterKey_ActiveStream(t *testing.T) {
 
 func TestHandleEnterKey_ExitCommand(t *testing.T) {
 	m := newTestModel()
-	m.textarea.SetValue(exitCommand)
+	m.textarea.SetValue(replcommands.Exit)
 
 	newM, cmd := m.handleEnterKey()
 
@@ -58,7 +59,7 @@ func TestHandleEnterKey_ExitCommand(t *testing.T) {
 
 func TestHandleEnterKey_HelpCommand(t *testing.T) {
 	m := newTestModel()
-	m.textarea.SetValue(helpCommand)
+	m.textarea.SetValue(replcommands.Help)
 
 	newM, _ := m.handleEnterKey()
 
@@ -75,7 +76,7 @@ func TestHandleEnterKey_ModelCommand(t *testing.T) {
 	m.ctx.registry = &providers.Registry{Providers: []providers.Provider{}}
 	m.ctx.globalCfg = &config.GlobalConfig{}
 	m.ctx.loader = config.NewLoader()
-	m.textarea.SetValue(modelCommand)
+	m.textarea.SetValue(replcommands.Model)
 
 	newM, _ := m.handleEnterKey()
 
@@ -93,7 +94,7 @@ func TestHandleEnterKey_SessionsCommand_EmptyState(t *testing.T) {
 
 	m := newTestModel()
 	m.sessions = newReplSessionState(filepath.Join(tmp, "project"))
-	m.textarea.SetValue(sessionsCommand)
+	m.textarea.SetValue(replcommands.Sessions)
 
 	newM, cmd := m.handleEnterKey()
 
@@ -206,7 +207,7 @@ func TestDispatchCommand_SlashPrefixedNonCommandFallsThrough(t *testing.T) {
 
 func TestHandleEnterKey_ClearCommand(t *testing.T) {
 	m := newTestModel()
-	m.textarea.SetValue(clearCommand)
+	m.textarea.SetValue(replcommands.Clear)
 
 	newM, cmd := m.handleEnterKey()
 
@@ -224,7 +225,7 @@ func TestHandleEnterKey_ClearCommand(t *testing.T) {
 func TestHandleEnterKey_LogoutCommand_NoProvider(t *testing.T) {
 	m := newTestModel()
 	m.ctx.cfg = &config.ResolvedConfig{Provider: ""}
-	m.textarea.SetValue(logoutCommand)
+	m.textarea.SetValue(replcommands.Logout)
 
 	newM, _ := m.handleEnterKey()
 
@@ -255,7 +256,7 @@ func TestStartModelSelection_SetsModelSelection(t *testing.T) {
 
 func TestHandleEnterKey_NewCommand(t *testing.T) {
 	m := newTestModel()
-	m.textarea.SetValue(newCommand)
+	m.textarea.SetValue(replcommands.New)
 
 	newM, cmd := m.handleEnterKey()
 
@@ -270,7 +271,7 @@ func TestHandleEnterKey_NewCommand(t *testing.T) {
 func TestHandleEnterKey_CompactCommandClientNotReady(t *testing.T) {
 	m := newTestModel()
 	m.ctx.cfg = &config.ResolvedConfig{}
-	m.textarea.SetValue(compactCommand)
+	m.textarea.SetValue(replcommands.Compact)
 
 	newM, cmd := m.handleEnterKey()
 
@@ -332,7 +333,7 @@ func TestHandleEnterKey_SessionsCommandWithSessions(t *testing.T) {
 		t.Fatalf("append user message: %v", err)
 	}
 	m.sessions.resetSession()
-	m.textarea.SetValue(sessionsCommand)
+	m.textarea.SetValue(replcommands.Sessions)
 
 	newM, cmd := m.handleEnterKey()
 
@@ -353,7 +354,7 @@ func TestHandleEnterKey_ResumeCommand(t *testing.T) {
 
 	m := newTestModel()
 	m.sessions = newReplSessionState(filepath.Join(tmp, "project"))
-	m.textarea.SetValue(resumeCommand)
+	m.textarea.SetValue(replcommands.Resume)
 
 	newM, _ := m.handleEnterKey()
 
@@ -377,5 +378,78 @@ func TestStartModelSelection_CallsOnComplete(t *testing.T) {
 	ms := result.modelSelection
 	if ms.Step != replwidgets.StepProvider {
 		t.Fatalf("expected model selection to start at provider step, got %d", ms.Step)
+	}
+}
+
+func TestHandleShowThinkingCommand_On(t *testing.T) {
+	m := newTestModel()
+	m.showThinking = false
+	m.streamHandler.showThinking = false
+
+	result := m.handleShowThinkingCommand("/show-thinking on")
+
+	if !result.showThinking {
+		t.Error("expected showThinking to be true after /show-thinking on")
+	}
+	if !result.streamHandler.showThinking {
+		t.Error("expected streamHandler.showThinking to be true after /show-thinking on")
+	}
+	if !strings.Contains(result.output.Join(), "Thinking tokens shown") {
+		t.Fatalf("expected confirmation message, got %q", result.output.Join())
+	}
+}
+
+func TestHandleShowThinkingCommand_Off(t *testing.T) {
+	m := newTestModel()
+
+	result := m.handleShowThinkingCommand("/show-thinking off")
+
+	if result.showThinking {
+		t.Error("expected showThinking to be false after /show-thinking off")
+	}
+	if result.streamHandler.showThinking {
+		t.Error("expected streamHandler.showThinking to be false after /show-thinking off")
+	}
+	if !strings.Contains(result.output.Join(), "Thinking tokens hidden") {
+		t.Fatalf("expected confirmation message, got %q", result.output.Join())
+	}
+}
+
+func TestHandleShowThinkingCommand_NoArgShowsStatus(t *testing.T) {
+	m := newTestModel()
+
+	result := m.handleShowThinkingCommand("/show-thinking")
+	if !strings.Contains(result.output.Join(), "shown") {
+		t.Fatalf("expected status message for shown state, got %q", result.output.Join())
+	}
+
+	m2 := newTestModel()
+	m2.showThinking = false
+	m2.streamHandler.showThinking = false
+
+	result2 := m2.handleShowThinkingCommand("/show-thinking")
+	if !strings.Contains(result2.output.Join(), "hidden") {
+		t.Fatalf("expected status message for hidden state, got %q", result2.output.Join())
+	}
+}
+
+func TestHandleShowThinkingCommand_PersistsToGlobalConfig(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	m := newTestModel()
+	m.ctx.globalCfg = &config.GlobalConfig{}
+	m.ctx.loader = config.NewLoader()
+
+	_ = m.handleShowThinkingCommand("/show-thinking off")
+
+	if m.ctx.globalCfg.ShowThinking == nil || *m.ctx.globalCfg.ShowThinking {
+		t.Error("expected globalCfg.ShowThinking to be false after /show-thinking off")
+	}
+
+	_ = m.handleShowThinkingCommand("/show-thinking on")
+
+	if m.ctx.globalCfg.ShowThinking == nil || !*m.ctx.globalCfg.ShowThinking {
+		t.Error("expected globalCfg.ShowThinking to be true after /show-thinking on")
 	}
 }

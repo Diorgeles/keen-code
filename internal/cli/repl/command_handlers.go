@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	keenauth "github.com/user/keen-code/internal/auth"
+	replcommands "github.com/user/keen-code/internal/cli/repl/commands"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
@@ -16,12 +17,12 @@ import (
 
 func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	switch {
-	case input == exitCommand:
+	case input == replcommands.Exit:
 		m.quitting = true
 		_ = m.history.Flush()
 		return *m, tea.Quit, true
 
-	case input == helpCommand:
+	case input == replcommands.Help:
 		m.output.AddLine(getHelpText())
 		m.output.AddEmptyLine()
 		m.textarea.Reset()
@@ -29,16 +30,16 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 		m.viewport.GotoBottom()
 		return *m, nil, true
 
-	case input == modelCommand:
+	case input == replcommands.Model:
 		m.textarea.Reset()
 		return m.startModelSelection(), nil, true
 
-	case input == logoutCommand:
+	case input == replcommands.Logout:
 		m.textarea.Reset()
 		result := m.handleLogoutCommand()
 		return result, nil, true
 
-	case input == sessionsCommand || input == resumeCommand:
+	case input == replcommands.Sessions || input == replcommands.Resume:
 		m.textarea.Reset()
 		summaries, err := m.sessions.listSessions()
 		if err != nil {
@@ -59,18 +60,23 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 		m.viewport.GotoBottom()
 		return *m, nil, true
 
-	case input == clearCommand || input == newCommand:
+	case input == replcommands.Clear || input == replcommands.New:
 		m.textarea.Reset()
 		result := m.handleClearCommand()
 		return result, nil, true
 
-	case input == thinkingCommand || strings.HasPrefix(input, thinkingCommand+" "):
+	case input == replcommands.Thinking || strings.HasPrefix(input, replcommands.Thinking+" "):
 		m.textarea.Reset()
 		result, cmd := m.handleThinkingCommand(input)
 		return result, cmd, true
 
-	case input == compactCommand || strings.HasPrefix(input, compactCommand+" "):
-		extraPrompt := strings.TrimSpace(strings.TrimPrefix(input, compactCommand))
+	case input == replcommands.ShowThinking || strings.HasPrefix(input, replcommands.ShowThinking+" "):
+		m.textarea.Reset()
+		result := m.handleShowThinkingCommand(input)
+		return result, nil, true
+
+	case input == replcommands.Compact || strings.HasPrefix(input, replcommands.Compact+" "):
+		extraPrompt := strings.TrimSpace(strings.TrimPrefix(input, replcommands.Compact))
 		if !m.appState.IsClientReady(m.ctx.cfg) {
 			m.output.AddError("LLM client not initialized. Use /model to configure.", repltheme.ErrorStyle)
 			m.textarea.Reset()
@@ -141,7 +147,7 @@ func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
-	effort := strings.TrimSpace(strings.TrimPrefix(input, thinkingCommand))
+	effort := strings.TrimSpace(strings.TrimPrefix(input, replcommands.Thinking))
 
 	modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model)
 	if !ok || !modelMeta.SupportsThinkingEffort() {
@@ -179,6 +185,42 @@ func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil
+}
+
+func (m *replModel) handleShowThinkingCommand(input string) replModel {
+	arg := strings.TrimSpace(strings.TrimPrefix(input, replcommands.ShowThinking))
+
+	switch arg {
+	case "on":
+		m.showThinking = true
+		m.streamHandler.showThinking = true
+		m.saveShowThinking(true)
+		m.output.AddStyledLine("  ✓ Thinking tokens shown", repltheme.HighlightStyle)
+	case "off":
+		m.showThinking = false
+		m.streamHandler.showThinking = false
+		m.saveShowThinking(false)
+		m.output.AddStyledLine("  ✓ Thinking tokens hidden", repltheme.HighlightStyle)
+	default:
+		if m.showThinking {
+			m.output.AddStyledLine("  Thinking tokens: shown (use /show-thinking off to hide)", repltheme.HighlightStyle)
+		} else {
+			m.output.AddStyledLine("  Thinking tokens: hidden (use /show-thinking on to show)", repltheme.HighlightStyle)
+		}
+	}
+
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
+}
+
+func (m *replModel) saveShowThinking(val bool) {
+	if m.ctx == nil || m.ctx.globalCfg == nil || m.ctx.loader == nil {
+		return
+	}
+	m.ctx.globalCfg.ShowThinking = &val
+	_ = m.ctx.loader.Save(m.ctx.globalCfg)
 }
 
 func (m *replModel) handleLogoutCommand() replModel {
@@ -233,24 +275,11 @@ func (m *replModel) handleClearCommand() replModel {
 }
 
 func getHelpText() string {
-	cmds := []struct{ cmd, desc string }{
-		{"/clear", "Start a new session (also /new)"},
-		{"/compact", "Compact conversation context"},
-		{"/help", "Show available commands"},
-		{"/logout", "Sign out of the current OAuth provider"},
-		{"/model", "Change provider or model"},
-		{"/new", "Start a new session (also /clear)"},
-		{"/resume", "Open the session picker"},
-		{"/sessions", "List saved sessions for this directory"},
-		{"/thinking", "Change thinking effort for the current model"},
-		{"/exit", "Quit Keen"},
-	}
-
 	var lines []string
 	lines = append(lines, repltheme.TitleStyle.Render("Available Commands"))
 	lines = append(lines, "")
-	for _, c := range cmds {
-		lines = append(lines, "  "+repltheme.HelpCmdStyle.Render(c.cmd)+" "+repltheme.HelpDescStyle.Render(c.desc))
+	for _, c := range replcommands.All {
+		lines = append(lines, "  "+repltheme.HelpCmdStyle.Render(c.Name)+" "+repltheme.HelpDescStyle.Render(c.Description))
 	}
 
 	return strings.Join(lines, "\n")

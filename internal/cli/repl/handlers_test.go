@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	replcommands "github.com/user/keen-code/internal/cli/repl/commands"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
@@ -153,7 +154,7 @@ func TestHandleLLMError(t *testing.T) {
 
 func TestHandleKeyMsg_Enter(t *testing.T) {
 	ta := textarea.New()
-	ta.SetValue(helpCommand)
+	ta.SetValue(replcommands.Help)
 	m := replModel{
 		textarea:      ta,
 		width:         80,

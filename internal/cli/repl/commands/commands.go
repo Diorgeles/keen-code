@@ -2,22 +2,37 @@ package commands
 
 import "strings"
 
+const (
+	Clear        = "/clear"
+	Compact      = "/compact"
+	Exit         = "/exit"
+	Help         = "/help"
+	Logout       = "/logout"
+	Model        = "/model"
+	New          = "/new"
+	Resume       = "/resume"
+	Sessions     = "/sessions"
+	ShowThinking = "/show-thinking"
+	Thinking     = "/thinking"
+)
+
 type SlashCommand struct {
 	Name        string
 	Description string
 }
 
-var all = []SlashCommand{
-	{"/clear", "Clear the session and create a new one (also /new)"},
-	{"/compact", "Compact conversation context"},
-	{"/exit", "Quit Keen"},
-	{"/help", "Show available commands"},
-	{"/logout", "Sign out of the current OAuth provider"},
-	{"/model", "Change provider or model"},
-	{"/new", "Start a new session (also /clear)"},
-	{"/resume", "Open the session picker"},
-	{"/sessions", "List saved sessions for this directory"},
-	{"/thinking", "Change thinking effort for the current model"},
+var All = []SlashCommand{
+	{Clear, "Clear the session and create a new one (also /new)"},
+	{Compact, "Compact conversation context"},
+	{Exit, "Quit Keen"},
+	{Help, "Show available commands"},
+	{Logout, "Sign out of the current OAuth provider"},
+	{Model, "Change provider or model"},
+	{New, "Start a new session (also /clear)"},
+	{Resume, "Open the session picker"},
+	{Sessions, "List saved sessions for this directory"},
+	{ShowThinking, "Toggle thinking token display (on|off)"},
+	{Thinking, "Change thinking effort for the current model"},
 }
 
 func Filter(input string) []SlashCommand {
@@ -26,7 +41,7 @@ func Filter(input string) []SlashCommand {
 	}
 	prefix := strings.ToLower(strings.TrimPrefix(input, "/"))
 	var results []SlashCommand
-	for _, cmd := range all {
+	for _, cmd := range All {
 		name := strings.TrimPrefix(cmd.Name, "/")
 		if strings.HasPrefix(name, prefix) {
 			results = append(results, cmd)

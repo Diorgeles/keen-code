@@ -22,6 +22,7 @@ type GlobalConfig struct {
 	ActiveProvider string                    `json:"active_provider"`
 	ActiveModel    string                    `json:"active_model"`
 	ThinkingEffort string                    `json:"thinking_effort,omitempty"`
+	ShowThinking   *bool                     `json:"show_thinking,omitempty"`
 	Providers      map[string]ProviderConfig `json:"providers"`
 }
 

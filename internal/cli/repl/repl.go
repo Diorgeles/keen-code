@@ -29,17 +29,6 @@ import (
 )
 
 const (
-	exitCommand     = "/exit"
-	helpCommand     = "/help"
-	modelCommand    = "/model"
-	compactCommand  = "/compact"
-	sessionsCommand = "/sessions"
-	resumeCommand   = "/resume"
-	clearCommand    = "/clear"
-	newCommand      = "/new"
-	thinkingCommand = "/thinking"
-	logoutCommand   = "/logout"
-
 	defaultWidth = 120
 	maxHeight    = 3
 )
@@ -80,6 +69,7 @@ type replModel struct {
 	isCompacting        bool
 	compactionCancel    context.CancelFunc
 	contextStatus       contextStatus
+	showThinking        bool
 	history             replhistory.InputHistory
 }
 
@@ -156,8 +146,13 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		sessions:            sessions,
 		suggestion:          replwidgets.NewSuggestionModel(),
 		fileSearcher:        fileSearcher,
+		showThinking:        true,
+	}
+	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
+		model.showThinking = *ctx.globalCfg.ShowThinking
 	}
 	model.streamHandler.workingDir = ctx.workingDir
+	model.streamHandler.showThinking = model.showThinking
 
 	historyDir, err := os.UserHomeDir()
 	if err == nil {
@@ -533,6 +528,7 @@ func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {
 	}
 
 	replay := newSessionReplay(m.width, m.mdRenderer, m.ctx.workingDir)
+	replay.handler.showThinking = m.showThinking
 
 	for _, event := range loaded.Events {
 		replay.applyEvent(event)

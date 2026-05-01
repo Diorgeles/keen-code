@@ -43,8 +43,8 @@ Use this for: running tests, installing dependencies, git operations, build comm
 and other shell-native tasks not covered by dedicated tools.
 
 IMPORTANT:
-- Set isDangerous=true for any command that removes files or changes system state.
-  This will always prompt for user permission.
+- Set isDangerous=true for any potentially dangerous commands like removing files, pushing to remote, etc.
+  This will always prompt for user permission. Note that linting code is not a dangerous command.
 - Commands time out after 180 seconds.
 - Quote paths that may contain spaces.
 - Prefer single commands over long chains. For independent commands, use parallel
