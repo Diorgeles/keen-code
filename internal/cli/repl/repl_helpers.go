@@ -148,7 +148,6 @@ func buildInitialScreen(ctx *replContext) []string {
 		"Use /help  for available commands",
 		"Use /model to change provider or model",
 		"Press Enter to send, Shift+Enter for new line",
-		"Shift+click to select and copy text",
 	}
 	tipsBox := repltheme.BoxStyle.Render(repltheme.TipStyle.Render(strings.Join(tips, "\n")))
 	lines = append(lines, tipsBox)
