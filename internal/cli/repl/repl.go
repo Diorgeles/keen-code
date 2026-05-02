@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textarea"
@@ -63,6 +64,7 @@ type replModel struct {
 	spinner             spinner.Model
 	showSpinner         bool
 	loadingText         string
+	loadingStartedAt    time.Time
 	userScrolled        bool
 	streamCancel        context.CancelFunc
 	turnMemory          *turnMemoryAccumulator
@@ -234,9 +236,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	m.showSpinner = true
-	m.spinner.Spinner = nextLoadingSpinner()
-	m.loadingText = nextLoadingText()
+	m.startLoading(nextLoadingText())
 	m.startAssistantTurnMemory()
 	m.streamHandler.Start(eventCh, m.loadingText)
 	m.textarea.Reset()
@@ -515,6 +515,9 @@ func (m replModel) inputMetaView() string {
 	}
 	contextText := renderContextStatus(m.contextStatus)
 	separator := repltheme.MetaLabelStyle.Render("·")
+	if m.showSpinner {
+		contextText += " " + separator + " " + repltheme.LoadingTimerStyle.Render("⏱ "+m.loadingElapsedText())
+	}
 	left := modelText + " " + separator + " " + contextText
 	right := ""
 	if m.contextStatus.ShouldSuggestCompaction() {
@@ -553,6 +556,9 @@ func (m replModel) inputMetaView() string {
 	if !m.contextStatus.KnownWindow || m.contextStatus.ContextWindow <= 0 {
 		compactLeft = repltheme.MetaLabelStyle.Render("M:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model) +
 			" " + separator + " " + repltheme.MetaLabelStyle.Render("C:") + " " + repltheme.ContextStatusUnknownStyle.Render("N/A")
+	}
+	if m.showSpinner {
+		compactLeft += " " + separator + " " + repltheme.LoadingTimerStyle.Render("⏱ "+m.loadingElapsedText())
 	}
 	space = available - lipgloss.Width(compactLeft) - lipgloss.Width(right)
 	if space >= 1 {

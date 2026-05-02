@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestNewOutputBuilder(t *testing.T) {
@@ -172,6 +173,23 @@ func TestOutputBuilder_AddUserInput_MultiLine(t *testing.T) {
 
 	if !strings.Contains(joined, "line2") {
 		t.Errorf("output should contain 'line2', got %q", joined)
+	}
+}
+
+func TestOutputBuilder_AddUserInput_WrappedLinesAreIndented(t *testing.T) {
+	ob := NewOutputBuilder(12, "")
+	style := lipgloss.NewStyle()
+
+	ob.AddUserInput("hello world", style)
+
+	lines := ob.GetLines()
+	if len(lines) != 5 {
+		t.Fatalf("len(lines) = %d, want 5", len(lines))
+	}
+
+	line := ansi.Strip(lines[2])
+	if strings.Contains(line, "hello") || !strings.HasPrefix(line, "   world") {
+		t.Errorf("wrapped line should be indented, got %q", line)
 	}
 }
 

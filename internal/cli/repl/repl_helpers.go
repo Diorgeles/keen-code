@@ -2,9 +2,11 @@ package repl
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"os"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -97,6 +99,35 @@ func nextLoadingText() string {
 
 func nextLoadingSpinner() spinner.Spinner {
 	return loadingSpinners[rand.Intn(len(loadingSpinners))]
+}
+
+func (m *replModel) startLoading(text string) {
+	m.showSpinner = true
+	m.spinner.Spinner = nextLoadingSpinner()
+	m.loadingText = text
+	m.loadingStartedAt = time.Now()
+}
+
+func (m *replModel) stopLoading() {
+	m.showSpinner = false
+	m.loadingStartedAt = time.Time{}
+}
+
+func (m replModel) loadingElapsedText() string {
+	if m.loadingStartedAt.IsZero() {
+		return "0:00"
+	}
+	return formatLoadingElapsed(time.Since(m.loadingStartedAt))
+}
+
+func formatLoadingElapsed(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int(d.Seconds())
+	minutes := totalSeconds / 60
+	seconds := totalSeconds % 60
+	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }
 
 func abbreviateHome(path string) string {

@@ -59,7 +59,7 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 		return m.handleCompactionDone()
 	}
 	segments := cloneStreamSegments(m.streamHandler.segments)
-	m.showSpinner = false
+	m.stopLoading()
 	m.clearStreamCancel()
 	m.adjustTextareaHeight()
 	responseLines, response := m.streamHandler.HandleDone()
@@ -86,7 +86,7 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 func (m *replModel) handleLLMIncomplete(err error) (replModel, tea.Cmd) {
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	partialResponse := m.streamHandler.GetResponse()
-	m.showSpinner = false
+	m.stopLoading()
 	m.clearStreamCancel()
 	turnMemory := m.consumeTurnMemory()
 	m.adjustTextareaHeight()
@@ -116,7 +116,7 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	}
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	partialResponse := m.streamHandler.GetResponse()
-	m.showSpinner = false
+	m.stopLoading()
 	m.clearStreamCancel()
 	turnMemory := m.consumeTurnMemory()
 	m.adjustTextareaHeight()
@@ -159,7 +159,7 @@ func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	responseLines, summary := m.streamHandler.HandleDone()
 	m.isCompacting = false
-	m.showSpinner = false
+	m.stopLoading()
 	m.compactionCancel = nil
 	m.clearStreamCancel()
 	if err := m.appState.ApplyCompaction(summary); err != nil {
@@ -192,7 +192,7 @@ func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
 		}
 	}
 	m.isCompacting = false
-	m.showSpinner = false
+	m.stopLoading()
 	m.compactionCancel = nil
 	m.clearStreamCancel()
 	if err != nil {
@@ -465,7 +465,7 @@ func (m *replModel) interruptStream(message string) {
 		m.clearStreamCancel()
 	}
 
-	m.showSpinner = false
+	m.stopLoading()
 
 	segments := cloneStreamSegments(m.streamHandler.segments)
 	partialResponse := m.streamHandler.GetResponse()

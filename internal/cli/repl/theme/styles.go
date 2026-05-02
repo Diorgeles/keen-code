@@ -96,6 +96,7 @@ var (
 	ErrorStyle               = lipgloss.NewStyle().Foreground(ErrorColor)
 	InterruptedStyle         = lipgloss.NewStyle().Foreground(PrimaryColor).Bold(true)
 	LoadingTextStyled        = lipgloss.NewStyle().Foreground(PrimaryColor)
+	LoadingTimerStyle        = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
 	CompactionSuccessStyle   = lipgloss.NewStyle().Foreground(SecondaryColor)
 	CompactionErrorStyle     = lipgloss.NewStyle().Foreground(ErrorColor)
 	CompactionCancelledStyle = lipgloss.NewStyle().Foreground(TextDimColor)

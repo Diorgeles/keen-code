@@ -133,9 +133,7 @@ func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
 
 	m.compactionCancel = cancel
 	m.isCompacting = true
-	m.showSpinner = true
-	m.spinner.Spinner = nextLoadingSpinner()
-	m.loadingText = "Compacting..."
+	m.startLoading("Compacting...")
 	m.clearTurnMemory()
 	m.streamHandler.Start(eventCh, m.loadingText)
 	m.userScrolled = false

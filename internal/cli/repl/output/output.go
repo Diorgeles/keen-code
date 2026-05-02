@@ -58,9 +58,20 @@ func (ob *OutputBuilder) AddUserInput(input string, promptStyle lipgloss.Style) 
 	indentStyle := lipgloss.NewStyle().Background(bg)
 	prompt := promptStyle.UnsetMarginTop().Background(bg).Render(" ▶ ")
 
-	bodyLines := []string{prompt + wrapStyle.Render(inputLines[0])}
-	for i := 1; i < len(inputLines); i++ {
-		bodyLines = append(bodyLines, indentStyle.Render("   ")+wrapStyle.Render(inputLines[i]))
+	bodyLines := make([]string, 0, len(inputLines))
+	for i, inputLine := range inputLines {
+		prefix := indentStyle.Render("   ")
+		if i == 0 {
+			prefix = prompt
+		}
+
+		wrappedLines := strings.Split(wrapStyle.Render(inputLine), "\n")
+		for j, wrappedLine := range wrappedLines {
+			if j > 0 {
+				prefix = indentStyle.Render("   ")
+			}
+			bodyLines = append(bodyLines, prefix+wrappedLine)
+		}
 	}
 	body := strings.Join(bodyLines, "\n")
 

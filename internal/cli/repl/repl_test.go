@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textarea"
@@ -673,6 +674,27 @@ func TestSpinnerHeight_IncludesCompactionSpinner(t *testing.T) {
 	}
 }
 
+func TestFormatLoadingElapsed(t *testing.T) {
+	tests := []struct {
+		name string
+		in   time.Duration
+		want string
+	}{
+		{name: "zero", in: 0, want: "0:00"},
+		{name: "under minute", in: 9*time.Second + 900*time.Millisecond, want: "0:09"},
+		{name: "minute", in: time.Minute + 5*time.Second, want: "1:05"},
+		{name: "negative", in: -time.Second, want: "0:00"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatLoadingElapsed(tt.in); got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
 	m := newTestModel()
 	m.showSpinner = true
@@ -708,6 +730,38 @@ func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
 	}
 	if !strings.Contains(lines[spinnerLine], "| ") {
 		t.Fatalf("expected spacing after spinner glyph, got %q", lines[spinnerLine])
+	}
+	if strings.Contains(lines[spinnerLine], "0:00") {
+		t.Fatalf("expected spinner line not to include elapsed timer, got %q", lines[spinnerLine])
+	}
+}
+
+func TestInputMetaView_RendersElapsedTimerAfterContextStatus(t *testing.T) {
+	m := newTestModel()
+	m.showSpinner = true
+	m.loadingStartedAt = time.Now().Add(-65 * time.Second)
+	m.contextStatus = contextStatus{
+		KnownWindow:   true,
+		KnownTokens:   true,
+		ContextWindow: 100,
+		CurrentTokens: 50,
+		Percent:       50,
+	}
+
+	meta := m.inputMetaView()
+	contextIdx := strings.Index(meta, "context in use:")
+	timerIdx := strings.Index(meta, "1:05")
+	if contextIdx == -1 || timerIdx == -1 {
+		t.Fatalf("expected context status and elapsed timer in meta, got %q", meta)
+	}
+	if timerIdx <= contextIdx {
+		t.Fatalf("expected elapsed timer after context status, got %q", meta)
+	}
+	if !strings.Contains(meta[contextIdx:timerIdx], "⏱") {
+		t.Fatalf("expected timer icon before timer, got %q", meta)
+	}
+	if !strings.Contains(meta[contextIdx:timerIdx], "·") {
+		t.Fatalf("expected dot separator between context status and timer, got %q", meta)
 	}
 }
 
