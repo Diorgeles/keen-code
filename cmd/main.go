@@ -9,7 +9,7 @@ import (
 	"github.com/user/keen-code/internal/logging"
 )
 
-const version = "0.12.0"
+const version = "0.12.1"
 
 func main() {
 	cleanup, logFile, err := logging.Init()
