@@ -223,6 +223,8 @@ func renderPermissionResolved(req *replpermissions.Request) []string {
 		line = "  " + repltheme.HighlightStyle.Render("✓ Permission granted for "+req.ToolName+" (this session)")
 	case replpermissions.StatusDenied:
 		line = "  " + lipgloss.NewStyle().Foreground(repltheme.MutedColor).Render("✗ Permission denied for "+req.ToolName)
+	case replpermissions.StatusRedirected:
+		line = "  " + lipgloss.NewStyle().Foreground(repltheme.MutedColor).Render("↩ Redirected for "+req.ToolName)
 	case replpermissions.StatusAutoAllowedSession:
 		line = "  " + repltheme.HighlightStyle.Render("✓ Auto-approved for "+req.ToolName+" (session)")
 	default:

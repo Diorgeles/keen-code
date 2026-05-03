@@ -631,8 +631,8 @@ func TestStreamHandler_MovePendingCursor(t *testing.T) {
 	}
 
 	sh.MovePendingCursor(100)
-	if sh.segments[0].permissionCursor != 2 {
-		t.Errorf("expected cursor clamped at 2, got %d", sh.segments[0].permissionCursor)
+	if sh.segments[0].permissionCursor != 3 {
+		t.Errorf("expected cursor clamped at 3, got %d", sh.segments[0].permissionCursor)
 	}
 
 	sh.MovePendingCursor(-100)

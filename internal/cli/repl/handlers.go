@@ -557,6 +557,14 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 			return *m, nil
 		}
 		choice := m.streamHandler.GetPendingChoice()
+		if choice == replpermissions.ChoiceAskWhatToDo {
+			m.streamHandler.ResolvePendingPermission(replpermissions.StatusRedirected)
+			m.permissionRequester.SendResponse(replpermissions.ChoiceDeny, req.ToolName)
+			m.interruptStream(interruptedPromptText)
+			m.updateViewportContent()
+			m.scrollToBottomIfFollowing()
+			return *m, nil
+		}
 		var status replpermissions.Status
 		switch choice {
 		case replpermissions.ChoiceAllow:

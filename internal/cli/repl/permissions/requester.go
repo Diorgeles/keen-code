@@ -14,6 +14,7 @@ const (
 	StatusAllowedSession     Status = "allowed_session"
 	StatusDenied             Status = "denied"
 	StatusAutoAllowedSession Status = "auto_allowed_session"
+	StatusRedirected         Status = "redirected"
 )
 
 var requestCounter uint64

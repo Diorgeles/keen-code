@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-05-03
+
+### Added
+- Permission option to ask what the agent should do instead, interrupting the current stream while preserving partial state
+
 ## [0.12.1] - 2026-05-02
 
 ### Changed
@@ -227,7 +232,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.12.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/mochow13/keen-code/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/mochow13/keen-code/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/mochow13/keen-code/compare/v0.11.2...v0.12.0
 [0.11.2]: https://github.com/mochow13/keen-code/compare/v0.11.1...v0.11.2
