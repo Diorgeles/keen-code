@@ -13,6 +13,7 @@ import (
 
 type mockLLMClient struct {
 	streamChatFunc func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error)
+	resetCount     int
 }
 
 func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
@@ -22,6 +23,10 @@ func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, 
 	ch := make(chan llm.StreamEvent)
 	close(ch)
 	return ch, nil
+}
+
+func (m *mockLLMClient) Reset() {
+	m.resetCount++
 }
 
 func TestNewAppState(t *testing.T) {
@@ -136,6 +141,23 @@ func TestAppState_ClearMessages_EmptyState(t *testing.T) {
 	if len(state.messages) != 0 {
 		t.Errorf("expected 0 messages, got %d", len(state.messages))
 	}
+}
+
+func TestAppState_ResetClientState(t *testing.T) {
+	client := &mockLLMClient{}
+	state := New(client, t.TempDir())
+
+	state.ResetClientState()
+
+	if client.resetCount != 1 {
+		t.Fatalf("expected reset once, got %d", client.resetCount)
+	}
+}
+
+func TestAppState_ResetClientState_NilClient(t *testing.T) {
+	state := New(nil, t.TempDir())
+
+	state.ResetClientState()
 }
 
 func TestAppState_StreamChat_WithClient(t *testing.T) {

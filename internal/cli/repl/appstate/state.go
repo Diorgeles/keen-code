@@ -48,6 +48,12 @@ func (s *AppState) ClearMessages() {
 	s.messages = []llm.Message{}
 }
 
+func (s *AppState) ResetClientState() {
+	if s.llmClient != nil {
+		s.llmClient.Reset()
+	}
+}
+
 func (s *AppState) ReplaceMessages(messages []llm.Message) {
 	s.messages = llm.CloneMessages(messages)
 }

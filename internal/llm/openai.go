@@ -466,6 +466,10 @@ func (c *OpenAICompatibleClient) StreamChat(
 	return eventCh, nil
 }
 
+func (c *OpenAICompatibleClient) Reset() {
+	c.pendingState = nil
+}
+
 func (c *OpenAICompatibleClient) savePendingIfAccumulated(oaiMessages []openai.ChatCompletionMessageParamUnion, turnStartLen int, injectedPending []openai.ChatCompletionMessageParamUnion) {
 	if len(injectedPending) == 0 && len(oaiMessages) <= turnStartLen {
 		return

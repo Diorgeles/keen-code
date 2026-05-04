@@ -8,4 +8,5 @@ import (
 
 type LLMClient interface {
 	StreamChat(ctx context.Context, messages []Message, toolRegistry *tools.Registry) (<-chan StreamEvent, error)
+	Reset()
 }

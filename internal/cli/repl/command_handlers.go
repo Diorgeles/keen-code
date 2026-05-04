@@ -250,6 +250,7 @@ func (m *replModel) handleLogoutCommand() replModel {
 
 func (m *replModel) handleClearCommand() replModel {
 	m.appState.ClearMessages()
+	m.appState.ResetClientState()
 	m.appState.ClearContextMetrics()
 	m.sessions.resetSession()
 	if m.permissionRequester != nil {

@@ -9,6 +9,7 @@ import (
 
 type mockLLMClient struct {
 	streamChatFunc func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error)
+	resetCount     int
 }
 
 func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
@@ -18,4 +19,8 @@ func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, 
 	ch := make(chan llm.StreamEvent)
 	close(ch)
 	return ch, nil
+}
+
+func (m *mockLLMClient) Reset() {
+	m.resetCount++
 }

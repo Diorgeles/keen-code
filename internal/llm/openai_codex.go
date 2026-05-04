@@ -136,6 +136,10 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 	return eventCh, nil
 }
 
+func (c *OpenAICodexClient) Reset() {
+	c.pendingState = nil
+}
+
 func codexInstructionsAndInput(messages []Message) (string, []responses.ResponseInputItemUnionParam) {
 	instructions := make([]string, 0, 1)
 	inputMessages := make([]Message, 0, len(messages))

@@ -207,6 +207,9 @@ func TestDispatchCommand_SlashPrefixedNonCommandFallsThrough(t *testing.T) {
 
 func TestHandleEnterKey_ClearCommand(t *testing.T) {
 	m := newTestModel()
+	client := &mockLLMClient{}
+	m.appState = replappstate.New(client, "")
+	m.appState.AddMessage(llm.RoleUser, "previous")
 	m.textarea.SetValue(replcommands.Clear)
 
 	newM, cmd := m.handleEnterKey()
@@ -219,6 +222,12 @@ func TestHandleEnterKey_ClearCommand(t *testing.T) {
 	}
 	if newM.textarea.Value() != "" {
 		t.Error("expected textarea to be reset")
+	}
+	if len(newM.appState.GetMessages()) != 0 {
+		t.Fatal("expected messages to be cleared")
+	}
+	if client.resetCount != 1 {
+		t.Fatalf("expected LLM client reset once, got %d", client.resetCount)
 	}
 }
 
@@ -256,6 +265,8 @@ func TestStartModelSelection_SetsModelSelection(t *testing.T) {
 
 func TestHandleEnterKey_NewCommand(t *testing.T) {
 	m := newTestModel()
+	client := &mockLLMClient{}
+	m.appState = replappstate.New(client, "")
 	m.textarea.SetValue(replcommands.New)
 
 	newM, cmd := m.handleEnterKey()
@@ -265,6 +276,9 @@ func TestHandleEnterKey_NewCommand(t *testing.T) {
 	}
 	if !strings.Contains(newM.output.Join(), "New session started") {
 		t.Fatalf("expected new session message, got %q", newM.output.Join())
+	}
+	if client.resetCount != 1 {
+		t.Fatalf("expected LLM client reset once, got %d", client.resetCount)
 	}
 }
 
