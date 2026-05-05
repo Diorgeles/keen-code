@@ -32,13 +32,26 @@ func NewSuggestionModel() SuggestionModel {
 	return SuggestionModel{}
 }
 
-// Refresh filters slash commands matching input and shows them.
 func (s *SuggestionModel) Refresh(input string) {
+	s.RefreshWithSkills(input, nil)
+}
+
+func (s *SuggestionModel) RefreshWithSkills(input string, skills []SuggestionItem) {
 	s.mode = commandMode
 	cmds := replcommands.Filter(input)
-	s.items = make([]SuggestionItem, len(cmds))
-	for i, c := range cmds {
-		s.items[i] = SuggestionItem{Name: c.Name, Description: c.Description}
+	s.items = make([]SuggestionItem, 0, len(cmds)+len(skills))
+	for _, c := range cmds {
+		s.items = append(s.items, SuggestionItem{Name: c.Name, Description: c.Description})
+	}
+	prefix := strings.ToLower(strings.TrimPrefix(input, "/"))
+	for _, skill := range skills {
+		name := strings.TrimPrefix(skill.Name, "/")
+		if strings.HasPrefix(strings.ToLower(name), prefix) {
+			if !strings.HasPrefix(skill.Name, "/") {
+				skill.Name = "/" + skill.Name
+			}
+			s.items = append(s.items, skill)
+		}
 	}
 	if len(s.items) > 0 {
 		s.visible = true

@@ -26,6 +26,7 @@ import (
 	"github.com/user/keen-code/internal/filesystem"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/session"
+	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/providers"
 )
 
@@ -207,6 +208,10 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return updated, cmd
 	}
 
+	if activated, ok := m.activateSkillInput(input); ok {
+		input = activated
+	}
+
 	if !m.appState.IsClientReady(m.ctx.cfg) {
 		m.output.AddError("LLM client not initialized. Use /model to configure.", repltheme.ErrorStyle)
 		m.textarea.Reset()
@@ -246,6 +251,26 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	m.viewport.GotoBottom()
 
 	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
+}
+
+func (m *replModel) activateSkillInput(input string) (string, bool) {
+	if !strings.HasPrefix(input, "/") || strings.Contains(input, "\n") {
+		return "", false
+	}
+	fields := strings.Fields(strings.TrimPrefix(input, "/"))
+	if len(fields) == 0 {
+		return "", false
+	}
+
+	skill, ok := m.appState.FindEnabledSkill(fields[0])
+	if !ok {
+		return "", false
+	}
+	msg, err := skills.ActivationMessage(skill, fields[1:])
+	if err != nil {
+		return "", false
+	}
+	return msg, true
 }
 
 func (m *replModel) updateViewportContent() {

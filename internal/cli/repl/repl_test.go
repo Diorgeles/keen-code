@@ -2,6 +2,8 @@ package repl
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -122,6 +124,30 @@ func TestAdjustTextareaHeight(t *testing.T) {
 	expectedVPHeight := m.height - m.textarea.Height() - 4
 	if m.viewport.Height() != expectedVPHeight {
 		t.Errorf("expected viewport height %d, got %d", expectedVPHeight, m.viewport.Height())
+	}
+}
+
+func TestActivateSkillInput(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Demo\nDo something useful."), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	activated, ok := m.activateSkillInput("/demo thing")
+	if !ok {
+		t.Fatal("expected skill activation")
+	}
+	if !strings.Contains(activated, "[Activate skill: demo]") || !strings.Contains(activated, "# Demo") || !strings.Contains(activated, "Arguments: thing") {
+		t.Fatalf("unexpected activation message: %q", activated)
 	}
 }
 

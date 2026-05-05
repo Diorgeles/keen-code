@@ -7,12 +7,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	keenauth "github.com/user/keen-code/internal/auth"
 	replcommands "github.com/user/keen-code/internal/cli/repl/commands"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
+	"github.com/user/keen-code/internal/skills"
 )
 
 func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
@@ -23,7 +25,7 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 		return *m, tea.Quit, true
 
 	case input == replcommands.Help:
-		m.output.AddLine(getHelpText())
+		m.output.AddLine(getHelpText(m.helpWidth()))
 		m.output.AddEmptyLine()
 		m.textarea.Reset()
 		m.updateViewportContent()
@@ -73,6 +75,11 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	case input == replcommands.ShowThinking || strings.HasPrefix(input, replcommands.ShowThinking+" "):
 		m.textarea.Reset()
 		result := m.handleShowThinkingCommand(input)
+		return result, nil, true
+
+	case input == replcommands.Skills || strings.HasPrefix(input, replcommands.Skills+" "):
+		m.textarea.Reset()
+		result := m.handleSkillsCommand(input)
 		return result, nil, true
 
 	case input == replcommands.Compact || strings.HasPrefix(input, replcommands.Compact+" "):
@@ -213,6 +220,162 @@ func (m *replModel) handleShowThinkingCommand(input string) replModel {
 	return *m
 }
 
+func (m *replModel) handleSkillsCommand(input string) replModel {
+	args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, replcommands.Skills)))
+	discovery := m.appState.GetSkills()
+	cfg := m.appState.GetSkillsConfig()
+
+	for _, warning := range discovery.Warnings {
+		m.output.AddError(warning, repltheme.ErrorStyle)
+	}
+
+	if len(args) == 0 || (len(args) == 1 && args[0] == "list") {
+		m.output.AddStyledLine("  Available Skills\n", lipgloss.NewStyle().Foreground(repltheme.MutedColor).Bold(true))
+		if len(discovery.Skills) == 0 {
+			m.output.AddStyledLine("    No skills found.", lipgloss.NewStyle().Foreground(repltheme.MutedColor))
+		} else {
+			m.addSkillTable(discovery.Skills, cfg)
+		}
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	if len(args) == 1 && args[0] == "reload" {
+		discovery = m.appState.ReloadSkills()
+		for _, warning := range discovery.Warnings {
+			m.output.AddError(warning, repltheme.ErrorStyle)
+		}
+		m.output.AddStyledLine("  ✓ Skills reloaded", repltheme.HighlightStyle)
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	if len(args) != 2 || (args[1] != "enable" && args[1] != "disable") {
+		m.output.AddError("Usage: /skills list | /skills reload | /skills <name> enable|disable", repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	name := args[0]
+	if _, ok := skills.Find(discovery.Skills, name); !ok {
+		m.output.AddError("Skill not found: "+name, repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	enabled := args[1] == "enable"
+	if err := m.appState.SetSkillEnabled(name, enabled); err != nil {
+		m.output.AddError("Failed to save skills config: "+err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	if enabled {
+		m.output.AddStyledLine("  ✓ Skill \""+name+"\" enabled", repltheme.HighlightStyle)
+	} else {
+		m.output.AddStyledLine("  ✓ Skill \""+name+"\" disabled", repltheme.HighlightStyle)
+	}
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
+}
+
+func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
+	const (
+		leftPadding  = "    "
+		rightPadding = 2
+		cellPadding  = 2
+	)
+
+	nameWidth := maxSkillNameWidth(skillList)
+	if nameWidth < len("Skill") {
+		nameWidth = len("Skill")
+	}
+	statusWidth := max(lipgloss.Width("Status"), lipgloss.Width("✗ disabled"))
+	tableWidth := m.width - lipgloss.Width(leftPadding) - rightPadding
+	if tableWidth < 1 {
+		tableWidth = m.viewport.Width() - lipgloss.Width(leftPadding) - rightPadding
+	}
+	if tableWidth < 1 {
+		tableWidth = 1
+	}
+
+	rows := make([][]string, 0, len(skillList))
+	for _, skill := range skillList {
+		status := "✓ enabled"
+		if !cfg.Enabled(skill.Name) {
+			status = "✗ disabled"
+		}
+		rows = append(rows, []string{skill.Name, status, skill.Description})
+	}
+
+	headerStyle := lipgloss.NewStyle().Foreground(repltheme.MutedColor).Bold(true)
+	nameStyle := lipgloss.NewStyle().Foreground(repltheme.PrimaryColor).Bold(true)
+	disabledStatusStyle := lipgloss.NewStyle().Foreground(repltheme.AccentColor)
+
+	rendered := table.New().
+		Headers("Skill", "Status", "Description").
+		Rows(rows...).
+		Width(tableWidth).
+		Wrap(true).
+		Border(lipgloss.NormalBorder()).
+		BorderTop(false).
+		BorderBottom(false).
+		BorderLeft(false).
+		BorderRight(false).
+		BorderColumn(false).
+		BorderRow(false).
+		BorderHeader(true).
+		BorderStyle(repltheme.RuleStyle).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			style := lipgloss.NewStyle().PaddingRight(cellPadding)
+			if row == table.HeaderRow {
+				style = style.Inherit(headerStyle)
+			}
+			if col == 0 {
+				style = style.Width(nameWidth + cellPadding)
+				if row != table.HeaderRow {
+					style = style.Inherit(nameStyle)
+				}
+			}
+			if col == 1 {
+				style = style.Width(statusWidth + cellPadding)
+				if row != table.HeaderRow {
+					if strings.HasPrefix(rows[row][col], "✓") {
+						style = style.Inherit(repltheme.HighlightStyle)
+					} else {
+						style = style.Inherit(disabledStatusStyle)
+					}
+				}
+			}
+			if col == 2 && row != table.HeaderRow {
+				style = style.Inherit(repltheme.HelpDescStyle)
+			}
+			return style
+		}).
+		Render()
+
+	for _, line := range strings.Split(rendered, "\n") {
+		m.output.AddLine(leftPadding + line)
+	}
+}
+
+func maxSkillNameWidth(skillList []skills.Skill) int {
+	width := 0
+	for _, skill := range skillList {
+		width = max(width, lipgloss.Width(skill.Name))
+	}
+	return width
+}
+
 func (m *replModel) saveShowThinking(val bool) {
 	if m.ctx == nil || m.ctx.globalCfg == nil || m.ctx.loader == nil {
 		return
@@ -273,13 +436,56 @@ func (m *replModel) handleClearCommand() replModel {
 	return *m
 }
 
-func getHelpText() string {
+func (m *replModel) helpWidth() int {
+	width := m.width
+	if width <= 0 {
+		width = m.viewport.Width()
+	}
+	if width <= 0 {
+		width = 80
+	}
+	return width
+}
+
+func getHelpText(width int) string {
+	const (
+		leftPadding  = "  "
+		rightPadding = 2
+		colGap       = "  "
+	)
+
+	cmdWidth := maxCommandNameWidth(replcommands.All)
+	if cmdWidth < len("Command") {
+		cmdWidth = len("Command")
+	}
+	descWidth := width - lipgloss.Width(leftPadding) - cmdWidth - lipgloss.Width(colGap) - rightPadding
+	if descWidth < 1 {
+		descWidth = 1
+	}
+
 	var lines []string
-	lines = append(lines, repltheme.TitleStyle.Render("Available Commands"))
+	lines = append(lines, leftPadding+repltheme.TitleStyle.Render("Available Commands"))
 	lines = append(lines, "")
 	for _, c := range replcommands.All {
-		lines = append(lines, "  "+repltheme.HelpCmdStyle.Render(c.Name)+" "+repltheme.HelpDescStyle.Render(c.Description))
+		descriptionLines := strings.Split(lipgloss.NewStyle().Width(descWidth).Render(c.Description), "\n")
+		if len(descriptionLines) == 0 {
+			descriptionLines = []string{""}
+		}
+
+		lines = append(lines, leftPadding+repltheme.HelpCmdStyle.Width(cmdWidth).Render(c.Name)+colGap+repltheme.HelpDescStyle.Render(descriptionLines[0]))
+		continuation := leftPadding + strings.Repeat(" ", cmdWidth) + colGap
+		for _, line := range descriptionLines[1:] {
+			lines = append(lines, continuation+repltheme.HelpDescStyle.Render(line))
+		}
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func maxCommandNameWidth(commands []replcommands.SlashCommand) int {
+	width := 0
+	for _, command := range commands {
+		width = max(width, lipgloss.Width(command.Name))
+	}
+	return width
 }

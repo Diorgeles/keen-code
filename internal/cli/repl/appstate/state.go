@@ -7,6 +7,7 @@ import (
 
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -18,15 +19,19 @@ type AppState struct {
 	toolRegistry *tools.Registry
 	workingDir   string
 	lastUsage    *llm.TokenUsage
+	skills       skills.Discovery
+	skillsConfig skills.Config
 }
 
 func New(client llm.LLMClient, workingDir string) *AppState {
-	return &AppState{
+	state := &AppState{
 		messages:     []llm.Message{},
 		llmClient:    client,
 		toolRegistry: tools.NewRegistry(),
 		workingDir:   workingDir,
 	}
+	state.ReloadSkills()
+	return state
 }
 
 func (s *AppState) AddMessage(role llm.Role, content string) {
@@ -48,6 +53,68 @@ func (s *AppState) ClearMessages() {
 	s.messages = []llm.Message{}
 }
 
+func (s *AppState) ReloadSkills() skills.Discovery {
+	if strings.TrimSpace(s.workingDir) == "" {
+		s.skills = skills.Discovery{}
+		s.skillsConfig = skills.LoadConfig()
+		return s.GetSkills()
+	}
+	s.skills = skills.LoadMetadata(skills.Discover(s.workingDir))
+	s.skillsConfig = skills.LoadConfig()
+	return s.GetSkills()
+}
+
+func (s *AppState) GetSkills() skills.Discovery {
+	return skills.Discovery{
+		Skills:   append([]skills.Skill(nil), s.skills.Skills...),
+		Warnings: append([]string(nil), s.skills.Warnings...),
+	}
+}
+
+func (s *AppState) GetSkillsConfig() skills.Config {
+	return cloneSkillsConfig(s.skillsConfig)
+}
+
+func (s *AppState) SetSkillEnabled(name string, enabled bool) error {
+	cfg := cloneSkillsConfig(s.skillsConfig)
+	cfg.SetEnabled(name, enabled)
+	if err := skills.SaveConfig(cfg); err != nil {
+		return err
+	}
+	s.skillsConfig = cfg
+	return nil
+}
+
+func (s *AppState) FindEnabledSkill(name string) (skills.Skill, bool) {
+	skill, ok := skills.Find(s.skills.Skills, name)
+	if !ok || !s.skillsConfig.Enabled(skill.Name) {
+		return skills.Skill{}, false
+	}
+	return skill, true
+}
+
+func (s *AppState) SkillSuggestions() []skills.Skill {
+	items := make([]skills.Skill, 0, len(s.skills.Skills))
+	for _, skill := range s.skills.Skills {
+		if s.skillsConfig.Enabled(skill.Name) {
+			items = append(items, skill)
+		}
+	}
+	return items
+}
+
+func (s *AppState) SkillsCatalog() string {
+	return skills.Catalog(s.skills.Skills, s.skillsConfig)
+}
+
+func cloneSkillsConfig(cfg skills.Config) skills.Config {
+	cloned := skills.Config{IsEnabled: map[string]bool{}}
+	for name, enabled := range cfg.IsEnabled {
+		cloned.IsEnabled[name] = enabled
+	}
+	return cloned
+}
+
 func (s *AppState) ResetClientState() {
 	if s.llmClient != nil {
 		s.llmClient.Reset()
@@ -64,7 +131,7 @@ func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig) (
 	}
 	systemMsg := llm.Message{
 		Role:    llm.RoleSystem,
-		Content: llm.Build(s.workingDir),
+		Content: llm.Build(s.workingDir, s.SkillsCatalog()),
 	}
 	messages := append([]llm.Message{systemMsg}, s.GetMessages()...)
 	return s.llmClient.StreamChat(ctx, messages, s.toolRegistry)

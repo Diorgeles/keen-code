@@ -56,6 +56,10 @@ func (g *Guard) CheckPath(path string, operation string) Permission {
 		return PermissionDenied
 	}
 
+	if operation == "read" && g.IsInSkillDir(resolved) {
+		return PermissionGranted
+	}
+
 	inWorkingDir := g.IsInWorkingDir(resolved)
 
 	switch operation {
@@ -79,6 +83,10 @@ func (g *Guard) IsBlocked(path string) bool {
 
 	if g.gitignore != nil && (g.gitignore.IsIgnored(path) || g.gitignore.IsIgnored(resolved)) {
 		return true
+	}
+
+	if g.IsInSkillDir(resolved) {
+		return false
 	}
 
 	home, _ := os.UserHomeDir()
@@ -116,4 +124,26 @@ func (g *Guard) IsInWorkingDir(path string) bool {
 
 	prefix := workingDirClean + string(filepath.Separator)
 	return strings.HasPrefix(cleaned+string(filepath.Separator), prefix)
+}
+
+func (g *Guard) IsInSkillDir(path string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
+
+	cleaned := filepath.Clean(path)
+	for _, dir := range []string{
+		filepath.Join(home, ".agents", "skills"),
+		filepath.Join(home, ".keen", "skills"),
+	} {
+		if cleaned == dir {
+			return true
+		}
+		prefix := dir + string(filepath.Separator)
+		if strings.HasPrefix(cleaned+string(filepath.Separator), prefix) {
+			return true
+		}
+	}
+	return false
 }

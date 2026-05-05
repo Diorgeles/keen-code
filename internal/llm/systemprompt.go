@@ -93,7 +93,7 @@ A structured list of files that are still important to continue the task.`
 
 const maxInstructionsSize = 8 * 1024
 
-func Build(workingDir string) string {
+func Build(workingDir, skillsCatalog string) string {
 	var sb strings.Builder
 	sb.WriteString(staticPrompt)
 	sb.WriteString(fmt.Sprintf("\n\nWorking directory: %s", workingDir))
@@ -102,6 +102,11 @@ func Build(workingDir string) string {
 	if instructions != "" {
 		sb.WriteString("\n\n")
 		sb.WriteString(instructions)
+	}
+
+	if skillsCatalog != "" {
+		sb.WriteString("\n\n")
+		sb.WriteString(skillsCatalog)
 	}
 
 	return sb.String()
