@@ -108,6 +108,8 @@ containing SKILL.md:
 		sb.WriteString(skill.Location)
 		sb.WriteString("\n")
 	}
+	sb.WriteString(`IMPORTANT: If users invoke a skill by "/<skill-name>" commands, the instructions are
+already in your conversation context. So do not read the skill's SKILL.md file again.`)
 	return strings.TrimRight(sb.String(), "\n")
 }
 
