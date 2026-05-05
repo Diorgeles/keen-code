@@ -211,6 +211,10 @@ func (c *OpenAIResponsesClient) StreamChat(
 	return eventCh, nil
 }
 
+func (c *OpenAIResponsesClient) Reset() {
+	c.pendingState = nil
+}
+
 func (c *OpenAIResponsesClient) injectPendingState(input []responses.ResponseInputItemUnionParam) ([]responses.ResponseInputItemUnionParam, []responses.ResponseInputItemUnionParam) {
 	if len(c.pendingState) == 0 {
 		return input, nil

@@ -56,6 +56,71 @@ func TestGuard_CheckPath_SensitivePath(t *testing.T) {
 	}
 }
 
+func TestGuard_CheckPath_AgentsSkillsDirGrantsReadOutsideWorkingDir(t *testing.T) {
+	home := t.TempDir()
+	workingDir := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(workingDir, nil)
+	skillPath := filepath.Join(home, ".agents", "skills", "demo", "SKILL.md")
+	got := g.CheckPath(skillPath, "read")
+	if got != PermissionGranted {
+		t.Errorf("CheckPath(~/.agents/skills skill, read) = %v, want PermissionGranted", got)
+	}
+}
+
+func TestGuard_CheckPath_AgentsSkillsDirDoesNotGrantWrite(t *testing.T) {
+	home := t.TempDir()
+	workingDir := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(workingDir, nil)
+	skillPath := filepath.Join(home, ".agents", "skills", "demo", "SKILL.md")
+	got := g.CheckPath(skillPath, "write")
+	if got != PermissionPending {
+		t.Errorf("CheckPath(~/.agents/skills skill, write) = %v, want PermissionPending", got)
+	}
+}
+
+func TestGuard_IsBlocked_SkillDirsAllowed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(t.TempDir(), nil)
+	for _, skillPath := range []string{
+		filepath.Join(home, ".agents", "skills", "demo", "SKILL.md"),
+		filepath.Join(home, ".keen", "skills", "builtin", "demo", "SKILL.md"),
+	} {
+		if g.IsBlocked(skillPath) {
+			t.Errorf("expected skill path to not be blocked: %s", skillPath)
+		}
+	}
+}
+
+func TestGuard_IsBlocked_AgentsOutsideSkillsDenied(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(t.TempDir(), nil)
+	path := filepath.Join(home, ".agents", "config.json")
+	if !g.IsBlocked(path) {
+		t.Error("expected ~/.agents path outside skills to be blocked")
+	}
+}
+
+func TestGuard_CheckPath_KeenSkillsDirGrantsReadOutsideWorkingDir(t *testing.T) {
+	home := t.TempDir()
+	workingDir := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(workingDir, nil)
+	skillPath := filepath.Join(home, ".keen", "skills", "builtin", "demo", "SKILL.md")
+	got := g.CheckPath(skillPath, "read")
+	if got != PermissionGranted {
+		t.Errorf("CheckPath(~/.keen/skills skill, read) = %v, want PermissionGranted", got)
+	}
+}
+
 func TestGuard_IsBlocked_Gitignore(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")

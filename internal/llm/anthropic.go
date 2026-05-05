@@ -388,6 +388,10 @@ func (c *AnthropicClient) StreamChat(
 	return eventCh, nil
 }
 
+func (c *AnthropicClient) Reset() {
+	c.pendingState = nil
+}
+
 func (c *AnthropicClient) injectPendingState(msgParams []anthropic.MessageParam) ([]anthropic.MessageParam, []anthropic.MessageParam) {
 	if len(c.pendingState) == 0 {
 		return msgParams, nil

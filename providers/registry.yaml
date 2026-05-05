@@ -5,7 +5,7 @@ providers:
       - id: claude-opus-4-7
         name: Claude Opus 4.7
         context_window: 1000000
-        thinking_efforts: ["low", "medium", "high", "max", "xhigh"]
+        thinking_efforts: ["low", "medium", "high", "max"]
       - id: claude-opus-4-6
         name: Claude Opus 4.6
         context_window: 1000000
@@ -49,6 +49,10 @@ providers:
         name: GPT-5.4
         context_window: 256000
         thinking_efforts: ["none", "low", "medium", "high", "xhigh"]
+      - id: gpt-5.4-mini
+        name: GPT-5.4 Mini
+        context_window: 256000
+        thinking_efforts: ["none", "low", "medium", "high", "xhigh"]
       - id: gpt-5.3-codex
         name: GPT-5.3 Codex
         context_window: 256000
@@ -60,11 +64,16 @@ providers:
       - id: gemini-3.1-pro-preview
         name: Gemini 3.1 Pro
         context_window: 1048576
-        thinking_efforts: ["off", "low", "medium", "high"]
+        thinking_efforts: ["low", "medium", "high"]
+      - id: gemini-3.1-flash-lite-preview
+        name: Gemini 3.1 Flash-Lite
+        context_window: 1048576
+        thinking_efforts: ["minimal", "low", "medium", "high"]
       - id: gemini-3-flash-preview
         name: Gemini 3 Flash
         context_window: 1048576
-        thinking_efforts: ["off", "low", "medium", "high"]
+        thinking_efforts: ["minimal", "low", "medium", "high"]
+
   - id: moonshotai
     name: Moonshot AI
     models:
@@ -90,6 +99,10 @@ providers:
         thinking_efforts: ["enabled", "disabled"]
       - id: glm-5
         name: GLM-5
+        context_window: 200000
+        thinking_efforts: ["enabled", "disabled"]
+      - id: glm-5-turbo
+        name: GLM-5 Turbo
         context_window: 200000
         thinking_efforts: ["enabled", "disabled"]
 

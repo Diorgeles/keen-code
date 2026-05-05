@@ -256,6 +256,10 @@ func (c *GenkitClient) StreamChat(
 	return eventCh, nil
 }
 
+func (c *GenkitClient) Reset() {
+	c.pendingState = nil
+}
+
 func (c *GenkitClient) injectPendingState(aiMessages []*ai.Message) ([]*ai.Message, []*ai.Message) {
 	if len(c.pendingState) == 0 {
 		return aiMessages, nil

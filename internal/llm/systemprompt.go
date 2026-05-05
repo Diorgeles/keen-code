@@ -19,7 +19,7 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Do not preemptively explain what you are going to do. Explain if users asks for it.
 - Be very concise in your responses. Explanation should not be verbose. Let user ask for
   more details.
-- After finishing a turn, add a brief summary of what you did only if it is strictly useful.
+- After finishing a turn, add a brief summary of what you did for your own reference.
 - One-word or one-line answers are fine when that is all the question needs.
 - Never use bash or code comments as a communication channel — write to the
   user in your response text only.
@@ -55,7 +55,8 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Raw tool calls and their outputs are only retained within the current turn. 
 - At the end of a turn, a "Tool memory" block may be created that notes down the
   written/edited files and failed bash commands.
-- Use the tool memory to retain some ideas on past tool usages for future turns.
+- Since tool outputs are not retained after a turn finishes, prefer writing a brief summary
+  of what you did in that turn for your own reference.
 - For other tools (read_file, grep, glob), run them again if needed without side-effects.
 
 # Git rules
@@ -93,7 +94,7 @@ A structured list of files that are still important to continue the task.`
 
 const maxInstructionsSize = 8 * 1024
 
-func Build(workingDir string) string {
+func Build(workingDir, skillsCatalog string) string {
 	var sb strings.Builder
 	sb.WriteString(staticPrompt)
 	sb.WriteString(fmt.Sprintf("\n\nWorking directory: %s", workingDir))
@@ -102,6 +103,11 @@ func Build(workingDir string) string {
 	if instructions != "" {
 		sb.WriteString("\n\n")
 		sb.WriteString(instructions)
+	}
+
+	if skillsCatalog != "" {
+		sb.WriteString("\n\n")
+		sb.WriteString(skillsCatalog)
 	}
 
 	return sb.String()

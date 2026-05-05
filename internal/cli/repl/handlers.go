@@ -429,12 +429,21 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 	m.textarea, cmd = m.textarea.Update(keyMsg)
 	input := m.textarea.Value()
 	if strings.HasPrefix(input, "/") {
-		m.suggestion.Refresh(input)
+		m.suggestion.RefreshWithSkills(input, m.skillSuggestions())
 	} else {
 		m.refreshFileSuggestions(input)
 	}
 	m.adjustTextareaHeight()
 	return *m, cmd
+}
+
+func (m *replModel) skillSuggestions() []replwidgets.SuggestionItem {
+	skillList := m.appState.SkillSuggestions()
+	items := make([]replwidgets.SuggestionItem, 0, len(skillList))
+	for _, skill := range skillList {
+		items = append(items, replwidgets.SuggestionItem{Name: "/" + skill.Name, Description: skill.Description})
+	}
+	return items
 }
 
 func (m *replModel) refreshFileSuggestions(input string) {

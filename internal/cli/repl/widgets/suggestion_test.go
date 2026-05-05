@@ -14,10 +14,10 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := replcommands.Filter("/")
-	if len(got) != 11 {
-		t.Fatalf("expected 11 commands, got %d", len(got))
+	if len(got) != 12 {
+		t.Fatalf("expected 12 commands, got %d", len(got))
 	}
-	if got[0].Name != "/clear" || got[1].Name != "/compact" || got[2].Name != "/exit" || got[3].Name != "/help" || got[4].Name != "/logout" || got[5].Name != "/model" || got[6].Name != "/new" || got[7].Name != "/resume" || got[8].Name != "/sessions" || got[9].Name != "/show-thinking" || got[10].Name != "/thinking" {
+	if got[0].Name != "/clear" || got[1].Name != "/compact" || got[2].Name != "/exit" || got[3].Name != "/help" || got[4].Name != "/logout" || got[5].Name != "/model" || got[6].Name != "/new" || got[7].Name != "/resume" || got[8].Name != "/sessions" || got[9].Name != "/show-thinking" || got[10].Name != "/skills" || got[11].Name != "/thinking" {
 		t.Errorf("unexpected order: %v", got)
 	}
 }
@@ -126,6 +126,17 @@ func TestSuggestionRefreshSlash(t *testing.T) {
 	}
 	if len(s.items) == 0 {
 		t.Error("expected items populated")
+	}
+}
+
+func TestSuggestionRefreshWithSkills(t *testing.T) {
+	s := NewSuggestionModel()
+	s.RefreshWithSkills("/de", []SuggestionItem{{Name: "/deploy", Description: "Deploy app"}})
+	if !s.visible {
+		t.Fatal("expected suggestions visible")
+	}
+	if len(s.items) != 1 || s.items[0].Name != "/deploy" {
+		t.Fatalf("unexpected items: %#v", s.items)
 	}
 }
 

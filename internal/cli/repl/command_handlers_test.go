@@ -1,15 +1,20 @@
 package repl
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
 	replcommands "github.com/user/keen-code/internal/cli/repl/commands"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/providers"
 )
 
@@ -163,7 +168,7 @@ func TestHandleEnterKey_ClientNotReady(t *testing.T) {
 }
 
 func TestGetHelpText(t *testing.T) {
-	text := getHelpText()
+	text := getHelpText(80)
 
 	if !strings.Contains(text, "/compact") {
 		t.Error("expected /compact in help text")
@@ -183,6 +188,27 @@ func TestGetHelpText(t *testing.T) {
 	if !strings.Contains(text, "/sessions") {
 		t.Error("expected /sessions in help text")
 	}
+	if !strings.Contains(text, "/skills") {
+		t.Error("expected /skills in help text")
+	}
+}
+
+func TestGetHelpTextWrapsCommandDescriptions(t *testing.T) {
+	text := getHelpText(48)
+	stripped := ansi.Strip(text)
+
+	if !strings.Contains(stripped, "  Available Commands") {
+		t.Fatalf("expected padded title, got %q", stripped)
+	}
+	if strings.Contains(stripped, "\n/show-thinking") {
+		t.Fatalf("expected /show-thinking to stay in command column, got %q", stripped)
+	}
+
+	for _, line := range strings.Split(stripped, "\n") {
+		if lipgloss.Width(line) > 46 {
+			t.Fatalf("help line exceeds padded width (%d > %d): %q", lipgloss.Width(line), 46, line)
+		}
+	}
 }
 
 func TestDispatchCommand_UnknownCommandFallsThrough(t *testing.T) {
@@ -192,6 +218,157 @@ func TestDispatchCommand_UnknownCommandFallsThrough(t *testing.T) {
 
 	if handled {
 		t.Error("expected unknown input to not be handled by dispatchCommand")
+	}
+}
+
+func TestHandleSkillsCommandList(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/skills list")
+	newM, _ := m.handleEnterKey()
+
+	out := newM.output.Join()
+	stripped := ansi.Strip(out)
+	if !strings.Contains(out, "\x1b[1;38;2;189;189;189m  Available Skills") || strings.Contains(stripped, "Available Skills:") {
+		t.Fatalf("expected header-colored skills title without colon, got %q", out)
+	}
+	if !strings.Contains(out, "38;2;92;107;192mdemo") {
+		t.Fatalf("expected primary-colored skill name, got %q", out)
+	}
+	for _, expected := range []string{"Skill", "Status", "Description", "────", "demo", "✓ enabled", "Demo skill"} {
+		if !strings.Contains(stripped, expected) {
+			t.Fatalf("expected %q in skills list output, got %q", expected, stripped)
+		}
+	}
+}
+
+func TestHandleSkillsCommandListStylesDisabledStatus(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	cfg := skills.Config{IsEnabled: map[string]bool{"demo": false}}
+	if err := skills.SaveConfig(cfg); err != nil {
+		t.Fatalf("save skills config: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/skills list")
+	newM, _ := m.handleEnterKey()
+
+	out := newM.output.Join()
+	if !strings.Contains(out, "38;2;255;179;0m✗ disabled") {
+		t.Fatalf("expected accent-colored disabled status, got %q", out)
+	}
+	if !strings.Contains(ansi.Strip(out), "✗ disabled") {
+		t.Fatalf("expected disabled status in skills list, got %q", out)
+	}
+}
+
+func TestHandleSkillsCommandListWrapsLongDescriptions(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	description := "This skill has a very long description that should wrap within the viewport boundary instead of overflowing horizontally."
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: "+description+"\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.width = 50
+	m.viewport.SetWidth(50)
+	m.output.SetWidth(50)
+	m.textarea.SetValue("/skills list")
+	newM, _ := m.handleEnterKey()
+
+	for _, line := range strings.Split(ansi.Strip(newM.output.Join()), "\n") {
+		if !strings.Contains(line, "demo") && !strings.Contains(line, description[:10]) {
+			continue
+		}
+		if lipgloss.Width(line) > 48 {
+			t.Fatalf("skill line exceeds padded width (%d > %d): %q", lipgloss.Width(line), 48, line)
+		}
+	}
+}
+
+func TestHandleSkillsCommandDisable(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/skills demo disable")
+	newM, _ := m.handleEnterKey()
+
+	if !strings.Contains(newM.output.Join(), "Skill \"demo\" disabled") {
+		t.Fatalf("expected disable confirmation, got %q", newM.output.Join())
+	}
+	if newM.appState.GetSkillsConfig().Enabled("demo") {
+		t.Fatal("expected appstate config to disable skill")
+	}
+}
+
+func TestHandleSkillsCommandReload(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+
+	writeSkillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(writeSkillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(writeSkillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m.textarea.SetValue("/skills reload")
+	newM, _ := m.handleEnterKey()
+
+	if !strings.Contains(newM.output.Join(), "Skills reloaded") {
+		t.Fatalf("expected reload confirmation, got %q", newM.output.Join())
+	}
+	if _, ok := skills.Find(newM.appState.GetSkills().Skills, "demo"); !ok {
+		t.Fatal("expected reloaded appstate to include new skill")
 	}
 }
 
@@ -207,6 +384,9 @@ func TestDispatchCommand_SlashPrefixedNonCommandFallsThrough(t *testing.T) {
 
 func TestHandleEnterKey_ClearCommand(t *testing.T) {
 	m := newTestModel()
+	client := &mockLLMClient{}
+	m.appState = replappstate.New(client, "")
+	m.appState.AddMessage(llm.RoleUser, "previous")
 	m.textarea.SetValue(replcommands.Clear)
 
 	newM, cmd := m.handleEnterKey()
@@ -219,6 +399,12 @@ func TestHandleEnterKey_ClearCommand(t *testing.T) {
 	}
 	if newM.textarea.Value() != "" {
 		t.Error("expected textarea to be reset")
+	}
+	if len(newM.appState.GetMessages()) != 0 {
+		t.Fatal("expected messages to be cleared")
+	}
+	if client.resetCount != 1 {
+		t.Fatalf("expected LLM client reset once, got %d", client.resetCount)
 	}
 }
 
@@ -256,6 +442,8 @@ func TestStartModelSelection_SetsModelSelection(t *testing.T) {
 
 func TestHandleEnterKey_NewCommand(t *testing.T) {
 	m := newTestModel()
+	client := &mockLLMClient{}
+	m.appState = replappstate.New(client, "")
 	m.textarea.SetValue(replcommands.New)
 
 	newM, cmd := m.handleEnterKey()
@@ -265,6 +453,9 @@ func TestHandleEnterKey_NewCommand(t *testing.T) {
 	}
 	if !strings.Contains(newM.output.Join(), "New session started") {
 		t.Fatalf("expected new session message, got %q", newM.output.Join())
+	}
+	if client.resetCount != 1 {
+		t.Fatalf("expected LLM client reset once, got %d", client.resetCount)
 	}
 }
 

@@ -3,6 +3,8 @@ package appstate
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,6 +15,7 @@ import (
 
 type mockLLMClient struct {
 	streamChatFunc func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error)
+	resetCount     int
 }
 
 func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
@@ -22,6 +25,10 @@ func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, 
 	ch := make(chan llm.StreamEvent)
 	close(ch)
 	return ch, nil
+}
+
+func (m *mockLLMClient) Reset() {
+	m.resetCount++
 }
 
 func TestNewAppState(t *testing.T) {
@@ -138,14 +145,103 @@ func TestAppState_ClearMessages_EmptyState(t *testing.T) {
 	}
 }
 
+func TestAppState_ReloadSkillsCachesMetadataOnly(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	body := "---\nname: demo\ndescription: Demo skill\n---\nSecret instruction body"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(body), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	state := New(nil, work)
+	discovery := state.GetSkills()
+	if len(discovery.Skills) != 1 {
+		t.Fatalf("expected one cached skill, got %#v", discovery.Skills)
+	}
+	if discovery.Skills[0].Description != "Demo skill" {
+		t.Fatalf("expected metadata description, got %#v", discovery.Skills[0])
+	}
+	if strings.Contains(state.SkillsCatalog(), "Secret instruction body") {
+		t.Fatal("expected cached catalog to exclude instruction body")
+	}
+}
+
+func TestAppState_SkillsReloadUpdatesMetadata(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	state := New(nil, work)
+	if len(state.GetSkills().Skills) != 0 {
+		t.Fatal("expected no initial skills")
+	}
+
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	state.ReloadSkills()
+	if _, ok := state.FindEnabledSkill("demo"); !ok {
+		t.Fatal("expected reloaded skill")
+	}
+}
+
+func TestAppState_SetSkillEnabledUpdatesCachedConfig(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	state := New(nil, work)
+	if err := state.SetSkillEnabled("demo", false); err != nil {
+		t.Fatalf("SetSkillEnabled() error = %v", err)
+	}
+	if _, ok := state.FindEnabledSkill("demo"); ok {
+		t.Fatal("expected disabled skill to be hidden")
+	}
+}
+
+func TestAppState_ResetClientState(t *testing.T) {
+	client := &mockLLMClient{}
+	state := New(client, t.TempDir())
+
+	state.ResetClientState()
+
+	if client.resetCount != 1 {
+		t.Fatalf("expected reset once, got %d", client.resetCount)
+	}
+}
+
+func TestAppState_ResetClientState_NilClient(t *testing.T) {
+	state := New(nil, t.TempDir())
+
+	state.ResetClientState()
+}
+
 func TestAppState_StreamChat_WithClient(t *testing.T) {
 	expectedEvents := []llm.StreamEvent{
 		{Type: llm.StreamEventTypeChunk, Content: "Hello"},
 		{Type: llm.StreamEventTypeDone},
 	}
+	var capturedMessages []llm.Message
 
 	client := &mockLLMClient{
 		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
+			capturedMessages = append([]llm.Message(nil), messages...)
 			ch := make(chan llm.StreamEvent)
 			go func() {
 				defer close(ch)
@@ -157,7 +253,18 @@ func TestAppState_StreamChat_WithClient(t *testing.T) {
 		},
 	}
 
-	state := New(client, t.TempDir())
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	state := New(client, work)
 	state.AddMessage(llm.RoleUser, "Hi")
 
 	cfg := &config.ResolvedConfig{APIKey: "key", Model: "model"}
@@ -173,6 +280,12 @@ func TestAppState_StreamChat_WithClient(t *testing.T) {
 
 	if len(received) != len(expectedEvents) {
 		t.Errorf("expected %d events, got %d", len(expectedEvents), len(received))
+	}
+	if len(capturedMessages) == 0 || capturedMessages[0].Role != llm.RoleSystem {
+		t.Fatalf("expected system message, got %#v", capturedMessages)
+	}
+	if !strings.Contains(capturedMessages[0].Content, "- demo: Demo skill") {
+		t.Fatalf("expected cached skills catalog in system prompt, got %q", capturedMessages[0].Content)
 	}
 }
 

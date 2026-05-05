@@ -13,6 +13,7 @@ const (
 	Resume       = "/resume"
 	Sessions     = "/sessions"
 	ShowThinking = "/show-thinking"
+	Skills       = "/skills"
 	Thinking     = "/thinking"
 )
 
@@ -32,6 +33,7 @@ var All = []SlashCommand{
 	{Resume, "Open the session picker"},
 	{Sessions, "List saved sessions for this directory"},
 	{ShowThinking, "Toggle thinking token display (on|off)"},
+	{Skills, "List, reload, enable, or disable skills"},
 	{Thinking, "Change thinking effort for the current model"},
 }
 
