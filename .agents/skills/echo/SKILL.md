@@ -10,6 +10,6 @@ When this skill is activated:
 1. Read this SKILL.md file first.
 2. Reply with exactly these fields in exact format as XML:
    - `skill`: `echo`
-   - `args`: the activation arguments exactly as provided
+   - `args`: $ARGUMENTS
    - `skill_file`: this SKILL.md path
 3. Do not edit files or run shell commands.

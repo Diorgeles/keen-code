@@ -1,5 +1,5 @@
 ---
-name: git-commit
+name: commit
 description: Stage, commit, and push changes with an auto-generated commit message.
 ---
 

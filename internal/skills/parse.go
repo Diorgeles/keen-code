@@ -19,41 +19,45 @@ type frontmatter struct {
 	Description string `yaml:"description"`
 }
 
-func ParseSkillMetadata(path, dirName string, data []byte) (Skill, bool, error) {
+func ParseSkillMetadata(path string, data []byte) (Skill, error) {
 	content := string(data)
 	if strings.TrimSpace(content) == "" {
-		return Skill{}, false, nil
-	}
-
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return Skill{}, false, err
-	}
-	skill := Skill{
-		Name:        dirName,
-		Description: dirName,
-		Location:    absPath,
+		return Skill{}, fmt.Errorf("empty SKILL.md")
 	}
 
 	fmText, _, hasFrontmatter, err := splitFrontmatter(content)
 	if err != nil {
-		return Skill{}, false, err
+		return Skill{}, err
 	}
 	if !hasFrontmatter {
-		return skill, true, nil
+		return Skill{}, fmt.Errorf("missing YAML frontmatter")
 	}
 
 	var fm frontmatter
 	if err := yaml.Unmarshal([]byte(fmText), &fm); err != nil {
-		return Skill{}, false, fmt.Errorf("parse frontmatter: %w", err)
+		return Skill{}, fmt.Errorf("parse frontmatter: %w", err)
 	}
-	if strings.TrimSpace(fm.Name) != "" && strings.TrimSpace(fm.Name) == dirName {
-		skill.Name = strings.TrimSpace(fm.Name)
+
+	name := strings.TrimSpace(fm.Name)
+	if name == "" {
+		return Skill{}, fmt.Errorf("missing required frontmatter field: name")
 	}
-	if strings.TrimSpace(fm.Description) != "" {
-		skill.Description = strings.TrimSpace(fm.Description)
+
+	description := strings.TrimSpace(fm.Description)
+	if description == "" {
+		return Skill{}, fmt.Errorf("missing required frontmatter field: description")
 	}
-	return skill, true, nil
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return Skill{}, err
+	}
+
+	return Skill{
+		Name:        name,
+		Description: description,
+		Location:    absPath,
+	}, nil
 }
 
 func splitFrontmatter(content string) (string, string, bool, error) {

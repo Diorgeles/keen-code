@@ -37,10 +37,10 @@ func TestDiscover_ProjectGlobalAndKeenSkills(t *testing.T) {
 	if len(result.Skills) != 3 {
 		t.Fatalf("expected 3 skills, got %d", len(result.Skills))
 	}
-	if result.Skills[0].Name != "builtin" || result.Skills[1].Name != "global" || result.Skills[2].Name != "project" {
-		t.Fatalf("unexpected skills: %#v", result.Skills)
+	if result.Skills[0].Name != "project" || result.Skills[1].Name != "global" || result.Skills[2].Name != "builtin" {
+		t.Fatalf("expected discovery order project/global/builtin, got %#v", result.Skills)
 	}
-	if result.Skills[0].Description != "builtin" || result.Skills[1].Description != "global" || result.Skills[2].Description != "project" {
+	if result.Skills[0].Description != "project" || result.Skills[1].Description != "global" || result.Skills[2].Description != "builtin" {
 		t.Fatalf("expected discovery to avoid reading metadata, got %#v", result.Skills)
 	}
 }
@@ -87,7 +87,7 @@ func TestLoadMetadata_InvalidYAMLWarnsAndSkips(t *testing.T) {
 	if len(result.Skills) != 0 {
 		t.Fatalf("expected no skills, got %#v", result.Skills)
 	}
-	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "Skill bad failed to load due to YAML parsing issue") {
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "Skill bad failed to load") {
 		t.Fatalf("unexpected warnings: %#v", result.Warnings)
 	}
 }
@@ -106,6 +106,36 @@ func TestLoadMetadata_ReadsNameAndDescription(t *testing.T) {
 	}
 }
 
+func TestLoadMetadata_FrontmatterNameOverridesDirName(t *testing.T) {
+	work := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	writeSkill(t, work, "any-dir", "---\nname: real-name\ndescription: Demo skill\n---\nBody")
+
+	result := LoadMetadata(Discover(work))
+	if len(result.Skills) != 1 || result.Skills[0].Name != "real-name" {
+		t.Fatalf("expected frontmatter name to win, got %#v", result.Skills)
+	}
+}
+
+func TestLoadMetadata_DuplicateFrontmatterNameWarns(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	writeSkill(t, work, "project-dir", "---\nname: shared\ndescription: From project\n---\nBody")
+	writeSkill(t, home, "global-dir", "---\nname: shared\ndescription: From global\n---\nBody")
+
+	result := LoadMetadata(Discover(work))
+	if len(result.Skills) != 1 {
+		t.Fatalf("expected 1 skill after dedup, got %#v", result.Skills)
+	}
+	if result.Skills[0].Description != "From project" {
+		t.Fatalf("expected project to win fm.Name collision, got %#v", result.Skills[0])
+	}
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "name \"shared\" already used") {
+		t.Fatalf("expected collision warning, got %#v", result.Warnings)
+	}
+}
+
 func TestCatalog_Empty(t *testing.T) {
 	if got := Catalog(nil, Config{}); got != "" {
 		t.Fatalf("expected empty catalog, got %q", got)
@@ -119,6 +149,9 @@ func TestCatalog_IncludesEnabledSkills(t *testing.T) {
 	}
 	if !strings.Contains(got, "- demo: Demo skill → read /tmp/demo/SKILL.md") {
 		t.Fatalf("expected skill entry, got %q", got)
+	}
+	if !strings.Contains(got, "[Activate skill: <name>]") {
+		t.Fatalf("expected catalog to reference activation marker, got %q", got)
 	}
 }
 
@@ -151,16 +184,16 @@ func writeSkillFile(t *testing.T, content string) Skill {
 }
 
 func TestActivationMessage(t *testing.T) {
-	skill := writeSkillFile(t, "# Demo\nDo something useful.")
-	got, err := ActivationMessage(skill, []string{"foo"})
+	skill := writeSkillFile(t, "# Demo\nargs=$ARGUMENTS")
+	got, err := ActivationMessage(skill, []string{"foo", "bar"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(got, "[Activate skill: demo]") {
 		t.Fatalf("expected activation header, got %q", got)
 	}
-	if !strings.Contains(got, "Arguments: foo") {
-		t.Fatalf("expected arguments, got %q", got)
+	if !strings.Contains(got, "args=foo bar") {
+		t.Fatalf("expected $ARGUMENTS substitution, got %q", got)
 	}
 	if !strings.Contains(got, "# Demo") {
 		t.Fatalf("expected skill content, got %q", got)
@@ -168,13 +201,35 @@ func TestActivationMessage(t *testing.T) {
 }
 
 func TestActivationMessageNoArgs(t *testing.T) {
-	skill := writeSkillFile(t, "# Demo\nDo something useful.")
+	skill := writeSkillFile(t, "# Demo\nargs=$ARGUMENTS done")
 	got, err := ActivationMessage(skill, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if strings.Contains(got, "Arguments:") {
-		t.Fatalf("expected no arguments line, got %q", got)
+	if !strings.Contains(got, "args= done") {
+		t.Fatalf("expected $ARGUMENTS to substitute to empty, got %q", got)
+	}
+}
+
+func TestActivationMessagePositional(t *testing.T) {
+	skill := writeSkillFile(t, "first=$1 second=$2 third=$3")
+	got, err := ActivationMessage(skill, []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "first=a second=b third=") {
+		t.Fatalf("expected positional substitution with empty fallback, got %q", got)
+	}
+}
+
+func TestActivationMessagePreservesDollarTen(t *testing.T) {
+	skill := writeSkillFile(t, "literal=$10")
+	got, err := ActivationMessage(skill, []string{"a"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "literal=$10") {
+		t.Fatalf("expected $10 untouched, got %q", got)
 	}
 }
 

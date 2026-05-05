@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -15,7 +16,7 @@ type Discovery struct {
 
 func Discover(workingDir string) Discovery {
 	var result Discovery
-	loaded := map[string]Skill{}
+	seen := map[string]bool{}
 
 	for _, root := range discoveryRoots(workingDir) {
 		matches, err := filepath.Glob(filepath.Join(root, "*", "SKILL.md"))
@@ -24,50 +25,48 @@ func Discover(workingDir string) Discovery {
 		}
 		sort.Strings(matches)
 		for _, skillPath := range matches {
-			name := filepath.Base(filepath.Dir(skillPath))
-			if _, exists := loaded[name]; exists {
+			dirName := filepath.Base(filepath.Dir(skillPath))
+			if seen[dirName] {
 				continue
 			}
+			seen[dirName] = true
 
 			absPath, err := filepath.Abs(skillPath)
 			if err != nil {
 				continue
 			}
-			loaded[name] = Skill{
-				Name:        name,
-				Description: name,
+			result.Skills = append(result.Skills, Skill{
+				Name:        dirName,
+				Description: dirName,
 				Location:    absPath,
-			}
+			})
 		}
 	}
 
-	for _, skill := range loaded {
-		result.Skills = append(result.Skills, skill)
-	}
-	sort.Slice(result.Skills, func(i, j int) bool {
-		return result.Skills[i].Name < result.Skills[j].Name
-	})
 	return result
 }
 
 func LoadMetadata(discovery Discovery) Discovery {
 	result := Discovery{Warnings: append([]string(nil), discovery.Warnings...)}
 	result.Skills = make([]Skill, 0, len(discovery.Skills))
+	byName := map[string]string{}
 
 	for _, discovered := range discovery.Skills {
 		data, err := os.ReadFile(discovered.Location)
 		if err != nil {
-			result.Skills = append(result.Skills, discovered)
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Skill %s failed to load: %v", discovered.Name, err))
 			continue
 		}
-		skill, ok, err := ParseSkillMetadata(discovered.Location, discovered.Name, data)
+		skill, err := ParseSkillMetadata(discovered.Location, data)
 		if err != nil {
-			result.Warnings = append(result.Warnings, "Skill "+discovered.Name+" failed to load due to YAML parsing issue")
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Skill %s failed to load: %v", discovered.Name, err))
 			continue
 		}
-		if !ok {
+		if existing, dup := byName[skill.Name]; dup {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("Skill %s skipped: name %q already used by %s", discovered.Name, skill.Name, existing))
 			continue
 		}
+		byName[skill.Name] = discovered.Name
 		result.Skills = append(result.Skills, skill)
 	}
 
@@ -108,8 +107,9 @@ containing SKILL.md:
 		sb.WriteString(skill.Location)
 		sb.WriteString("\n")
 	}
-	sb.WriteString(`IMPORTANT: If users invoke a skill by "/<skill-name>" commands, the instructions are
-already in your conversation context. So do not read the skill's SKILL.md file again.`)
+	sb.WriteString("IMPORTANT: If any user message in this conversation begins with " +
+		"`[Activate skill: <name>]`, the SKILL.md body for that skill has already been " +
+		"provided inline in that message — do not call read_file on its path.")
 	return strings.TrimRight(sb.String(), "\n")
 }
 
@@ -139,15 +139,27 @@ func ActivationMessage(skill Skill, args []string) (string, error) {
 		return "", fmt.Errorf("read skill %s: %w", skill.Name, err)
 	}
 
+	body := substituteArgs(strings.TrimSpace(string(content)), args)
+
 	var sb strings.Builder
 	sb.WriteString("[Activate skill: ")
 	sb.WriteString(skill.Name)
-	sb.WriteString("]")
-	if len(args) > 0 {
-		sb.WriteString("\nArguments: ")
-		sb.WriteString(strings.Join(args, " "))
-	}
-	sb.WriteString("\n\n")
-	sb.WriteString(strings.TrimSpace(string(content)))
+	sb.WriteString("]\n\n")
+	sb.WriteString(body)
 	return sb.String(), nil
+}
+
+var argPlaceholder = regexp.MustCompile(`\$ARGUMENTS\b|\$([1-9])\b`)
+
+func substituteArgs(body string, args []string) string {
+	return argPlaceholder.ReplaceAllStringFunc(body, func(match string) string {
+		if match == "$ARGUMENTS" {
+			return strings.Join(args, " ")
+		}
+		idx := int(match[1]-'0') - 1
+		if idx < len(args) {
+			return args[idx]
+		}
+		return ""
+	})
 }
