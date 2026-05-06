@@ -1,0 +1,201 @@
+# Permission System
+
+The permission system in Keen Code uses a `Guard` to enforce filesystem access policies, with user approval for sensitive operations.
+
+## Guard
+
+The `Guard` type in `internal/filesystem/guard.go` is the central component:
+
+```go
+type Guard struct {
+    workingDir   string
+    blockedPaths []string
+    gitignore    *GitAwareness
+}
+
+func NewGuard(workingDir string, gitignore *GitAwareness) *Guard
+```
+
+## Permission States
+
+```go
+type Permission int
+
+const (
+    PermissionDenied  Permission = iota  // Blocked by policy
+    PermissionGranted                     // Allowed without prompting
+    PermissionPending                     // Needs user approval
+)
+```
+
+## Path Resolution
+
+Paths are resolved relative to the working directory:
+
+```go
+func (g *Guard) ResolvePath(path string) (string, error) {
+    if filepath.IsAbs(path) {
+        return filepath.Clean(path), nil
+    }
+    return filepath.Join(g.workingDir, path), nil
+}
+```
+
+## Policy Checks
+
+`CheckPath` evaluates an operation against the policy:
+
+```go
+func (g *Guard) CheckPath(path string, operation string) Permission
+```
+
+### Operation: "read"
+- **Granted**: Path is in working directory OR in skills directory
+- **Pending**: Path is outside working directory but not blocked
+- **Denied**: Path is blocked by policy or doesn't resolve
+
+### Operation: "write" or "edit"
+- **Pending**: Always requires user approval (no auto-grant for writes)
+- **Denied**: Path is blocked by policy
+
+### Other Operations
+- **Denied**: Any unrecognized operation is blocked
+
+## Blocked Paths
+
+System directories are blocked by default:
+
+```go
+func defaultBlockedPaths() []string {
+    return []string{
+        "/etc", "/usr", "/bin", "/sbin", "/lib", "/lib64",
+        "/proc", "/sys", "/dev", "/root",
+    }
+}
+```
+
+## GitAwareness
+
+The `GitAwareness` type (`internal/filesystem/gitawareness.go`) loads `.gitignore` files to excludeIgnored paths from tool access:
+
+```go
+type GitAwareness struct {
+    patternSets []PatternSet
+}
+
+func (g *GitAwareness) LoadGitignoreRecursive(root string) error
+func (g *GitAwareness) IsIgnored(filePath string) bool
+func (g *GitAwareness) FilterPaths(paths []string) []string
+```
+
+It uses the `go-git` library's gitignore parser to handle `.gitignore` patterns correctly.
+
+## Blocked Path Checks
+
+A path is blocked if:
+1. It cannot be resolved
+2. It matches a `.gitignore` pattern
+3. It is in a hidden directory under home (`~/.something`)
+4. It has a prefix in `blockedPaths` (system directories)
+5. It is in a skill directory (exception - always allowed)
+
+```go
+func (g *Guard) IsBlocked(path string) bool {
+    resolved, err := g.ResolvePath(path)
+    if err != nil {
+        return true
+    }
+    if g.gitignore != nil && g.gitignore.IsIgnored(path) {
+        return true
+    }
+    if g.IsInSkillDir(resolved) {
+        return false
+    }
+    // ... home and system path checks
+}
+```
+
+## Skills Directory Exception
+
+Skill directories are explicitly allowed for read access:
+- `~/.agents/skills`
+- `~/.keen/skills`
+
+```go
+func (g *Guard) IsInSkillDir(path string) bool {
+    home, _ := os.UserHomeDir()
+    for _, dir := range []string{
+        filepath.Join(home, ".agents", "skills"),
+        filepath.Join(home, ".keen", "skills"),
+    } {
+        if strings.HasPrefix(path, dir) {
+            return true
+        }
+    }
+    return false
+}
+```
+
+## PermissionRequester Interface
+
+Tools use `PermissionRequester` to request user approval:
+
+```go
+// internal/tools/permission.go
+type PermissionRequester interface {
+    RequestPermission(ctx context.Context, toolName, path, resolvedPath string, isDangerous bool) (bool, error)
+}
+```
+
+### Parameters:
+- `toolName`: Name of the tool (e.g., "bash", "read_file")
+- `path`: Original path as provided
+- `resolvedPath`: Absolute resolved path
+- `isDangerous`: True for operations that modify files/system
+
+The requester implementation (typically in the CLI/repl layer) prompts the user and returns their decision.
+
+## Tool Integration
+
+All tools follow the same permission pattern:
+
+```go
+func (t *SomeTool) Execute(ctx context.Context, input any) (any, error) {
+    // 1. Parse parameters
+    // 2. Resolve path
+    // 3. Check permission
+    permission := t.guard.CheckPath(path, operation)
+
+    switch permission {
+    case PermissionDenied:
+        return nil, fmt.Errorf("permission denied by policy")
+    case PermissionPending:
+        allowed, err := t.permissionRequester.RequestPermission(...)
+        if !allowed {
+            return nil, fmt.Errorf("permission denied by user")
+        }
+    }
+
+    // 4. Execute operation
+}
+```
+
+## Bash Tool Special Case
+
+The `bash` tool has special handling for dangerous commands:
+
+```go
+// If command is marked dangerous, always prompt
+if isDangerous {
+    allowed, err := t.permissionRequester.RequestPermission(
+        ctx, t.Name(), command, "", true,
+    )
+    // ...
+}
+```
+
+Dangerous commands include:
+- File removal (`rm`, `rm -rf`)
+- Git operations that modify repository state
+- Process termination
+- System modifications
