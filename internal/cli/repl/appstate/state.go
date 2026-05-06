@@ -54,13 +54,17 @@ func (s *AppState) ClearMessages() {
 }
 
 func (s *AppState) ReloadSkills() skills.Discovery {
+	s.skillsConfig = skills.LoadConfig()
 	if strings.TrimSpace(s.workingDir) == "" {
 		s.skills = skills.Discovery{}
-		s.skillsConfig = skills.LoadConfig()
 		return s.GetSkills()
 	}
-	s.skills = skills.LoadMetadata(skills.Discover(s.workingDir))
-	s.skillsConfig = skills.LoadConfig()
+	bundledDir, bundledErr := skills.EnsureBundled()
+	discovery := skills.LoadMetadata(skills.Discover(s.workingDir, bundledDir))
+	if bundledErr != nil {
+		discovery.Warnings = append(discovery.Warnings, "Bundled skills failed to extract: "+bundledErr.Error())
+	}
+	s.skills = discovery
 	return s.GetSkills()
 }
 

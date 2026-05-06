@@ -10,6 +10,7 @@ import (
 
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -160,11 +161,18 @@ func TestAppState_ReloadSkillsCachesMetadataOnly(t *testing.T) {
 
 	state := New(nil, work)
 	discovery := state.GetSkills()
-	if len(discovery.Skills) != 1 {
-		t.Fatalf("expected one cached skill, got %#v", discovery.Skills)
+	var demo *skills.Skill
+	for i := range discovery.Skills {
+		if discovery.Skills[i].Name == "demo" {
+			demo = &discovery.Skills[i]
+			break
+		}
 	}
-	if discovery.Skills[0].Description != "Demo skill" {
-		t.Fatalf("expected metadata description, got %#v", discovery.Skills[0])
+	if demo == nil {
+		t.Fatalf("expected demo skill in cache, got %#v", discovery.Skills)
+	}
+	if demo.Description != "Demo skill" {
+		t.Fatalf("expected metadata description, got %#v", *demo)
 	}
 	if strings.Contains(state.SkillsCatalog(), "Secret instruction body") {
 		t.Fatal("expected cached catalog to exclude instruction body")
@@ -176,8 +184,8 @@ func TestAppState_SkillsReloadUpdatesMetadata(t *testing.T) {
 	work := t.TempDir()
 	t.Setenv("HOME", home)
 	state := New(nil, work)
-	if len(state.GetSkills().Skills) != 0 {
-		t.Fatal("expected no initial skills")
+	if _, ok := state.FindEnabledSkill("demo"); ok {
+		t.Fatal("did not expect demo skill before it is written")
 	}
 
 	skillDir := filepath.Join(work, ".agents", "skills", "demo")

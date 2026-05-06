@@ -33,7 +33,7 @@ func TestDiscover_ProjectGlobalAndKeenSkills(t *testing.T) {
 	writeSkill(t, home, "global", "---\nname: global\ndescription: Global skill\n---\nBody")
 	writeSkillAt(t, filepath.Join(home, ".keen", "skills"), "builtin", "---\nname: builtin\ndescription: Builtin skill\n---\nBody")
 
-	result := Discover(work)
+	result := Discover(work, "")
 	if len(result.Skills) != 3 {
 		t.Fatalf("expected 3 skills, got %d", len(result.Skills))
 	}
@@ -45,6 +45,118 @@ func TestDiscover_ProjectGlobalAndKeenSkills(t *testing.T) {
 	}
 }
 
+func TestDiscover_AllFiveRootsAndOrder(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	bundled := t.TempDir()
+	t.Setenv("HOME", home)
+	writeSkill(t, work, "p-agents", "---\nname: p-agents\ndescription: x\n---\nBody")
+	writeSkillAt(t, filepath.Join(work, ".keen", "skills"), "p-keen", "---\nname: p-keen\ndescription: x\n---\nBody")
+	writeSkill(t, home, "g-agents", "---\nname: g-agents\ndescription: x\n---\nBody")
+	writeSkillAt(t, filepath.Join(home, ".keen", "skills"), "g-keen", "---\nname: g-keen\ndescription: x\n---\nBody")
+	writeSkillAt(t, bundled, "b-skill", "---\nname: b-skill\ndescription: x\n---\nBody")
+
+	result := Discover(work, bundled)
+	if len(result.Skills) != 5 {
+		t.Fatalf("expected 5 skills, got %#v", result.Skills)
+	}
+	wantOrder := []string{"p-agents", "p-keen", "g-agents", "g-keen", "b-skill"}
+	for i, want := range wantOrder {
+		if result.Skills[i].Name != want {
+			t.Fatalf("at %d expected %q, got %q (full=%#v)", i, want, result.Skills[i].Name, result.Skills)
+		}
+	}
+}
+
+func TestDiscover_ProjectKeenBeatsGlobalAndBundled(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	bundled := t.TempDir()
+	t.Setenv("HOME", home)
+	writeSkillAt(t, bundled, "same", "---\nname: same\ndescription: From bundled\n---\nBody")
+	writeSkillAt(t, filepath.Join(home, ".keen", "skills"), "same", "---\nname: same\ndescription: From global keen\n---\nBody")
+	projectKeenPath := writeSkillAt(t, filepath.Join(work, ".keen", "skills"), "same", "---\nname: same\ndescription: From project keen\n---\nBody")
+
+	result := LoadMetadata(Discover(work, bundled))
+	if len(result.Skills) != 1 {
+		t.Fatalf("expected 1 skill after dedup, got %#v", result.Skills)
+	}
+	if result.Skills[0].Description != "From project keen" {
+		t.Fatalf("expected project .keen/skills to win, got %#v", result.Skills[0])
+	}
+	if result.Skills[0].Location != projectKeenPath {
+		t.Fatalf("expected location %q, got %q", projectKeenPath, result.Skills[0].Location)
+	}
+}
+
+func TestDiscover_BundledNamespaceDoesNotLeakIntoParent(t *testing.T) {
+	// Layout:
+	//   <home>/.keen/skills/foo/SKILL.md          ← user-global
+	//   <home>/.keen/skills/bundled/bar/SKILL.md  ← bundled (separate root)
+	// The user-global glob is <home>/.keen/skills/*/SKILL.md, which must not
+	// pick up the bundled tree.
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	bundled := filepath.Join(home, ".keen", "skills", "bundled")
+	writeSkillAt(t, filepath.Join(home, ".keen", "skills"), "foo", "---\nname: foo\ndescription: User\n---\nBody")
+	writeSkillAt(t, bundled, "bar", "---\nname: bar\ndescription: Bundled\n---\nBody")
+
+	result := Discover(work, bundled)
+	names := []string{}
+	for _, s := range result.Skills {
+		names = append(names, s.Name)
+	}
+	if len(names) != 2 {
+		t.Fatalf("expected exactly foo and bar, got %v", names)
+	}
+	for _, n := range names {
+		if n == "bundled" {
+			t.Fatalf("bundled namespace dir leaked into parent root: %v", names)
+		}
+	}
+}
+
+func TestUserDefined_BeatsBundled_SameDirname(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	bundled := t.TempDir()
+	writeSkillAt(t, bundled, "commit", "---\nname: commit\ndescription: Bundled commit\n---\nBundled body")
+	userPath := writeSkill(t, home, "commit", "---\nname: commit\ndescription: User commit\n---\nUser body")
+
+	result := LoadMetadata(Discover(work, bundled))
+	if len(result.Skills) != 1 {
+		t.Fatalf("expected 1 skill (user shadows bundled), got %#v", result.Skills)
+	}
+	if result.Skills[0].Description != "User commit" {
+		t.Fatalf("expected user-defined to win, got %#v", result.Skills[0])
+	}
+	if result.Skills[0].Location != userPath {
+		t.Fatalf("expected location %q, got %q", userPath, result.Skills[0].Location)
+	}
+}
+
+func TestUserDefined_BeatsBundled_FrontmatterNameOverride(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	bundled := t.TempDir()
+	writeSkillAt(t, bundled, "commit", "---\nname: commit\ndescription: Bundled commit\n---\nBundled body")
+	writeSkill(t, home, "my-helper", "---\nname: commit\ndescription: User commit\n---\nUser body")
+
+	result := LoadMetadata(Discover(work, bundled))
+	if len(result.Skills) != 1 {
+		t.Fatalf("expected user to shadow bundled via fm.Name dedup, got %#v", result.Skills)
+	}
+	if result.Skills[0].Description != "User commit" {
+		t.Fatalf("expected user-defined to win, got %#v", result.Skills[0])
+	}
+	if len(result.Warnings) != 1 || !strings.Contains(result.Warnings[0], "commit") {
+		t.Fatalf("expected fm.Name collision warning, got %#v", result.Warnings)
+	}
+}
+
 func TestDiscover_ProjectWinsCollision(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
@@ -53,7 +165,7 @@ func TestDiscover_ProjectWinsCollision(t *testing.T) {
 	writeSkill(t, home, "same", "---\nname: same\ndescription: Global\n---\nBody")
 	projectPath := writeSkill(t, work, "same", "---\nname: same\ndescription: Project\n---\nBody")
 
-	result := Discover(work)
+	result := Discover(work, "")
 	if len(result.Skills) != 1 {
 		t.Fatalf("expected 1 skill, got %d", len(result.Skills))
 	}
@@ -69,7 +181,7 @@ func TestDiscover_GlobalWinsKeenCollision(t *testing.T) {
 	writeSkillAt(t, filepath.Join(home, ".keen", "skills"), "same", "---\nname: same\ndescription: Builtin\n---\nBody")
 	globalPath := writeSkill(t, home, "same", "---\nname: same\ndescription: Global\n---\nBody")
 
-	result := Discover(work)
+	result := Discover(work, "")
 	if len(result.Skills) != 1 {
 		t.Fatalf("expected 1 skill, got %d", len(result.Skills))
 	}
@@ -83,7 +195,7 @@ func TestLoadMetadata_InvalidYAMLWarnsAndSkips(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	writeSkill(t, work, "bad", "---\nname: [\n---\nBody")
 
-	result := LoadMetadata(Discover(work))
+	result := LoadMetadata(Discover(work, ""))
 	if len(result.Skills) != 0 {
 		t.Fatalf("expected no skills, got %#v", result.Skills)
 	}
@@ -97,7 +209,7 @@ func TestLoadMetadata_ReadsNameAndDescription(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	writeSkill(t, work, "demo", "---\nname: demo\ndescription: Demo skill\n---\nBody")
 
-	result := LoadMetadata(Discover(work))
+	result := LoadMetadata(Discover(work, ""))
 	if len(result.Skills) != 1 {
 		t.Fatalf("expected 1 skill, got %d", len(result.Skills))
 	}
@@ -111,7 +223,7 @@ func TestLoadMetadata_FrontmatterNameOverridesDirName(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	writeSkill(t, work, "any-dir", "---\nname: real-name\ndescription: Demo skill\n---\nBody")
 
-	result := LoadMetadata(Discover(work))
+	result := LoadMetadata(Discover(work, ""))
 	if len(result.Skills) != 1 || result.Skills[0].Name != "real-name" {
 		t.Fatalf("expected frontmatter name to win, got %#v", result.Skills)
 	}
@@ -124,7 +236,7 @@ func TestLoadMetadata_DuplicateFrontmatterNameWarns(t *testing.T) {
 	writeSkill(t, work, "project-dir", "---\nname: shared\ndescription: From project\n---\nBody")
 	writeSkill(t, home, "global-dir", "---\nname: shared\ndescription: From global\n---\nBody")
 
-	result := LoadMetadata(Discover(work))
+	result := LoadMetadata(Discover(work, ""))
 	if len(result.Skills) != 1 {
 		t.Fatalf("expected 1 skill after dedup, got %#v", result.Skills)
 	}
