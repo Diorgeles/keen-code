@@ -93,6 +93,39 @@ func makeToolCallChunk() openai.ChatCompletionChunk {
 	return chunk
 }
 
+func makeToolCallChunkWithReasoningField() openai.ChatCompletionChunk {
+	chunk := makeToolCallChunkWithoutReasoning()
+	chunk.Choices[0].Delta.JSON.ExtraFields = map[string]respjson.Field{
+		"reasoning": respjson.NewField(`"kimi-reasoning"`),
+	}
+	return chunk
+}
+
+func makeToolCallChunkWithoutReasoning() openai.ChatCompletionChunk {
+	return openai.ChatCompletionChunk{
+		Choices: []openai.ChatCompletionChunkChoice{
+			{
+				Index: 0,
+				Delta: openai.ChatCompletionChunkChoiceDelta{
+					Role: "assistant",
+					ToolCalls: []openai.ChatCompletionChunkChoiceDeltaToolCall{
+						{
+							Index: 0,
+							ID:    "call_1",
+							Type:  "function",
+							Function: openai.ChatCompletionChunkChoiceDeltaToolCallFunction{
+								Name:      "read_file",
+								Arguments: `{"path":"go.mod"}`,
+							},
+						},
+					},
+				},
+				FinishReason: "tool_calls",
+			},
+		},
+	}
+}
+
 func makeContentChunk(content string) openai.ChatCompletionChunk {
 	return openai.ChatCompletionChunk{
 		Choices: []openai.ChatCompletionChunkChoice{
@@ -235,6 +268,70 @@ func TestOpenAICompatibleClient_StreamChat_InjectsReasoningContentAcrossToolTurn
 	}
 }
 
+func TestOpenAICompatibleClient_StreamChat_CapturesReasoningFieldAcrossToolTurns(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderOpenCodeGo),
+		model:          "kimi-k2.6",
+		thinkingEffort: "enabled",
+	}
+
+	var requests []string
+	callCount := 0
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		body, err := json.Marshal(params)
+		if err != nil {
+			t.Fatalf("failed to marshal params: %v", err)
+		}
+		requests = append(requests, string(body))
+
+		callCount++
+		if callCount == 1 {
+			return &fakeChatStream{
+				chunks: []openai.ChatCompletionChunk{
+					makeToolCallChunkWithReasoningField(),
+				},
+			}
+		}
+		return &fakeChatStream{
+			chunks: []openai.ChatCompletionChunk{
+				makeContentChunk("done"),
+			},
+		}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successToolOAI{}); err != nil {
+		t.Fatalf("register tool: %v", err)
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{
+		{Role: RoleUser, Content: "read go.mod"},
+	}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var reasoning strings.Builder
+	for ev := range eventCh {
+		switch ev.Type {
+		case StreamEventTypeReasoningChunk:
+			reasoning.WriteString(ev.Content)
+		case StreamEventTypeError:
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if len(requests) != 2 {
+		t.Fatalf("expected two requests, got %d", len(requests))
+	}
+	if !strings.Contains(requests[1], `"reasoning_content":"kimi-reasoning"`) {
+		t.Fatalf("expected reasoning field serialized as reasoning_content in second request, got: %s", requests[1])
+	}
+	if reasoning.String() != "kimi-reasoning" {
+		t.Fatalf("expected reasoning stream, got %q", reasoning.String())
+	}
+}
+
 func TestNewOpenAICompatibleClient_ZAI(t *testing.T) {
 	client, err := NewOpenAICompatibleClient(&ClientConfig{
 		Provider: Provider(config.ProviderZAI),
@@ -249,6 +346,37 @@ func TestNewOpenAICompatibleClient_ZAI(t *testing.T) {
 	}
 	if client.model != "glm-4-plus" {
 		t.Fatalf("expected model glm-4-plus, got %s", client.model)
+	}
+}
+
+func TestNewOpenAICompatibleClient_OpenCodeGo(t *testing.T) {
+	client, err := NewOpenAICompatibleClient(&ClientConfig{
+		Provider: Provider(config.ProviderOpenCodeGo),
+		APIKey:   "test-key",
+		Model:    "kimi-k2.6",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if client == nil {
+		t.Fatal("expected client")
+	}
+	if client.provider != Provider(config.ProviderOpenCodeGo) {
+		t.Fatalf("expected provider opencode-go, got %s", client.provider)
+	}
+	if client.model != "kimi-k2.6" {
+		t.Fatalf("expected model kimi-k2.6, got %s", client.model)
+	}
+}
+
+func TestOpenAICompatibleBaseURL_OpenCodeGo(t *testing.T) {
+	baseURL, err := openAICompatibleBaseURL(Provider(config.ProviderOpenCodeGo))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := openCodeGoBaseURL + "/v1/"
+	if baseURL != expected {
+		t.Fatalf("expected %q, got %q", expected, baseURL)
 	}
 }
 
@@ -425,6 +553,130 @@ func TestOpenAICompatibleClient_ZAI_ThinkingDisabled(t *testing.T) {
 		if _, ok := extra["thinking"]; ok {
 			t.Fatal("expected no thinking config when thinkingEffort is empty")
 		}
+	}
+}
+
+func TestOpenAICompatibleClient_OpenCodeGoDeepSeekThinkingEffort(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderOpenCodeGo),
+		model:          "deepseek-v4-pro",
+		thinkingEffort: "max",
+	}
+
+	params := client.buildChatParams(nil, nil)
+
+	if string(params.ReasoningEffort) != "max" {
+		t.Fatalf("expected reasoning_effort max, got %q", params.ReasoningEffort)
+	}
+	extra := params.ExtraFields()
+	thinking, ok := extra["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking map, got %#v", extra["thinking"])
+	}
+	if thinking["type"] != "enabled" {
+		t.Fatalf("expected thinking enabled, got %#v", thinking)
+	}
+}
+
+func TestOpenAICompatibleClient_OpenCodeGoDeepSeekThinkingOff(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderOpenCodeGo),
+		model:          "deepseek-v4-flash",
+		thinkingEffort: "off",
+	}
+
+	params := client.buildChatParams(nil, nil)
+
+	if params.ReasoningEffort != "" {
+		t.Fatalf("expected empty reasoning_effort, got %q", params.ReasoningEffort)
+	}
+	extra := params.ExtraFields()
+	thinking, ok := extra["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking map, got %#v", extra["thinking"])
+	}
+	if thinking["type"] != "disabled" {
+		t.Fatalf("expected thinking disabled, got %#v", thinking)
+	}
+}
+
+func TestOpenAICompatibleClient_OpenCodeGoGLMThinkingEnabled(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderOpenCodeGo),
+		model:          "glm-5.1",
+		thinkingEffort: "enabled",
+	}
+
+	params := client.buildChatParams(nil, nil)
+
+	extra := params.ExtraFields()
+	thinking, ok := extra["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking map, got %#v", extra["thinking"])
+	}
+	if thinking["type"] != "enabled" {
+		t.Fatalf("expected thinking enabled, got %#v", thinking)
+	}
+}
+
+func TestOpenAICompatibleClient_OpenCodeGoKimiThinkingDisabled(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderOpenCodeGo),
+		model:          "kimi-k2.6",
+		thinkingEffort: "disabled",
+	}
+
+	params := client.buildChatParams(nil, nil)
+
+	extra := params.ExtraFields()
+	thinking, ok := extra["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected thinking map, got %#v", extra["thinking"])
+	}
+	if thinking["type"] != "disabled" {
+		t.Fatalf("expected thinking disabled, got %#v", thinking)
+	}
+}
+
+func TestOpenAICompatibleClient_OpenCodeGoQwenThinking(t *testing.T) {
+	tests := []struct {
+		effort string
+		want   bool
+	}{
+		{effort: "enabled", want: true},
+		{effort: "disabled", want: false},
+	}
+
+	for _, tt := range tests {
+		client := &OpenAICompatibleClient{
+			provider:       Provider(config.ProviderOpenCodeGo),
+			model:          "qwen3.6-plus",
+			thinkingEffort: tt.effort,
+		}
+
+		params := client.buildChatParams(nil, nil)
+		extra := params.ExtraFields()
+		got, ok := extra["enable_thinking"].(bool)
+		if !ok {
+			t.Fatalf("effort %q: expected enable_thinking bool, got %#v", tt.effort, extra["enable_thinking"])
+		}
+		if got != tt.want {
+			t.Fatalf("effort %q: expected %v, got %v", tt.effort, tt.want, got)
+		}
+	}
+}
+
+func TestOpenAICompatibleClient_OpenCodeGoMiMoOmitsThinkingConfig(t *testing.T) {
+	client := &OpenAICompatibleClient{
+		provider:       Provider(config.ProviderOpenCodeGo),
+		model:          "mimo-v2-pro",
+		thinkingEffort: "enabled",
+	}
+
+	params := client.buildChatParams(nil, nil)
+
+	if extra := params.ExtraFields(); extra != nil {
+		t.Fatalf("expected no thinking extra fields for MiMo, got %#v", extra)
 	}
 }
 

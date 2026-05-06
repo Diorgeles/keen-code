@@ -55,8 +55,7 @@ type Model struct {
   "providers": {
     "opencode-go": {
       "models": ["kimi-k2.6"],
-      "api_key": "oc_...",
-      "base_url": "https://opencode.ai/zen/go/v1/"
+      "api_key": "oc_..."
     }
   }
 }
@@ -81,7 +80,7 @@ Resolution order:
 
 Most providers use API key authentication. Keys are stored in the global config under `providers.{provider}.api_key`.
 
-OpenCode Go also uses API key authentication. Its default base URL is `https://opencode.ai/zen/go/v1/`; users only need to set `base_url` when using a proxy or compatible mirror.
+OpenCode Go also uses API key authentication. Users normally leave `base_url` unset. Keen uses `https://opencode.ai/zen/go/v1/` for OpenAI-compatible models and `https://opencode.ai/zen/go` for MiniMax models through the Anthropic SDK, which appends `/v1/messages`.
 
 ### OAuth Authentication (OpenAI Codex)
 

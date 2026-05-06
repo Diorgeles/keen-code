@@ -30,6 +30,8 @@ const (
 	StepOAuth
 )
 
+const maxVisibleListItems = 6
+
 type modelSelectionCompleteMsg struct{}
 type modelSelectionCancelMsg struct{}
 type modelSelectionOAuthCompleteMsg struct {
@@ -461,7 +463,11 @@ func (m *Model) renderOAuthStatus() string {
 
 func (m *Model) renderList(cursor int, getName func(int) string, count int) string {
 	var view strings.Builder
-	for i := 0; i < count; i++ {
+	start, end := visibleListRange(cursor, count, maxVisibleListItems)
+	if start > 0 {
+		view.WriteString(repltheme.HighlightStyle.Render("  ↑") + "\n")
+	}
+	for i := start; i < end; i++ {
 		if i == cursor {
 			view.WriteString(repltheme.ModelSelectionStyle.Render("▶ " + getName(i)))
 			view.WriteString("\n")
@@ -469,7 +475,29 @@ func (m *Model) renderList(cursor int, getName func(int) string, count int) stri
 		}
 		view.WriteString("  " + repltheme.NormalStyle.Render(getName(i)) + "\n")
 	}
+	if end < count {
+		view.WriteString(repltheme.HighlightStyle.Render("  ↓") + "\n")
+	}
 	return view.String()
+}
+
+func visibleListRange(cursor, count, maxVisible int) (int, int) {
+	if count <= 0 {
+		return 0, 0
+	}
+	if maxVisible <= 0 || count <= maxVisible {
+		return 0, count
+	}
+
+	half := maxVisible / 2
+	start := cursor - half
+	if start < 0 {
+		start = 0
+	}
+	if start+maxVisible > count {
+		start = count - maxVisible
+	}
+	return start, start + maxVisible
 }
 
 func (m *Model) getProviderName(providerID string) string {

@@ -2,11 +2,19 @@ package llm
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/user/keen-code/internal/config"
 )
 
 type Provider string
+
+const (
+	deepSeekBaseURL   = "https://api.deepseek.com/"
+	moonshotAIBaseURL = "https://api.moonshot.ai/v1/"
+	zaiBaseURL        = "https://api.z.ai/api/paas/v4/"
+	openCodeGoBaseURL = "https://opencode.ai/zen/go"
+)
 
 type ClientConfig struct {
 	Provider       Provider
@@ -66,7 +74,43 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			ThinkingEffort: cfg.ThinkingEffort,
 			BaseURL:        cfg.BaseURL,
 		})
+	case config.ProviderOpenCodeGo:
+		if isOpenCodeGoMiniMaxModel(cfg.Model) {
+			return NewAnthropicClient(&ClientConfig{
+				Provider: Provider(cfg.Provider),
+				APIKey:   cfg.APIKey,
+				Model:    cfg.Model,
+				BaseURL:  cfg.BaseURL,
+			})
+		}
+		return NewOpenAICompatibleClient(&ClientConfig{
+			Provider:       Provider(cfg.Provider),
+			APIKey:         cfg.APIKey,
+			Model:          cfg.Model,
+			ThinkingEffort: cfg.ThinkingEffort,
+			BaseURL:        cfg.BaseURL,
+		})
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
 	}
+}
+
+func isOpenCodeGoMiniMaxModel(model string) bool {
+	return strings.HasPrefix(model, "minimax-m2.")
+}
+
+func isOpenCodeGoDeepSeekModel(model string) bool {
+	return strings.HasPrefix(model, "deepseek-")
+}
+
+func isOpenCodeGoGLMModel(model string) bool {
+	return strings.HasPrefix(model, "glm-")
+}
+
+func isOpenCodeGoKimiModel(model string) bool {
+	return strings.HasPrefix(model, "kimi-")
+}
+
+func isOpenCodeGoQwenModel(model string) bool {
+	return strings.HasPrefix(model, "qwen")
 }

@@ -8,6 +8,7 @@ import (
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
+	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -62,6 +63,15 @@ func makeThinkingDeltaEvent(index int64, thinking string) anthropic.MessageStrea
 	return ev
 }
 
+func makeSignatureDeltaEvent(index int64, signature string) anthropic.MessageStreamEventUnion {
+	raw := json.RawMessage(`{"type":"content_block_delta","index":` +
+		string(rune('0'+index)) + `,"delta":{"type":"signature_delta","signature":` +
+		mustMarshalJSON(signature) + `}}`)
+	var ev anthropic.MessageStreamEventUnion
+	_ = json.Unmarshal(raw, &ev)
+	return ev
+}
+
 func makeMessageStartEvent(inputTokens, outputTokens, cacheCreationInputTokens, cacheReadInputTokens int64) anthropic.MessageStreamEventUnion {
 	raw := json.RawMessage(`{"type":"message_start","message":{"usage":{"input_tokens":` +
 		mustMarshalJSON(inputTokens) + `,"output_tokens":` +
@@ -87,6 +97,25 @@ func makeMessageDeltaUsageEvent(inputTokens, outputTokens, cacheCreationInputTok
 func makeContentBlockStopEvent(index int64) anthropic.MessageStreamEventUnion {
 	raw := json.RawMessage(`{"type":"content_block_stop","index":` +
 		string(rune('0'+index)) + `}`)
+	var ev anthropic.MessageStreamEventUnion
+	_ = json.Unmarshal(raw, &ev)
+	return ev
+}
+
+func makeThinkingStartEvent(index int64, thinking, signature string) anthropic.MessageStreamEventUnion {
+	raw := json.RawMessage(`{"type":"content_block_start","index":` +
+		string(rune('0'+index)) +
+		`,"content_block":{"type":"thinking","thinking":` + mustMarshalJSON(thinking) +
+		`,"signature":` + mustMarshalJSON(signature) + `}}`)
+	var ev anthropic.MessageStreamEventUnion
+	_ = json.Unmarshal(raw, &ev)
+	return ev
+}
+
+func makeRedactedThinkingStartEvent(index int64, data string) anthropic.MessageStreamEventUnion {
+	raw := json.RawMessage(`{"type":"content_block_start","index":` +
+		string(rune('0'+index)) +
+		`,"content_block":{"type":"redacted_thinking","data":` + mustMarshalJSON(data) + `}}`)
 	var ev anthropic.MessageStreamEventUnion
 	_ = json.Unmarshal(raw, &ev)
 	return ev
@@ -429,6 +458,86 @@ func TestAnthropicClient_StreamChat_ToolInvocation(t *testing.T) {
 	}
 }
 
+func TestAnthropicClient_StreamChat_PreservesThinkingBlocksForToolContinuation(t *testing.T) {
+	callCount := 0
+	var seenParams []anthropic.MessageNewParams
+
+	firstEvents := []anthropic.MessageStreamEventUnion{
+		makeThinkingStartEvent(0, "", ""),
+		makeThinkingDeltaEvent(0, "need a tool"),
+		makeSignatureDeltaEvent(0, "sig-1"),
+		makeContentBlockStopEvent(0),
+		makeRedactedThinkingStartEvent(1, "redacted-data"),
+		makeContentBlockStopEvent(1),
+		makeTextDeltaEvent(2, "using tool"),
+		makeContentBlockStopEvent(2),
+		makeToolUseStartEvent(3, "toolu_01", "success_tool"),
+		makeInputJSONDeltaEvent(3, `{"message":"hello"}`),
+		makeContentBlockStopEvent(3),
+	}
+	secondEvents := []anthropic.MessageStreamEventUnion{
+		makeTextDeltaEvent(0, "done"),
+		makeContentBlockStopEvent(0),
+	}
+
+	c := &AnthropicClient{model: "claude-sonnet-4-6"}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+		callCount++
+		seenParams = append(seenParams, params)
+		if callCount == 1 {
+			return &mockAnthropicStream{events: firstEvents}
+		}
+		return &mockAnthropicStream{events: secondEvents}
+	}
+
+	registry := tools.NewRegistry()
+	if err := registry.Register(&successTool{}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	eventCh, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "go"}}, registry)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for event := range eventCh {
+		if event.Type == StreamEventTypeError {
+			t.Fatalf("unexpected error: %v", event.Error)
+		}
+	}
+
+	if len(seenParams) != 2 {
+		t.Fatalf("expected 2 captured params, got %d", len(seenParams))
+	}
+	if len(seenParams[1].Messages) != 3 {
+		t.Fatalf("expected user, assistant, tool-result messages; got %d", len(seenParams[1].Messages))
+	}
+	assistant := seenParams[1].Messages[1]
+	if string(assistant.Role) != "assistant" {
+		t.Fatalf("expected assistant message, got %q", assistant.Role)
+	}
+	if len(assistant.Content) != 4 {
+		t.Fatalf("expected 4 assistant content blocks, got %d", len(assistant.Content))
+	}
+	if assistant.Content[0].OfThinking == nil {
+		t.Fatal("expected first block to be thinking")
+	}
+	if assistant.Content[0].OfThinking.Thinking != "need a tool" {
+		t.Fatalf("expected thinking content preserved, got %q", assistant.Content[0].OfThinking.Thinking)
+	}
+	if assistant.Content[0].OfThinking.Signature != "sig-1" {
+		t.Fatalf("expected thinking signature preserved, got %q", assistant.Content[0].OfThinking.Signature)
+	}
+	if assistant.Content[1].OfRedactedThinking == nil || assistant.Content[1].OfRedactedThinking.Data != "redacted-data" {
+		t.Fatalf("expected redacted thinking preserved, got %#v", assistant.Content[1].OfRedactedThinking)
+	}
+	if assistant.Content[2].OfText == nil || assistant.Content[2].OfText.Text != "using tool" {
+		t.Fatalf("expected text block preserved, got %#v", assistant.Content[2].OfText)
+	}
+	if assistant.Content[3].OfToolUse == nil {
+		t.Fatal("expected final block to be tool_use")
+	}
+}
+
 func TestAnthropicClient_executeTools_Success(t *testing.T) {
 	c := &AnthropicClient{}
 
@@ -635,6 +744,18 @@ func TestAnthropicClient_NoThinkingEffort_DisablesThinking(t *testing.T) {
 	}
 	if capturedParams.MaxTokens != anthropicMaxTokens {
 		t.Errorf("expected anthropicMaxTokens %d, got %d", anthropicMaxTokens, capturedParams.MaxTokens)
+	}
+}
+
+func TestAnthropicBaseURL_OpenCodeGo(t *testing.T) {
+	if got := anthropicBaseURL(Provider(config.ProviderOpenCodeGo), ""); got != openCodeGoBaseURL {
+		t.Fatalf("expected %q, got %q", openCodeGoBaseURL, got)
+	}
+	if got := anthropicBaseURL(Provider(config.ProviderOpenCodeGo), "https://proxy.example.com/v1"); got != "https://proxy.example.com/v1" {
+		t.Fatalf("expected configured base URL, got %q", got)
+	}
+	if got := anthropicBaseURL(Provider(config.ProviderAnthropic), ""); got != "" {
+		t.Fatalf("expected empty Anthropic default override, got %q", got)
 	}
 }
 

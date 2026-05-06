@@ -150,6 +150,36 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 			t.Fatalf("expected deepseek-v4-pro efforts %v, got %v", expectedDeepSeek, deepseek.ThinkingEfforts)
 		}
 	}
+
+	opencode, ok := reg.GetProvider("opencode-go")
+	if !ok {
+		t.Fatal("expected to find opencode-go provider")
+	}
+	if len(opencode.Models) != 14 {
+		t.Fatalf("expected 14 opencode-go models, got %d", len(opencode.Models))
+	}
+
+	qwen, ok := reg.GetModel("opencode-go", "qwen3.6-plus")
+	if !ok {
+		t.Fatal("expected to find opencode-go/qwen3.6-plus")
+	}
+	if qwen.ContextWindow != 1000000 {
+		t.Fatalf("expected qwen3.6-plus context 1000000, got %d", qwen.ContextWindow)
+	}
+	expectedQwen := []string{"enabled", "disabled"}
+	for i, effort := range expectedQwen {
+		if qwen.ThinkingEfforts[i] != effort {
+			t.Fatalf("expected qwen3.6-plus efforts %v, got %v", expectedQwen, qwen.ThinkingEfforts)
+		}
+	}
+
+	minimax, ok := reg.GetModel("opencode-go", "minimax-m2.7")
+	if !ok {
+		t.Fatal("expected to find opencode-go/minimax-m2.7")
+	}
+	if minimax.SupportsThinkingEffort() {
+		t.Fatalf("expected minimax-m2.7 to omit thinking efforts, got %v", minimax.ThinkingEfforts)
+	}
 }
 
 func TestRegistry_GetModel(t *testing.T) {

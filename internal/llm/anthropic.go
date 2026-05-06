@@ -11,6 +11,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
+	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -24,6 +25,18 @@ type anthropicStream interface {
 }
 
 type anthropicStreamFactory func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream
+
+type anthropicContentBlockState struct {
+	blockType   string
+	id          string
+	name        string
+	text        string
+	thinking    string
+	signature   string
+	data        string
+	inputStart  []byte
+	inputBuffer []byte
+}
 
 type sdkAnthropicStream struct {
 	stream *ssestream.Stream[anthropic.MessageStreamEventUnion]
@@ -58,8 +71,8 @@ func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
 	opts := []option.RequestOption{
 		option.WithAPIKey(cfg.APIKey),
 	}
-	if cfg.BaseURL != "" {
-		opts = append(opts, option.WithBaseURL(cfg.BaseURL))
+	if baseURL := anthropicBaseURL(cfg.Provider, cfg.BaseURL); baseURL != "" {
+		opts = append(opts, option.WithBaseURL(baseURL))
 	}
 
 	client := anthropic.NewClient(opts...)
@@ -75,6 +88,16 @@ func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
 	}
 
 	return c, nil
+}
+
+func anthropicBaseURL(provider Provider, configured string) string {
+	if configured != "" {
+		return configured
+	}
+	if provider == Provider(config.ProviderOpenCodeGo) {
+		return openCodeGoBaseURL
+	}
+	return ""
 }
 
 func toAnthropicMessages(messages []Message) ([]anthropic.TextBlockParam, []anthropic.MessageParam) {
@@ -167,13 +190,9 @@ func (c *AnthropicClient) collectTurn(
 ) ([]anthropic.ContentBlockParamUnion, []toolUseEntry, *TokenUsage, error) {
 	stream := c.streamImpl(ctx, params)
 
-	// track open tool_use blocks by index so we can accumulate partial JSON
-	type toolUseState struct {
-		id          string
-		name        string
-		inputBuffer []byte
-	}
-	toolStates := map[int64]*toolUseState{}
+	// Track open content blocks by index so tool continuations can replay the
+	// exact assistant block sequence.
+	blockStates := map[int64]*anthropicContentBlockState{}
 
 	var assistantBlocks []anthropic.ContentBlockParamUnion
 	var usage *TokenUsage
@@ -228,11 +247,36 @@ func (c *AnthropicClient) collectTurn(
 		case "content_block_start":
 			cbs := ev.AsContentBlockStart()
 			switch cbs.ContentBlock.Type {
+			case "text":
+				text := cbs.ContentBlock.AsText()
+				blockStates[cbs.Index] = &anthropicContentBlockState{
+					blockType: "text",
+					text:      text.Text,
+				}
+			case "thinking":
+				thinking := cbs.ContentBlock.AsThinking()
+				blockStates[cbs.Index] = &anthropicContentBlockState{
+					blockType: "thinking",
+					thinking:  thinking.Thinking,
+					signature: thinking.Signature,
+				}
+			case "redacted_thinking":
+				redacted := cbs.ContentBlock.AsRedactedThinking()
+				blockStates[cbs.Index] = &anthropicContentBlockState{
+					blockType: "redacted_thinking",
+					data:      redacted.Data,
+				}
 			case "tool_use":
 				tu := cbs.ContentBlock.AsToolUse()
-				toolStates[cbs.Index] = &toolUseState{
-					id:   tu.ID,
-					name: tu.Name,
+				var inputStart []byte
+				if len(tu.Input) > 0 {
+					inputStart = append(inputStart, tu.Input...)
+				}
+				blockStates[cbs.Index] = &anthropicContentBlockState{
+					blockType:  "tool_use",
+					id:         tu.ID,
+					name:       tu.Name,
+					inputStart: inputStart,
 				}
 			}
 
@@ -240,6 +284,12 @@ func (c *AnthropicClient) collectTurn(
 			cbd := ev.AsContentBlockDelta()
 			switch cbd.Delta.Type {
 			case "text_delta":
+				state, ok := blockStates[cbd.Index]
+				if !ok {
+					state = &anthropicContentBlockState{blockType: "text"}
+					blockStates[cbd.Index] = state
+				}
+				state.text += cbd.Delta.Text
 				if cbd.Delta.Text != "" {
 					eventCh <- StreamEvent{
 						Type:    StreamEventTypeChunk,
@@ -247,27 +297,60 @@ func (c *AnthropicClient) collectTurn(
 					}
 				}
 			case "thinking_delta":
+				state, ok := blockStates[cbd.Index]
+				if !ok {
+					state = &anthropicContentBlockState{blockType: "thinking"}
+					blockStates[cbd.Index] = state
+				}
+				state.thinking += cbd.Delta.Thinking
 				if cbd.Delta.Thinking != "" {
 					eventCh <- StreamEvent{
 						Type:    StreamEventTypeReasoningChunk,
 						Content: cbd.Delta.Thinking,
 					}
 				}
-			case "input_json_delta":
-				if state, ok := toolStates[cbd.Index]; ok {
-					state.inputBuffer = append(state.inputBuffer, []byte(cbd.Delta.PartialJSON)...)
+			case "signature_delta":
+				state, ok := blockStates[cbd.Index]
+				if !ok || state.blockType != "thinking" {
+					continue
 				}
+				state.signature += cbd.Delta.Signature
+			case "input_json_delta":
+				state, ok := blockStates[cbd.Index]
+				if !ok {
+					state = &anthropicContentBlockState{blockType: "tool_use"}
+					blockStates[cbd.Index] = state
+				}
+				state.inputBuffer = append(state.inputBuffer, []byte(cbd.Delta.PartialJSON)...)
 			}
 
 		case "content_block_stop":
 			cbs := ev.AsContentBlockStop()
-			if state, ok := toolStates[cbs.Index]; ok {
-				var inputRaw json.RawMessage = state.inputBuffer
-				if len(inputRaw) == 0 {
-					inputRaw = json.RawMessage("{}")
+			if state, ok := blockStates[cbs.Index]; ok {
+				switch state.blockType {
+				case "text":
+					if state.text != "" {
+						assistantBlocks = append(assistantBlocks, anthropic.NewTextBlock(state.text))
+					}
+				case "thinking":
+					assistantBlocks = append(assistantBlocks, anthropic.NewThinkingBlock(state.signature, state.thinking))
+				case "redacted_thinking":
+					assistantBlocks = append(assistantBlocks, anthropic.NewRedactedThinkingBlock(state.data))
+				case "tool_use":
+					if state.name == "" && state.id == "" {
+						delete(blockStates, cbs.Index)
+						continue
+					}
+					var inputRaw json.RawMessage = state.inputBuffer
+					if len(inputRaw) == 0 {
+						inputRaw = state.inputStart
+					}
+					if len(inputRaw) == 0 {
+						inputRaw = json.RawMessage("{}")
+					}
+					assistantBlocks = append(assistantBlocks, anthropic.NewToolUseBlock(state.id, inputRaw, state.name))
 				}
-				assistantBlocks = append(assistantBlocks, anthropic.NewToolUseBlock(state.id, inputRaw, state.name))
-				delete(toolStates, cbs.Index)
+				delete(blockStates, cbs.Index)
 			}
 		}
 	}

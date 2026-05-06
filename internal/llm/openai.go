@@ -94,11 +94,13 @@ func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, erro
 func openAICompatibleBaseURL(provider Provider) (string, error) {
 	switch provider {
 	case Provider(config.ProviderDeepSeek):
-		return "https://api.deepseek.com/", nil
+		return deepSeekBaseURL, nil
 	case Provider(config.ProviderMoonshotAI):
-		return "https://api.moonshot.ai/v1/", nil
+		return moonshotAIBaseURL, nil
 	case Provider(config.ProviderZAI):
-		return "https://api.z.ai/api/paas/v4/", nil
+		return zaiBaseURL, nil
+	case Provider(config.ProviderOpenCodeGo):
+		return openCodeGoBaseURL + "/v1/", nil
 	default:
 		return "", fmt.Errorf("unsupported OpenAI-compatible provider: %s", provider)
 	}
@@ -164,6 +166,15 @@ func extractJSONStringField(extra map[string]respjson.Field, key string) string 
 	var value string
 	if err := json.Unmarshal([]byte(raw), &value); err == nil {
 		return value
+	}
+	return ""
+}
+
+func extractReasoningDelta(extra map[string]respjson.Field) string {
+	for _, key := range []string{"reasoning_content", "reasoning", "reasoning_text"} {
+		if value := extractJSONStringField(extra, key); value != "" {
+			return value
+		}
 	}
 	return ""
 }
@@ -259,6 +270,10 @@ func emitMissingFinalContent(
 	}
 }
 
+func (c *OpenAICompatibleClient) shouldLogRawChunks() bool {
+	return c.provider == Provider(config.ProviderOpenCodeGo) && isOpenCodeGoKimiModel(c.model)
+}
+
 func (c *OpenAICompatibleClient) collectTurn(
 	ctx context.Context,
 	params openai.ChatCompletionNewParams,
@@ -271,6 +286,9 @@ func (c *OpenAICompatibleClient) collectTurn(
 
 	for stream.Next() {
 		chunk := stream.Current()
+		if c.shouldLogRawChunks() {
+			slog.Debug("OpenCode Go Kimi stream chunk", "chunk", chunk.RawJSON())
+		}
 		acc.AddChunk(chunk)
 
 		if len(chunk.Choices) == 0 {
@@ -283,9 +301,9 @@ func (c *OpenAICompatibleClient) collectTurn(
 			emitChunk(eventCh, delta.Content)
 		}
 
-		// reasoning_content is a DeepSeek/Moonshot AI extension not modeled by openai-go.
+		// reasoning_content/reasoning are OpenAI-compatible extensions not modeled by openai-go.
 		// Capture it during streaming because the SDK accumulator does not retain JSON metadata.
-		reasoningDelta := extractJSONStringField(delta.JSON.ExtraFields, "reasoning_content")
+		reasoningDelta := extractReasoningDelta(delta.JSON.ExtraFields)
 		reasoningContent.WriteString(reasoningDelta)
 		if reasoningDelta != "" {
 			eventCh <- StreamEvent{
@@ -368,7 +386,7 @@ func (c *OpenAICompatibleClient) buildChatParams(oaiMessages []openai.ChatComple
 	if len(oaiTools) > 0 {
 		params.Tools = oaiTools
 	}
-	if c.provider == Provider(config.ProviderDeepSeek) && c.thinkingEffort != "" {
+	if (c.provider == Provider(config.ProviderDeepSeek) || (c.provider == Provider(config.ProviderOpenCodeGo) && isOpenCodeGoDeepSeekModel(c.model))) && c.thinkingEffort != "" {
 		if c.thinkingEffort == "off" {
 			params.SetExtraFields(map[string]any{
 				"thinking": map[string]any{
@@ -384,12 +402,20 @@ func (c *OpenAICompatibleClient) buildChatParams(oaiMessages []openai.ChatComple
 			})
 		}
 	}
-	if c.provider == Provider(config.ProviderZAI) && c.thinkingEffort != "" {
+	if (c.provider == Provider(config.ProviderZAI) || (c.provider == Provider(config.ProviderOpenCodeGo) && (isOpenCodeGoGLMModel(c.model) || isOpenCodeGoKimiModel(c.model)))) && c.thinkingEffort != "" {
 		params.SetExtraFields(map[string]any{
 			"thinking": map[string]any{
 				"type": c.thinkingEffort,
 			},
 		})
+	}
+	if c.provider == Provider(config.ProviderOpenCodeGo) && isOpenCodeGoQwenModel(c.model) && c.thinkingEffort != "" {
+		switch c.thinkingEffort {
+		case "enabled":
+			params.SetExtraFields(map[string]any{"enable_thinking": true})
+		case "disabled":
+			params.SetExtraFields(map[string]any{"enable_thinking": false})
+		}
 	}
 	return params
 }

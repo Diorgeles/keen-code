@@ -153,12 +153,81 @@ func TestProviderConstants(t *testing.T) {
 		{Provider(config.ProviderOpenAI), "openai"},
 		{Provider(config.ProviderGoogleAI), "googleai"},
 		{Provider(config.ProviderDeepSeek), "deepseek"},
+		{Provider(config.ProviderOpenCodeGo), "opencode-go"},
 	}
 
 	for _, tt := range tests {
 		if string(tt.provider) != tt.expected {
 			t.Errorf("expected provider %q, got %q", tt.expected, tt.provider)
 		}
+	}
+}
+
+func TestNewClient_OpenCodeGoOpenAICompatibleModel(t *testing.T) {
+	cfg := &config.ResolvedConfig{
+		Provider:       config.ProviderOpenCodeGo,
+		Model:          "kimi-k2.6",
+		APIKey:         "test-api-key",
+		ThinkingEffort: "enabled",
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	oaiClient, ok := client.(*OpenAICompatibleClient)
+	if !ok {
+		t.Fatalf("expected *OpenAICompatibleClient, got %T", client)
+	}
+	if oaiClient.provider != Provider(config.ProviderOpenCodeGo) {
+		t.Fatalf("expected provider opencode-go, got %s", oaiClient.provider)
+	}
+	if oaiClient.model != "kimi-k2.6" {
+		t.Fatalf("expected model kimi-k2.6, got %s", oaiClient.model)
+	}
+	if oaiClient.thinkingEffort != "enabled" {
+		t.Fatalf("expected thinking effort enabled, got %q", oaiClient.thinkingEffort)
+	}
+}
+
+func TestNewClient_OpenCodeGoAnthropicModel(t *testing.T) {
+	cfg := &config.ResolvedConfig{
+		Provider:       config.ProviderOpenCodeGo,
+		Model:          "minimax-m2.7",
+		APIKey:         "test-api-key",
+		ThinkingEffort: "enabled",
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	anthropicClient, ok := client.(*AnthropicClient)
+	if !ok {
+		t.Fatalf("expected *AnthropicClient, got %T", client)
+	}
+	if anthropicClient.model != "minimax-m2.7" {
+		t.Fatalf("expected model minimax-m2.7, got %s", anthropicClient.model)
+	}
+	if anthropicClient.thinkingEffort != "" {
+		t.Fatalf("expected no Anthropic thinking effort for OpenCode Go MiniMax, got %q", anthropicClient.thinkingEffort)
+	}
+}
+
+func TestNewClient_OpenCodeGoMissingAPIKey(t *testing.T) {
+	cfg := &config.ResolvedConfig{
+		Provider: config.ProviderOpenCodeGo,
+		Model:    "glm-5.1",
+	}
+
+	_, err := NewClient(cfg)
+	if err == nil {
+		t.Fatal("expected missing API key error")
+	}
+	if err.Error() != "API key is required" {
+		t.Fatalf("expected API key error, got %q", err.Error())
 	}
 }
 

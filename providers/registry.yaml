@@ -117,3 +117,57 @@ providers:
         name: DeepSeek V4 Pro
         context_window: 1000000
         thinking_efforts: ["off", "high", "max"]
+
+  - id: opencode-go
+    name: OpenCode Go
+    models:
+      - id: glm-5.1
+        name: GLM-5.1
+        context_window: 200000
+        thinking_efforts: ["enabled", "disabled"]
+      - id: glm-5
+        name: GLM-5
+        context_window: 200000
+        thinking_efforts: ["enabled", "disabled"]
+      - id: kimi-k2.6
+        name: Kimi K2.6
+        context_window: 256000
+        thinking_efforts: ["enabled", "disabled"]
+      - id: kimi-k2.5
+        name: Kimi K2.5
+        context_window: 256000
+        thinking_efforts: ["enabled", "disabled"]
+      - id: deepseek-v4-pro
+        name: DeepSeek V4 Pro
+        context_window: 1000000
+        thinking_efforts: ["off", "high", "max"]
+      - id: deepseek-v4-flash
+        name: DeepSeek V4 Flash
+        context_window: 1000000
+        thinking_efforts: ["off", "high", "max"]
+      - id: mimo-v2-pro
+        name: MiMo-V2-Pro
+        context_window: 1000000
+      - id: mimo-v2-omni
+        name: MiMo-V2-Omni
+        context_window: 1000000
+      - id: mimo-v2.5-pro
+        name: MiMo-V2.5-Pro
+        context_window: 1000000
+      - id: mimo-v2.5
+        name: MiMo-V2.5
+        context_window: 256000
+      - id: minimax-m2.7
+        name: MiniMax M2.7
+        context_window: 200000
+      - id: minimax-m2.5
+        name: MiniMax M2.5
+        context_window: 200000
+      - id: qwen3.6-plus
+        name: Qwen3.6 Plus
+        context_window: 1000000
+        thinking_efforts: ["enabled", "disabled"]
+      - id: qwen3.5-plus
+        name: Qwen3.5 Plus
+        context_window: 1000000
+        thinking_efforts: ["enabled", "disabled"]

@@ -16,6 +16,7 @@ const (
 	ProviderMoonshotAI  = "moonshotai"
 	ProviderDeepSeek    = "deepseek"
 	ProviderZAI         = "zai"
+	ProviderOpenCodeGo  = "opencode-go"
 )
 
 type GlobalConfig struct {

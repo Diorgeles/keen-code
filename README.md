@@ -127,10 +127,12 @@ keen
 - Google AI (Gemini)
 - Moonshot AI (Kimi)
 - DeepSeek
+- Z.ai (GLM)
+- OpenCode Go
 
 > Use `/model` to switch providers. The ChatGPT/Codex option opens a browser-based OpenAI sign-in flow and stores OAuth credentials in `~/.keen/auth.json`.
 
-More providers will be added in the future.
+OpenCode Go uses an API key and includes GLM, Kimi, DeepSeek, MiMo, MiniMax, and Qwen models.
 
 ## Built-in Tools
 
