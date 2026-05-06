@@ -24,7 +24,7 @@ type anthropicStream interface {
 	Close() error
 }
 
-type anthropicStreamFactory func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream
+type anthropicStreamFactory func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream
 
 type anthropicContentBlockState struct {
 	blockType   string
@@ -60,6 +60,7 @@ func (s *sdkAnthropicStream) Close() error {
 
 type AnthropicClient struct {
 	client         anthropic.Client
+	provider       Provider
 	model          string
 	thinkingEffort string
 	maxRetries     int
@@ -79,12 +80,13 @@ func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
 
 	c := &AnthropicClient{
 		client:         client,
+		provider:       cfg.Provider,
 		model:          cfg.Model,
 		thinkingEffort: cfg.ThinkingEffort,
 		maxRetries:     retryCount(cfg.MaxRetries),
 	}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
-		return &sdkAnthropicStream{stream: c.client.Messages.NewStreaming(ctx, params)}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
+		return &sdkAnthropicStream{stream: c.client.Messages.NewStreaming(ctx, params, opts...)}
 	}
 
 	return c, nil
@@ -159,10 +161,11 @@ func (c *AnthropicClient) collectTurnWithRetry(
 	ctx context.Context,
 	params anthropic.MessageNewParams,
 	eventCh chan<- StreamEvent,
+	requestOpts ...option.RequestOption,
 ) ([]anthropic.ContentBlockParamUnion, []toolUseEntry, *TokenUsage, error) {
 	maxRetries := retryCount(c.maxRetries)
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		assistantBlocks, toolUses, usage, err := c.collectTurn(ctx, params, eventCh)
+		assistantBlocks, toolUses, usage, err := c.collectTurn(ctx, params, eventCh, requestOpts...)
 		if err == nil {
 			return assistantBlocks, toolUses, usage, nil
 		}
@@ -187,8 +190,9 @@ func (c *AnthropicClient) collectTurn(
 	ctx context.Context,
 	params anthropic.MessageNewParams,
 	eventCh chan<- StreamEvent,
+	requestOpts ...option.RequestOption,
 ) ([]anthropic.ContentBlockParamUnion, []toolUseEntry, *TokenUsage, error) {
-	stream := c.streamImpl(ctx, params)
+	stream := c.streamImpl(ctx, params, requestOpts...)
 
 	// Track open content blocks by index so tool continuations can replay the
 	// exact assistant block sequence.
@@ -408,8 +412,10 @@ func (c *AnthropicClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
 	toolRegistry *tools.Registry,
+	opts ...StreamOptions,
 ) (<-chan StreamEvent, error) {
 	eventCh := make(chan StreamEvent)
+	streamOpts := streamOptions(opts)
 
 	go func() {
 		defer close(eventCh)
@@ -418,6 +424,7 @@ func (c *AnthropicClient) StreamChat(
 		msgParams, injectedPending := c.injectPendingState(msgParams)
 		turnStartLen := len(msgParams)
 		anthropicTools := toAnthropicTools(toolRegistry)
+		requestOpts := c.requestOptions(streamOpts)
 
 		for range maxToolTurns {
 			thinking, outCfg, maxTok := anthropicThinkingParams(c.thinkingEffort)
@@ -435,7 +442,7 @@ func (c *AnthropicClient) StreamChat(
 				params.Tools = anthropicTools
 			}
 
-			assistantBlocks, toolUses, usage, err := c.collectTurnWithRetry(ctx, params, eventCh)
+			assistantBlocks, toolUses, usage, err := c.collectTurnWithRetry(ctx, params, eventCh, requestOpts...)
 			if err != nil {
 				c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, err)
 				return
@@ -469,6 +476,15 @@ func (c *AnthropicClient) StreamChat(
 	}()
 
 	return eventCh, nil
+}
+
+func (c *AnthropicClient) requestOptions(opts StreamOptions) []option.RequestOption {
+	if c.provider != Provider(config.ProviderOpenCodeGo) || opts.SessionID == "" {
+		return nil
+	}
+	return []option.RequestOption{
+		option.WithHeader("x-opencode-session", opencodeSessionID(opts.SessionID)),
+	}
 }
 
 func (c *AnthropicClient) Reset() {

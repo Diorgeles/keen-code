@@ -278,8 +278,9 @@ func (c *OpenAICompatibleClient) collectTurn(
 	ctx context.Context,
 	params openai.ChatCompletionNewParams,
 	eventCh chan<- StreamEvent,
+	requestOpts ...option.RequestOption,
 ) (openai.ChatCompletionMessage, string, string, bool, openai.CompletionUsage, error) {
-	stream := c.streamImpl(ctx, params)
+	stream := c.streamImpl(ctx, params, requestOpts...)
 	var acc openai.ChatCompletionAccumulator
 	var reasoningContent strings.Builder
 	var streamedContent strings.Builder
@@ -328,10 +329,11 @@ func (c *OpenAICompatibleClient) collectTurnWithRetry(
 	ctx context.Context,
 	params openai.ChatCompletionNewParams,
 	eventCh chan<- StreamEvent,
+	requestOpts ...option.RequestOption,
 ) (openai.ChatCompletionMessage, string, string, bool, openai.CompletionUsage, error) {
 	maxRetries := retryCount(c.maxRetries)
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurn(ctx, params, eventCh)
+		message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurn(ctx, params, eventCh, requestOpts...)
 		if err == nil {
 			return message, reasoningContent, streamedContent, hasChoice, usage, nil
 		}
@@ -429,8 +431,10 @@ func (c *OpenAICompatibleClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
 	toolRegistry *tools.Registry,
+	opts ...StreamOptions,
 ) (<-chan StreamEvent, error) {
 	eventCh := make(chan StreamEvent)
+	streamOpts := streamOptions(opts)
 
 	go func() {
 		defer close(eventCh)
@@ -444,11 +448,12 @@ func (c *OpenAICompatibleClient) StreamChat(
 			slog.Debug("OpenAI messages", "messages", string(prettyJSON))
 		}
 		oaiTools := toOpenAITools(toolRegistry)
+		requestOpts := c.requestOptions(streamOpts)
 
 		for range maxToolTurns {
 			params := c.buildChatParams(oaiMessages, oaiTools)
 
-			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurnWithRetry(ctx, params, eventCh)
+			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurnWithRetry(ctx, params, eventCh, requestOpts...)
 			if err != nil {
 				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, err)
 				return
@@ -490,6 +495,15 @@ func (c *OpenAICompatibleClient) StreamChat(
 	}()
 
 	return eventCh, nil
+}
+
+func (c *OpenAICompatibleClient) requestOptions(opts StreamOptions) []option.RequestOption {
+	if c.provider != Provider(config.ProviderOpenCodeGo) || opts.SessionID == "" {
+		return nil
+	}
+	return []option.RequestOption{
+		option.WithHeader("x-opencode-session", opencodeSessionID(opts.SessionID)),
+	}
 }
 
 func (c *OpenAICompatibleClient) Reset() {

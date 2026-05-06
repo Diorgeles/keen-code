@@ -14,6 +14,7 @@ import (
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
+	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/skills"
 )
 
@@ -122,7 +123,7 @@ func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	eventCh, err := m.appState.StreamCompact(ctx, m.ctx.cfg, extraPrompt)
+	eventCh, err := m.appState.StreamCompact(ctx, m.ctx.cfg, extraPrompt, llm.StreamOptions{SessionID: m.sessions.currentID()})
 	if err != nil {
 		cancel()
 		m.output.AddError(err.Error(), repltheme.ErrorStyle)

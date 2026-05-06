@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/tools"
@@ -150,7 +153,7 @@ func mustMarshalJSON(v any) string {
 
 func newTestAnthropicClient(events []anthropic.MessageStreamEventUnion) *AnthropicClient {
 	c := &AnthropicClient{model: "claude-3-haiku-20240307"}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		return &mockAnthropicStream{events: events}
 	}
 	return c
@@ -316,7 +319,7 @@ func TestAnthropicClient_StreamChat_IncludesCacheTokensInInputFootprint(t *testi
 func TestAnthropicClient_StreamChat_StreamError(t *testing.T) {
 	expectedErr := errors.New("network failure")
 	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		return &mockAnthropicStream{err: expectedErr}
 	}
 
@@ -342,7 +345,7 @@ func TestAnthropicClient_StreamChat_RetriesOnRetryableError(t *testing.T) {
 	expectedErr := errors.New("network failure")
 	callCount := 0
 	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: testMaxRetries}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		callCount++
 		return &mockAnthropicStream{err: expectedErr}
 	}
@@ -395,7 +398,7 @@ func TestAnthropicClient_StreamChat_ToolInvocation(t *testing.T) {
 	}
 
 	c := &AnthropicClient{model: "claude-3-haiku-20240307"}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		callCount++
 		seenParams = append(seenParams, params)
 		if callCount == 1 {
@@ -481,7 +484,7 @@ func TestAnthropicClient_StreamChat_PreservesThinkingBlocksForToolContinuation(t
 	}
 
 	c := &AnthropicClient{model: "claude-sonnet-4-6"}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		callCount++
 		seenParams = append(seenParams, params)
 		if callCount == 1 {
@@ -691,7 +694,7 @@ func TestAnthropicClient_ThinkingEffort_UsedInParams(t *testing.T) {
 		model:          "claude-sonnet-4-6",
 		thinkingEffort: "high",
 	}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		capturedParams = params
 		return &mockAnthropicStream{events: []anthropic.MessageStreamEventUnion{
 			makeTextDeltaEvent(0, "ok"),
@@ -724,7 +727,7 @@ func TestAnthropicClient_NoThinkingEffort_DisablesThinking(t *testing.T) {
 		model:          "claude-sonnet-4-6",
 		thinkingEffort: "",
 	}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		capturedParams = params
 		return &mockAnthropicStream{events: []anthropic.MessageStreamEventUnion{
 			makeTextDeltaEvent(0, "ok"),
@@ -768,7 +771,7 @@ func TestAnthropicClient_PendingState_ErrorMidLoop(t *testing.T) {
 	}
 
 	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		callCount++
 		if callCount == 1 {
 			return &mockAnthropicStream{events: firstEvents}
@@ -828,7 +831,7 @@ func TestAnthropicClient_PendingState_InjectedOnNextCall(t *testing.T) {
 	}
 
 	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		callCount++
 		capturedParams = append(capturedParams, params)
 		switch callCount {
@@ -908,7 +911,7 @@ func TestAnthropicClient_PendingState_PreservedWhenRecoveryFailsBeforeProgress(t
 	}
 
 	wantLen := len(c.pendingState)
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		return &mockAnthropicStream{err: errors.New("API error")}
 	}
 
@@ -940,7 +943,7 @@ func TestAnthropicClient_PendingState_PreservedWhenRecoveryFailsBeforeProgress(t
 
 func TestAnthropicClient_PendingState_NoAccumulation_EmitsError(t *testing.T) {
 	c := &AnthropicClient{model: "claude-3-haiku-20240307", maxRetries: 1}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		return &mockAnthropicStream{err: errors.New("API error")}
 	}
 
@@ -981,7 +984,7 @@ func TestAnthropicClient_PendingState_ClearedOnSuccess(t *testing.T) {
 		makeTextDeltaEvent(0, "done"),
 		makeContentBlockStopEvent(0),
 	}
-	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams) anthropicStream {
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		return &mockAnthropicStream{events: successEvents}
 	}
 
@@ -1005,5 +1008,38 @@ func TestAnthropicClient_PendingState_ClearedOnSuccess(t *testing.T) {
 	}
 	if len(c.pendingState) != 0 {
 		t.Fatal("expected pending state to be cleared after successful completion")
+	}
+}
+
+func TestAnthropicClient_StreamChat_OpenCodeGoSessionHeader(t *testing.T) {
+	const sessionID = "f71b869f-bfbb-46ad-a7b4-99a94261f9e9"
+	const expectedSessionHeader = "f71b869fbfbb46ada7b499a94261f9e9"
+	var gotSessionHeader string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSessionHeader = r.Header.Get("x-opencode-session")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	c := &AnthropicClient{
+		client:   anthropic.NewClient(option.WithBaseURL(server.URL), option.WithAPIKey("test-key")),
+		provider: Provider(config.ProviderOpenCodeGo),
+		model:    "minimax-m2.7",
+	}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
+		return &sdkAnthropicStream{stream: c.client.Messages.NewStreaming(ctx, params, opts...)}
+	}
+
+	ch, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil, StreamOptions{SessionID: sessionID})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range ch {
+	}
+
+	if gotSessionHeader != expectedSessionHeader {
+		t.Fatalf("expected x-opencode-session %q, got %q", expectedSessionHeader, gotSessionHeader)
 	}
 }

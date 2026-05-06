@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -181,6 +183,40 @@ func TestNewOpenAICompatibleClient_OpenAIProviderRejected(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error, got client: %+v", client)
+	}
+}
+
+func TestOpenAICompatibleClient_StreamChat_OpenCodeGoSessionHeader(t *testing.T) {
+	const sessionID = "f71b869f-bfbb-46ad-a7b4-99a94261f9e9"
+	const expectedSessionHeader = "f71b869fbfbb46ada7b499a94261f9e9"
+	var gotSessionHeader string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSessionHeader = r.Header.Get("x-opencode-session")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	client := &OpenAICompatibleClient{
+		provider: Provider(config.ProviderOpenCodeGo),
+		model:    "glm-5.1",
+		client:   openai.NewClient(option.WithBaseURL(server.URL), option.WithAPIKey("test-key")),
+	}
+	client.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
+		return &sdkChatStream{stream: client.client.Chat.Completions.NewStreaming(ctx, params, opts...)}
+	}
+
+	eventCh, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil, StreamOptions{SessionID: sessionID})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if gotSessionHeader != expectedSessionHeader {
+		t.Fatalf("expected x-opencode-session %q, got %q", expectedSessionHeader, gotSessionHeader)
 	}
 }
 

@@ -69,7 +69,7 @@ func newCodexHTTPClient() *http.Client {
 	return &http.Client{Transport: transport}
 }
 
-func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, toolRegistry *tools.Registry) (<-chan StreamEvent, error) {
+func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, toolRegistry *tools.Registry, opts ...StreamOptions) (<-chan StreamEvent, error) {
 	eventCh := make(chan StreamEvent)
 
 	go func() {

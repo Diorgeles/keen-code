@@ -129,7 +129,7 @@ func (s *AppState) ReplaceMessages(messages []llm.Message) {
 	s.messages = llm.CloneMessages(messages)
 }
 
-func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig) (<-chan llm.StreamEvent, error) {
+func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig, opts ...llm.StreamOptions) (<-chan llm.StreamEvent, error) {
 	if s.llmClient == nil {
 		return nil, nil
 	}
@@ -138,7 +138,7 @@ func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig) (
 		Content: llm.Build(s.workingDir, s.SkillsCatalog()),
 	}
 	messages := append([]llm.Message{systemMsg}, s.GetMessages()...)
-	return s.llmClient.StreamChat(ctx, messages, s.toolRegistry)
+	return s.llmClient.StreamChat(ctx, messages, s.toolRegistry, opts...)
 }
 
 func (s *AppState) buildCompactionRequest(cfg *config.ResolvedConfig, extraPrompt string) ([]llm.Message, error) {
@@ -166,12 +166,12 @@ func (s *AppState) buildCompactionRequest(cfg *config.ResolvedConfig, extraPromp
 	return requestMessages, nil
 }
 
-func (s *AppState) StreamCompact(ctx context.Context, cfg *config.ResolvedConfig, extraPrompt string) (<-chan llm.StreamEvent, error) {
+func (s *AppState) StreamCompact(ctx context.Context, cfg *config.ResolvedConfig, extraPrompt string, opts ...llm.StreamOptions) (<-chan llm.StreamEvent, error) {
 	requestMessages, err := s.buildCompactionRequest(cfg, extraPrompt)
 	if err != nil || requestMessages == nil {
 		return nil, err
 	}
-	return s.llmClient.StreamChat(ctx, requestMessages, nil)
+	return s.llmClient.StreamChat(ctx, requestMessages, nil, opts...)
 }
 
 func (s *AppState) ApplyCompaction(summary string) error {

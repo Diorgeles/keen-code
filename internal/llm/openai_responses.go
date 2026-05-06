@@ -145,6 +145,7 @@ func (c *OpenAIResponsesClient) StreamChat(
 	ctx context.Context,
 	messages []Message,
 	toolRegistry *tools.Registry,
+	opts ...StreamOptions,
 ) (<-chan StreamEvent, error) {
 	eventCh := make(chan StreamEvent)
 

@@ -82,6 +82,13 @@ func (s *replSessionState) resetSession() {
 	s.current = nil
 }
 
+func (s *replSessionState) currentID() string {
+	if s == nil || s.current == nil {
+		return ""
+	}
+	return s.current.ID
+}
+
 func (s *replSessionState) listSessions() ([]session.Summary, error) {
 	if s == nil || s.store == nil {
 		return nil, nil

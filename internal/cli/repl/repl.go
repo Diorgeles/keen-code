@@ -231,7 +231,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	m.appState.AddMessage(llm.RoleUser, input)
 
 	ctx := m.startStreamContext()
-	eventCh, err := m.appState.StreamChat(ctx, m.ctx.cfg)
+	eventCh, err := m.appState.StreamChat(ctx, m.ctx.cfg, llm.StreamOptions{SessionID: m.sessions.currentID()})
 	if err != nil {
 		m.clearStreamCancel()
 		m.output.AddError(err.Error(), repltheme.ErrorStyle)
