@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-05-06
+
+### Added
+- Agent skills discovery, slash-command invocation, frontmatter validation, and argument substitution
+- Bundled commit skill embedded in the binary and extracted to the user skills directory at runtime
+- Additional model registry entries
+
+### Changed
+- Reset LLM provider state when starting new REPL sessions
+
 ## [0.12.2] - 2026-05-03
 
 ### Added
@@ -232,7 +242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.12.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/mochow13/keen-code/compare/v0.12.2...v0.13.0
 [0.12.2]: https://github.com/mochow13/keen-code/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/mochow13/keen-code/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/mochow13/keen-code/compare/v0.11.2...v0.12.0
