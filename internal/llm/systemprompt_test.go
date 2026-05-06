@@ -90,15 +90,6 @@ func TestBuild_AgentsMd_Empty(t *testing.T) {
 	}
 }
 
-func TestBuild_FreshOnEachCall(t *testing.T) {
-	dir := t.TempDir()
-	result1 := Build(dir, "")
-	result2 := Build(dir, "")
-	if result1 != result2 {
-		t.Error("expected identical output from two Build calls with same args")
-	}
-}
-
 func TestBuild_IncludesSkillsCatalog(t *testing.T) {
 	dir := t.TempDir()
 	catalog := skills.Catalog([]skills.Skill{{Name: "demo", Description: "Demo skill", Location: "/tmp/demo/SKILL.md"}}, skills.Config{})

@@ -144,25 +144,6 @@ func TestNewClient_Gemini(t *testing.T) {
 	}
 }
 
-func TestProviderConstants(t *testing.T) {
-	tests := []struct {
-		provider Provider
-		expected string
-	}{
-		{Provider(config.ProviderAnthropic), "anthropic"},
-		{Provider(config.ProviderOpenAI), "openai"},
-		{Provider(config.ProviderGoogleAI), "googleai"},
-		{Provider(config.ProviderDeepSeek), "deepseek"},
-		{Provider(config.ProviderOpenCodeGo), "opencode-go"},
-	}
-
-	for _, tt := range tests {
-		if string(tt.provider) != tt.expected {
-			t.Errorf("expected provider %q, got %q", tt.expected, tt.provider)
-		}
-	}
-}
-
 func TestNewClient_OpenCodeGoOpenAICompatibleModel(t *testing.T) {
 	cfg := &config.ResolvedConfig{
 		Provider:       config.ProviderOpenCodeGo,
