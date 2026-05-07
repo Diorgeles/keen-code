@@ -188,7 +188,7 @@ func TestOutputBuilder_AddUserInput_WrappedLinesAreIndented(t *testing.T) {
 	}
 
 	line := ansi.Strip(lines[2])
-	if strings.Contains(line, "hello") || !strings.HasPrefix(line, "   world") {
+	if strings.Contains(line, "hello") || !strings.HasPrefix(line, "    world") {
 		t.Errorf("wrapped line should be indented, got %q", line)
 	}
 }
