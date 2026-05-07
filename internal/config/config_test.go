@@ -226,6 +226,23 @@ func TestResolve_WithSessionOverrides(t *testing.T) {
 	}
 }
 
+func TestResolve_TrimsAPIKey(t *testing.T) {
+	global := &GlobalConfig{
+		ActiveProvider: ProviderMiniMax,
+		Providers: map[string]ProviderConfig{
+			ProviderMiniMax: {Models: []string{"MiniMax-M2.7"}, APIKey: "\n  minimax-key\t"},
+		},
+	}
+
+	resolved, err := Resolve(global, &SessionConfig{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.APIKey != "minimax-key" {
+		t.Fatalf("expected trimmed API key, got %q", resolved.APIKey)
+	}
+}
+
 func TestResolve_MissingProvider(t *testing.T) {
 	global := &GlobalConfig{}
 	session := &SessionConfig{}

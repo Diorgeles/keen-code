@@ -197,6 +197,34 @@ func TestNewClient_OpenCodeGoAnthropicModel(t *testing.T) {
 	}
 }
 
+func TestNewClient_MiniMax(t *testing.T) {
+	cfg := &config.ResolvedConfig{
+		Provider:       config.ProviderMiniMax,
+		Model:          "MiniMax-M2.7",
+		APIKey:         "test-api-key",
+		ThinkingEffort: "enabled",
+	}
+
+	client, err := NewClient(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	anthropicClient, ok := client.(*AnthropicClient)
+	if !ok {
+		t.Fatalf("expected *AnthropicClient, got %T", client)
+	}
+	if anthropicClient.provider != Provider(config.ProviderMiniMax) {
+		t.Fatalf("expected provider minimax, got %s", anthropicClient.provider)
+	}
+	if anthropicClient.model != "MiniMax-M2.7" {
+		t.Fatalf("expected model MiniMax-M2.7, got %s", anthropicClient.model)
+	}
+	if anthropicClient.thinkingEffort != "" {
+		t.Fatalf("expected no Anthropic thinking effort for MiniMax, got %q", anthropicClient.thinkingEffort)
+	}
+}
+
 func TestNewClient_OpenCodeGoMissingAPIKey(t *testing.T) {
 	cfg := &config.ResolvedConfig{
 		Provider: config.ProviderOpenCodeGo,

@@ -118,6 +118,16 @@ providers:
         context_window: 1000000
         thinking_efforts: ["off", "high", "max"]
 
+  - id: minimax
+    name: MiniMax
+    models:
+      - id: MiniMax-M2.7
+        name: MiniMax M2.7
+        context_window: 204800
+      - id: MiniMax-M2.5
+        name: MiniMax M2.5
+        context_window: 204800
+
   - id: opencode-go
     name: OpenCode Go
     models:
@@ -159,10 +169,10 @@ providers:
         context_window: 256000
       - id: minimax-m2.7
         name: MiniMax M2.7
-        context_window: 200000
+        context_window: 204800
       - id: minimax-m2.5
         name: MiniMax M2.5
-        context_window: 200000
+        context_window: 204800
       - id: qwen3.6-plus
         name: Qwen3.6 Plus
         context_window: 1000000

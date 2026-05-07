@@ -278,7 +278,7 @@ func copySelectedTextCmd(text string) tea.Cmd {
 }
 
 func isSelectionCopyKey(msg tea.KeyPressMsg) bool {
-	if msg.String() == keyCtrlC {
+	if msg.String() == keyCtrlC || msg.String() == keyCmdC {
 		return true
 	}
 	if msg.Code != 'c' && msg.Code != 'C' {

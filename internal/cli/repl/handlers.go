@@ -20,6 +20,7 @@ const (
 	keyEnter     = "enter"
 	keyCtrlC     = "ctrl+c"
 	keyCtrlD     = "ctrl+d"
+	keyCmdC      = "cmd+c"
 	keyEsc       = "esc"
 	keyTab       = "tab"
 	keyUp        = "up"

@@ -128,10 +128,12 @@ keen
 - Moonshot AI (Kimi)
 - DeepSeek
 - Z.ai (GLM)
+- MiniMax
 - OpenCode Go
 
 > Use `/model` to switch providers. The ChatGPT/Codex option opens a browser-based OpenAI sign-in flow and stores OAuth credentials in `~/.keen/auth.json`.
 
+MiniMax uses its Anthropic-compatible API and includes MiniMax M2.7 and M2.5.
 OpenCode Go uses an API key and includes GLM, Kimi, DeepSeek, MiMo, MiniMax, and Qwen models.
 
 ## Built-in Tools

@@ -69,6 +69,7 @@ Implementations:
 - `OpenAICompatibleClient` - OpenAI-compatible API (DeepSeek, Moonshot, Z.ai, OpenCode Go non-MiniMax models)
 - `GenkitClient` - Firebase Genkit for Google AI
 
+MiniMax uses `AnthropicClient` with `https://api.minimax.io/anthropic`.
 OpenCode Go is routed by model family: `minimax-m2.*` uses `AnthropicClient`, while GLM, Kimi, DeepSeek, MiMo, and Qwen models use `OpenAICompatibleClient`.
 
 ### Tools (`internal/tools/`)

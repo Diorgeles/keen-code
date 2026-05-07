@@ -762,6 +762,15 @@ func TestAnthropicBaseURL_OpenCodeGo(t *testing.T) {
 	}
 }
 
+func TestAnthropicBaseURL_MiniMax(t *testing.T) {
+	if got := anthropicBaseURL(Provider(config.ProviderMiniMax), ""); got != miniMaxBaseURL {
+		t.Fatalf("expected %q, got %q", miniMaxBaseURL, got)
+	}
+	if got := anthropicBaseURL(Provider(config.ProviderMiniMax), "https://proxy.example.com/anthropic"); got != "https://proxy.example.com/anthropic" {
+		t.Fatalf("expected configured base URL, got %q", got)
+	}
+}
+
 func TestAnthropicClient_PendingState_ErrorMidLoop(t *testing.T) {
 	callCount := 0
 	firstEvents := []anthropic.MessageStreamEventUnion{

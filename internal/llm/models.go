@@ -13,6 +13,7 @@ const (
 	deepSeekBaseURL   = "https://api.deepseek.com/"
 	moonshotAIBaseURL = "https://api.moonshot.ai/v1/"
 	zaiBaseURL        = "https://api.z.ai/api/paas/v4/"
+	miniMaxBaseURL    = "https://api.minimax.io/anthropic"
 	openCodeGoBaseURL = "https://opencode.ai/zen/go"
 )
 
@@ -41,6 +42,13 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			Model:          cfg.Model,
 			ThinkingEffort: cfg.ThinkingEffort,
 			BaseURL:        cfg.BaseURL,
+		})
+	case config.ProviderMiniMax:
+		return NewAnthropicClient(&ClientConfig{
+			Provider: Provider(cfg.Provider),
+			APIKey:   cfg.APIKey,
+			Model:    cfg.Model,
+			BaseURL:  cfg.BaseURL,
 		})
 	case config.ProviderGoogleAI:
 		return NewGenkitClient(&ClientConfig{

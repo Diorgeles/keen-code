@@ -13,7 +13,8 @@ Keen Code supports multiple AI providers through a plugin-like architecture. The
 | Moonshot AI | `moonshotai` | API Key | Kimi K2.6, K2.5, K2 Thinking, K2 Thinking Turbo |
 | DeepSeek | `deepseek` | API Key | DeepSeek V4 Flash, V4 Pro |
 | Z.ai | `zai` | API Key | GLM-5.1, GLM-5, GLM-5 Turbo |
-| OpenCode Go | `opencode-go` | API Key | GLM-5.1, GLM-5, Kimi K2.6, Kimi K2.5, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2, MiniMax M2, Qwen3 Plus |
+| MiniMax | `minimax` | API Key | MiniMax M2.7, M2.5 |
+| OpenCode Go | `opencode-go` | API Key | GLM-5.1, GLM-5, Kimi K2.6, Kimi K2.5, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2, MiniMax M2.7/M2.5, Qwen3 Plus |
 
 ## Provider Registry
 
@@ -80,6 +81,8 @@ Resolution order:
 
 Most providers use API key authentication. Keys are stored in the global config under `providers.{provider}.api_key`.
 
+MiniMax uses its Anthropic-compatible API. Users normally leave `base_url` unset. Keen uses `https://api.minimax.io/anthropic`, which the Anthropic SDK extends to `/v1/messages`.
+
 OpenCode Go also uses API key authentication. Users normally leave `base_url` unset. Keen uses `https://opencode.ai/zen/go/v1/` for OpenAI-compatible models and `https://opencode.ai/zen/go` for MiniMax models through the Anthropic SDK, which appends `/v1/messages`.
 
 ### OAuth Authentication (OpenAI Codex)
@@ -123,6 +126,7 @@ Direct integration with Anthropic SDK:
 - Tool conversion to Anthropic tool format
 - Thinking budget support (low/medium/high/max)
 - Cached token tracking
+- MiniMax models (`MiniMax-M2.7`, `MiniMax-M2.5`) through MiniMax's Anthropic-compatible `/messages` endpoint
 - OpenCode Go MiniMax models (`minimax-m2.*`) through the Anthropic-compatible `/messages` endpoint
 
 ### OpenAIResponsesClient (`internal/llm/openai_responses.go`)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 const (
@@ -16,6 +17,7 @@ const (
 	ProviderMoonshotAI  = "moonshotai"
 	ProviderDeepSeek    = "deepseek"
 	ProviderZAI         = "zai"
+	ProviderMiniMax     = "minimax"
 	ProviderOpenCodeGo  = "opencode-go"
 )
 
@@ -108,7 +110,7 @@ func Resolve(global *GlobalConfig, session *SessionConfig) (*ResolvedConfig, err
 	if !ok {
 		providerGlobal = ProviderConfig{}
 	}
-	apiKey := firstNonEmpty(session.APIKey, providerGlobal.APIKey)
+	apiKey := normalizeAPIKey(firstNonEmpty(session.APIKey, providerGlobal.APIKey))
 	if RequiresAPIKey(provider) && apiKey == "" {
 		return nil, fmt.Errorf("no API key configured for %s", provider)
 	}
@@ -172,4 +174,8 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func normalizeAPIKey(key string) string {
+	return strings.TrimSpace(key)
 }

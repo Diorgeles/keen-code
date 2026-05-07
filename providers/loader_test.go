@@ -151,6 +151,24 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 		}
 	}
 
+	minimaxProvider, ok := reg.GetProvider("minimax")
+	if !ok {
+		t.Fatal("expected to find minimax provider")
+	}
+	if len(minimaxProvider.Models) != 2 {
+		t.Fatalf("expected 2 minimax models, got %d", len(minimaxProvider.Models))
+	}
+	minimaxM27, ok := reg.GetModel("minimax", "MiniMax-M2.7")
+	if !ok {
+		t.Fatal("expected to find minimax/MiniMax-M2.7")
+	}
+	if minimaxM27.ContextWindow != 204800 {
+		t.Fatalf("expected MiniMax-M2.7 context 204800, got %d", minimaxM27.ContextWindow)
+	}
+	if minimaxM27.SupportsThinkingEffort() {
+		t.Fatalf("expected MiniMax-M2.7 to omit thinking efforts, got %v", minimaxM27.ThinkingEfforts)
+	}
+
 	opencode, ok := reg.GetProvider("opencode-go")
 	if !ok {
 		t.Fatal("expected to find opencode-go provider")

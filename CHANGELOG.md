@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- MiniMax provider support for M2.7 and M2.5 via the Anthropic-compatible API.
+
 ## [0.14.0] - 2026-05-06
 
 ### Added

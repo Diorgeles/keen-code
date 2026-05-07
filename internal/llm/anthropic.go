@@ -99,6 +99,9 @@ func anthropicBaseURL(provider Provider, configured string) string {
 	if provider == Provider(config.ProviderOpenCodeGo) {
 		return openCodeGoBaseURL
 	}
+	if provider == Provider(config.ProviderMiniMax) {
+		return miniMaxBaseURL
+	}
 	return ""
 }
 
