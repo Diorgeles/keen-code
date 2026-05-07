@@ -82,7 +82,7 @@ var (
 	InputRuleStyle      = lipgloss.NewStyle().Foreground(PrimaryColor)
 	UserInputBlockStyle = lipgloss.NewStyle().
 				Background(UserInputBlockBackground).
-				Padding(1, 0)
+				Padding(1, 1)
 
 	InfoLabelStyle = lipgloss.NewStyle().Foreground(MutedColor).Width(18)
 	InfoValueStyle = lipgloss.NewStyle().Foreground(TextDimColor)
