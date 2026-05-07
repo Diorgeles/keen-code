@@ -526,16 +526,14 @@ func (m replModel) inputMetaView() string {
 		}
 	}
 
-	modelText := repltheme.MetaLabelStyle.Render("model:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model)
+	modelText := repltheme.MetaLabelStyle.Render("◉") + " " + repltheme.HighlightStyle.Render(provider+"/"+model)
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
 		if modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
-			effortLabel := "thinking:"
 			effortValue := m.ctx.cfg.ThinkingEffort
 			if m.ctx.cfg.Provider == config.ProviderAnthropic {
-				effortLabel = "effort:"
 				effortValue += " (adaptive)"
 			}
-			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render(effortLabel) + " " + repltheme.HighlightStyle.Render(effortValue)
+			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render("∴") + " " + repltheme.HighlightStyle.Render(effortValue)
 		}
 	}
 	contextText := renderContextStatus(m.contextStatus)

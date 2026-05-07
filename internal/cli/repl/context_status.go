@@ -97,7 +97,7 @@ func contextPercentStyle(percent float64) lipgloss.Style {
 }
 
 func renderContextStatus(status contextStatus) string {
-	label := repltheme.ContextStatusLabelStyle.Render("context in use:")
+	label := repltheme.ContextStatusLabelStyle.Render("◷")
 	if !status.KnownWindow || status.ContextWindow <= 0 {
 		return label + " " + repltheme.ContextStatusUnknownStyle.Render("N/A")
 	}

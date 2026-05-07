@@ -597,14 +597,20 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	m.refreshContextStatus()
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, "model:") {
-		t.Fatalf("expected combined model label, got %q", meta)
+	if strings.Contains(meta, "model:") {
+		t.Fatalf("did not expect model label, got %q", meta)
+	}
+	if !strings.Contains(meta, "◉") {
+		t.Fatalf("expected model glyph, got %q", meta)
 	}
 	if !strings.Contains(meta, "openai") {
 		t.Fatalf("expected provider text in combined model display, got %q", meta)
 	}
-	if !strings.Contains(meta, "context in use:") {
-		t.Fatalf("expected inline context label, got %q", meta)
+	if !strings.Contains(meta, "◷") {
+		t.Fatalf("expected context glyph, got %q", meta)
+	}
+	if strings.Contains(meta, "context in use:") {
+		t.Fatalf("did not expect context label, got %q", meta)
 	}
 	if !strings.Contains(meta, "50%") {
 		t.Fatalf("expected 50%% context usage, got %q", meta)
@@ -640,18 +646,21 @@ func TestInputMetaView_ShowsAnthropicAdaptiveEffort(t *testing.T) {
 	}
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, "effort:") {
-		t.Fatalf("expected effort label for anthropic, got %q", meta)
+	if !strings.Contains(meta, "∴") {
+		t.Fatalf("expected thinking glyph for anthropic, got %q", meta)
 	}
 	if !strings.Contains(meta, "high (adaptive)") {
 		t.Fatalf("expected adaptive effort text for anthropic, got %q", meta)
+	}
+	if strings.Contains(meta, "effort:") {
+		t.Fatalf("did not expect effort label for anthropic, got %q", meta)
 	}
 	if strings.Contains(meta, "thinking:") {
 		t.Fatalf("did not expect thinking label for anthropic, got %q", meta)
 	}
 }
 
-func TestInputMetaView_KeepsThinkingLabelForNonAnthropic(t *testing.T) {
+func TestInputMetaView_ShowsThinkingGlyphForNonAnthropic(t *testing.T) {
 	m := newTestModel()
 	m.width = 120
 	m.ctx = &replContext{
@@ -674,8 +683,11 @@ func TestInputMetaView_KeepsThinkingLabelForNonAnthropic(t *testing.T) {
 	}
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, "thinking:") {
-		t.Fatalf("expected thinking label for non-anthropic provider, got %q", meta)
+	if !strings.Contains(meta, "∴") {
+		t.Fatalf("expected thinking glyph for non-anthropic provider, got %q", meta)
+	}
+	if strings.Contains(meta, "thinking:") {
+		t.Fatalf("did not expect thinking label for non-anthropic provider, got %q", meta)
 	}
 	if strings.Contains(meta, "effort:") {
 		t.Fatalf("did not expect effort label for non-anthropic provider, got %q", meta)
@@ -701,7 +713,7 @@ func TestInputMetaView_SuggestsCompactionAtSeventyPercent(t *testing.T) {
 
 func TestInputMetaView_DropsCompactionHintWhenWidthIsTight(t *testing.T) {
 	m := newTestModel()
-	m.width = 30
+	m.width = 20
 	m.contextStatus = contextStatus{
 		KnownWindow:   true,
 		KnownTokens:   true,
@@ -804,7 +816,7 @@ func TestInputMetaView_RendersElapsedTimerAfterContextStatus(t *testing.T) {
 	}
 
 	meta := m.inputMetaView()
-	contextIdx := strings.Index(meta, "context in use:")
+	contextIdx := strings.Index(meta, "◷")
 	timerIdx := strings.Index(meta, "1:05")
 	if contextIdx == -1 || timerIdx == -1 {
 		t.Fatalf("expected context status and elapsed timer in meta, got %q", meta)
