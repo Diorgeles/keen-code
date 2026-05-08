@@ -13,26 +13,6 @@ Guard checks paths before filesystem operations:
 - `PermissionPending` - User approval required (outside working dir)
 - `PermissionDenied` - Blocked (system paths, .gitignore files)
 
-## Releasing
-1. Bump versions together:
-   - `cmd/main.go`
-   - `npm/package.json`
-2. Update `CHANGELOG.md`:
-   - Move `[Unreleased]` entries under a new `[X.Y.Z] - YYYY-MM-DD` heading
-   - Add a new empty `[Unreleased]` section at the top
-   - Update the comparison links at the bottom of the file
-3. Run the tests:
-   - `go test ./...`
-4. Verify the npm wrapper package:
-   - `cd npm && npm pack --dry-run`
-5. Commit the version bump.
-6. Create and push a tag in the form `vX.Y.Z`.
-6. Push `main` and the tag to GitHub.
-7. GitHub Actions will:
-   - run GoReleaser for the tagged release
-   - publish the npm package from `npm/` after the release job succeeds
-8. The Git tag must match `npm/package.json` version exactly.
-
 ## Important Guidelines
 - Minimal comments only when strictly necessary
 - Test critical paths, not aiming for 100% coverage
