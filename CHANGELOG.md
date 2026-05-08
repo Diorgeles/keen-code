@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.3] - 2026-05-08
+
+### Changed
+- Moved release guide from README into a local skill at `.agents/skills/release/`.
+
+### Added
+- Documentation for turn memory KV cache and token cost analysis.
+
 ## [0.15.2] - 2026-05-08
 
 ### Changed
@@ -275,7 +283,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.15.3...HEAD
+[0.15.3]: https://github.com/mochow13/keen-code/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/mochow13/keen-code/compare/v0.15.1...v0.15.2
 [0.15.1]: https://github.com/mochow13/keen-code/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/mochow13/keen-code/compare/v0.14.0...v0.15.0
