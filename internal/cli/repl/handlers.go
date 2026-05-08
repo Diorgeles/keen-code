@@ -462,9 +462,6 @@ func (m *replModel) refreshFileSuggestions(input string) {
 		cursorByte += len(ln) + 1
 	}
 	if tok, _, found := extractAtToken(input, cursorByte); found {
-		if !m.suggestion.Visible() || !m.suggestion.IsFileMode() {
-			m.fileSearcher.Invalidate()
-		}
 		paths := m.fileSearcher.Search(tok, 10)
 		m.suggestion.RefreshFiles(paths)
 	} else {
