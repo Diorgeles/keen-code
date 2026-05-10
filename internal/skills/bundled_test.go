@@ -7,17 +7,30 @@ import (
 	"testing"
 )
 
-func TestBundledFS_HasCommit(t *testing.T) {
-	names := bundledNames()
-	found := false
-	for _, n := range names {
-		if n == "commit" {
-			found = true
-			break
-		}
+func expectedBundledSkillNames() []string {
+	return []string{
+		"clarify",
+		"cleanup",
+		"commit",
+		"debug",
+		"explain",
+		"fix-tests",
+		"plan",
+		"refactor",
+		"review",
 	}
-	if !found {
-		t.Fatalf("expected commit to be bundled, got %v", names)
+}
+
+func TestBundledFS_HasExpectedSkills(t *testing.T) {
+	names := bundledNames()
+	found := make(map[string]bool, len(names))
+	for _, n := range names {
+		found[n] = true
+	}
+	for _, want := range expectedBundledSkillNames() {
+		if !found[want] {
+			t.Fatalf("expected %s to be bundled, got %v", want, names)
+		}
 	}
 }
 
@@ -34,13 +47,15 @@ func TestEnsureBundled_WritesFiles(t *testing.T) {
 		t.Fatalf("root: got %q want %q", root, wantRoot)
 	}
 
-	commitPath := filepath.Join(root, "commit", "SKILL.md")
-	data, err := os.ReadFile(commitPath)
-	if err != nil {
-		t.Fatalf("expected %s: %v", commitPath, err)
-	}
-	if !strings.Contains(string(data), "name: commit") {
-		t.Fatalf("commit SKILL.md missing frontmatter name, got %q", string(data))
+	for _, name := range expectedBundledSkillNames() {
+		path := filepath.Join(root, name, "SKILL.md")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("expected %s: %v", path, err)
+		}
+		if !strings.Contains(string(data), "name: "+name) {
+			t.Fatalf("%s SKILL.md missing frontmatter name, got %q", name, string(data))
+		}
 	}
 }
 
@@ -79,14 +94,13 @@ func TestEnsureBundled_DiscoveryPicksUpBundled(t *testing.T) {
 		t.Fatalf("EnsureBundled: %v", err)
 	}
 	result := LoadMetadata(Discover(work, bundledDir))
-	found := false
+	found := make(map[string]bool, len(result.Skills))
 	for _, s := range result.Skills {
-		if s.Name == "commit" {
-			found = true
-			break
-		}
+		found[s.Name] = true
 	}
-	if !found {
-		t.Fatalf("expected bundled commit skill in discovery, got %#v", result.Skills)
+	for _, want := range expectedBundledSkillNames() {
+		if !found[want] {
+			t.Fatalf("expected bundled %s skill in discovery, got %#v", want, result.Skills)
+		}
 	}
 }
