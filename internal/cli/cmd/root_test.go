@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"testing"
+
+	"github.com/user/keen-code/internal/config"
 )
 
 func TestNewRootCommand(t *testing.T) {
@@ -41,6 +43,87 @@ func TestNewRootCommand_HasRunCommand(t *testing.T) {
 	}
 	if runCmd == nil || runCmd.Name() != "run" {
 		t.Fatalf("expected run command, got %#v", runCmd)
+	}
+}
+
+func TestNewRootCommand_RunCommandHasModelProviderFlags(t *testing.T) {
+	cmd := NewRootCommand("0.1.0")
+
+	runCmd, _, err := cmd.Find([]string{"run"})
+	if err != nil {
+		t.Fatalf("Find(run) error = %v", err)
+	}
+
+	for _, name := range []string{"model", "provider"} {
+		if runCmd.Flags().Lookup(name) == nil {
+			t.Fatalf("expected run command to have --%s flag", name)
+		}
+	}
+}
+
+func TestApplyRunOverrides(t *testing.T) {
+	globalCfg := &config.GlobalConfig{
+		Providers: map[string]config.ProviderConfig{
+			config.ProviderAnthropic: {
+				APIKey:  "anthropic-key",
+				Models:  []string{"claude-3"},
+				BaseURL: "https://anthropic.example",
+			},
+			config.ProviderOpenCodeGo: {
+				APIKey:  "opencode-key",
+				Models:  []string{"kimi-k2.6"},
+				BaseURL: "https://opencode.example",
+			},
+		},
+	}
+	resolvedCfg := &config.ResolvedConfig{
+		Provider: config.ProviderAnthropic,
+		APIKey:   "anthropic-key",
+		Model:    "claude-3",
+		BaseURL:  "https://anthropic.example",
+		AuthMode: config.AuthModeAPIKey,
+	}
+
+	err := applyRunOverrides(globalCfg, resolvedCfg, config.ProviderOpenCodeGo, "qwen3.6-plus")
+	if err != nil {
+		t.Fatalf("applyRunOverrides() error = %v", err)
+	}
+
+	if resolvedCfg.Provider != config.ProviderOpenCodeGo {
+		t.Fatalf("Provider = %q, want %q", resolvedCfg.Provider, config.ProviderOpenCodeGo)
+	}
+	if resolvedCfg.APIKey != "opencode-key" {
+		t.Fatalf("APIKey = %q, want opencode-key", resolvedCfg.APIKey)
+	}
+	if resolvedCfg.BaseURL != "https://opencode.example" {
+		t.Fatalf("BaseURL = %q, want https://opencode.example", resolvedCfg.BaseURL)
+	}
+	if resolvedCfg.Model != "qwen3.6-plus" {
+		t.Fatalf("Model = %q, want qwen3.6-plus", resolvedCfg.Model)
+	}
+}
+
+func TestApplyRunOverrides_ProviderUsesFirstConfiguredModel(t *testing.T) {
+	globalCfg := &config.GlobalConfig{
+		Providers: map[string]config.ProviderConfig{
+			config.ProviderOpenCodeGo: {
+				APIKey: "opencode-key",
+				Models: []string{"kimi-k2.6"},
+			},
+		},
+	}
+	resolvedCfg := &config.ResolvedConfig{
+		Provider: config.ProviderAnthropic,
+		Model:    "claude-3",
+	}
+
+	err := applyRunOverrides(globalCfg, resolvedCfg, config.ProviderOpenCodeGo, "")
+	if err != nil {
+		t.Fatalf("applyRunOverrides() error = %v", err)
+	}
+
+	if resolvedCfg.Model != "kimi-k2.6" {
+		t.Fatalf("Model = %q, want kimi-k2.6", resolvedCfg.Model)
 	}
 }
 

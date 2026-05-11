@@ -42,17 +42,25 @@ func NewRootCommand(version string) *cobra.Command {
 func newRunCommand() *cobra.Command {
 	var sessionID string
 	var format string
+	var providerID string
+	var modelID string
 
 	runCmd := &cobra.Command{
 		Use:   "run [flags] <message...>",
 		Short: "Run one non-interactive Keen turn",
 		Args:  cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, _, _, resolvedCfg, needsSetup, err := loadRootRuntime()
+			_, _, globalCfg, resolvedCfg, _, err := loadRootRuntime()
 			if err != nil {
 				return err
 			}
-			if needsSetup {
+			if err := applyRunOverrides(globalCfg, resolvedCfg, providerID, modelID); err != nil {
+				return err
+			}
+			if resolvedCfg.Provider == "" {
+				return fmt.Errorf("LLM client not initialized. Run keen to configure a provider")
+			}
+			if resolvedCfg.AuthMode == config.AuthModeOAuth && !keenauth.NewOAuthManager(nil).HasCredential(resolvedCfg.Provider) {
 				return fmt.Errorf("LLM client not initialized. Run keen to configure a provider")
 			}
 
@@ -91,6 +99,8 @@ func newRunCommand() *cobra.Command {
 	}
 	runCmd.Flags().StringVar(&sessionID, "session", "", "resume an existing Keen session")
 	runCmd.Flags().StringVar(&format, "format", repl.HeadlessFormatText, "output format: text or json")
+	runCmd.Flags().StringVar(&providerID, "provider", "", "provider to use for this run")
+	runCmd.Flags().StringVar(&modelID, "model", "", "model to use for this run")
 	return runCmd
 }
 
@@ -127,6 +137,26 @@ func loadRootRuntime() (*providers.Registry, *config.Loader, *config.GlobalConfi
 	}
 	needsSetup := resolvedCfg.AuthMode == config.AuthModeOAuth && !keenauth.NewOAuthManager(nil).HasCredential(globalCfg.ActiveProvider)
 	return registry, loader, globalCfg, resolvedCfg, needsSetup, nil
+}
+
+func applyRunOverrides(globalCfg *config.GlobalConfig, resolvedCfg *config.ResolvedConfig, providerID string, modelID string) error {
+	if providerID != "" {
+		providerCfg, ok := globalCfg.GetProviderConfig(providerID)
+		if !ok {
+			return fmt.Errorf("provider %q is not configured", providerID)
+		}
+		resolvedCfg.Provider = providerID
+		resolvedCfg.APIKey = providerCfg.APIKey
+		resolvedCfg.BaseURL = providerCfg.BaseURL
+		resolvedCfg.AuthMode = config.AuthModeForProvider(providerID)
+		if modelID == "" && len(providerCfg.Models) > 0 {
+			resolvedCfg.Model = providerCfg.Models[0]
+		}
+	}
+	if modelID != "" {
+		resolvedCfg.Model = modelID
+	}
+	return nil
 }
 
 func buildRunPrompt(args []string, stdin string) string {
