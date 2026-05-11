@@ -473,9 +473,11 @@ func (c *OpenAICompatibleClient) StreamChat(
 				eventCh <- StreamEvent{
 					Type: StreamEventTypeUsage,
 					Usage: &TokenUsage{
-						InputTokens:  int(usage.PromptTokens),
-						OutputTokens: int(usage.CompletionTokens),
-						TotalTokens:  int(usage.TotalTokens),
+						InputTokens:     int(usage.PromptTokens),
+						OutputTokens:    int(usage.CompletionTokens),
+						TotalTokens:     int(usage.TotalTokens),
+						CachedTokens:    int(usage.PromptTokensDetails.CachedTokens),
+						ReasoningTokens: int(usage.CompletionTokensDetails.ReasoningTokens),
 					},
 				}
 			}

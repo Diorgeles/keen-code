@@ -196,6 +196,7 @@ func (c *OpenAIResponsesClient) StreamChat(
 						OutputTokens:    int(completed.Usage.OutputTokens),
 						TotalTokens:     int(completed.Usage.TotalTokens),
 						ReasoningTokens: int(completed.Usage.OutputTokensDetails.ReasoningTokens),
+						CachedTokens:    int(completed.Usage.InputTokensDetails.CachedTokens),
 					},
 				}
 			}
