@@ -41,7 +41,7 @@ The interactive terminal interface built with Bubble Tea:
 repl.RunREPL()
     └── Bubble Tea application
             ├── StreamHandler - handles LLM response streaming
-            ├── CommandHandlers - processes slash commands (/model, /undo, etc.)
+            ├── CommandHandlers - processes slash commands (/btw, /model, /compact, etc.)
             ├── SessionState - manages session context
             └── UI Widgets - renders output, permissions, viewport
 ```
@@ -86,6 +86,10 @@ Built-in tools the LLM can call:
 | bash | `bash.go` | Execute shell commands |
 
 All tools use `filesystem.Guard` for permission checks and `PermissionRequester` for user prompts.
+
+### Side Questions (`/btw`)
+
+The `/btw <question>` command starts a one-shot helper stream for quick side questions. It builds a request from the current conversation plus `llm.BuildBtwPrompt()`, disables tool access, and renders the answer in a separate overlay. The side-question exchange is kept out of the main conversation and session transcript, but overlay history can be reopened with `/btw` during the current REPL session.
 
 ### Session (`internal/session/`)
 

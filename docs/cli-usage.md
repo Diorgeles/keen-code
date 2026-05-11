@@ -6,6 +6,7 @@ Keen Code provides slash commands (prefixed with `/`) for controlling the agent.
 
 | Command | Description |
 |---------|-------------|
+| `/btw <question>` | Ask a quick side question without adding it to the main conversation |
 | `/help` | Show available commands |
 | `/model` | Change provider or model |
 | `/thinking <effort>` | Set thinking effort for the current model |
@@ -17,6 +18,22 @@ Keen Code provides slash commands (prefixed with `/`) for controlling the agent.
 | `/clear` or `/new` | Clear the current session and start a new one |
 | `/logout` | Sign out of the current OAuth provider |
 | `/exit` | Quit Keen Code |
+
+## `/btw <question>`
+
+Asks a quick side question in a separate overlay without adding the question or answer to the main conversation. Use it for short clarifications that should not steer the active task.
+
+```text
+/btw What does this error mean?
+```
+
+Behavior:
+
+- Uses the current conversation as read-only context
+- Runs without tool access
+- Works even while the main assistant response is streaming
+- Press `Esc` to close the overlay and return to the main conversation
+- Running `/btw` with no question reopens the side-question history if one exists; otherwise Keen shows usage help
 
 ## `/help`
 
@@ -210,7 +227,7 @@ Type a partial slash command and press `Tab` to see suggestions:
 
 Autocomplete supports:
 
-- Built-in slash commands
+- Built-in slash commands, including `/btw`
 - Enabled skills as slash commands
 - File mentions with `@<token>`
 
@@ -235,7 +252,7 @@ These shortcuts are available in the REPL:
 | `Shift+Enter` | Insert a newline in the input box |
 | `Ctrl+C` | Clear non-empty input; quit when input is empty; copy selected text when a selection is active |
 | `Ctrl+D` | Clear non-empty input; quit when input is empty |
-| `Esc` | Interrupt an active response; cancel compaction/model/session pickers; hide suggestions; clear selections |
+| `Esc` | Interrupt an active response; close `/btw`; cancel compaction/model/session pickers; hide suggestions; clear selections |
 | `Tab` | Show or accept autocomplete suggestions |
 | `↑` / `↓` | Navigate input history when the cursor is at the top/bottom of input; otherwise move the cursor; scroll output when history cannot move |
 | `PageUp` / `PageDown` | Scroll output by a half page |
