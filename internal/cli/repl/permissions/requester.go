@@ -36,6 +36,7 @@ type Requester struct {
 	requestChan         chan *Request
 	pending             *Request
 	sessionAllowedTools map[string]bool
+	autoApprove         bool
 }
 
 func NewRequester() *Requester {
@@ -45,7 +46,17 @@ func NewRequester() *Requester {
 	}
 }
 
+func NewAutoApproveRequester() *Requester {
+	r := NewRequester()
+	r.autoApprove = true
+	return r
+}
+
 func (r *Requester) RequestPermission(ctx context.Context, toolName, path, resolvedPath string, isDangerous bool) (bool, error) {
+	if r.autoApprove {
+		return true, nil
+	}
+
 	if !isDangerous && r.sessionAllowedTools[toolName] {
 		return true, nil
 	}
