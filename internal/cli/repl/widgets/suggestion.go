@@ -15,6 +15,8 @@ const (
 	fileMode
 )
 
+const maxVisibleItems = 6
+
 // SuggestionItem is a generic suggestion entry used for both slash commands and file paths.
 type SuggestionItem struct {
 	Name        string
@@ -22,10 +24,11 @@ type SuggestionItem struct {
 }
 
 type SuggestionModel struct {
-	visible  bool
-	items    []SuggestionItem
-	selected int
-	mode     suggestionMode
+	visible      bool
+	items        []SuggestionItem
+	selected     int
+	scrollOffset int
+	mode         suggestionMode
 }
 
 func NewSuggestionModel() SuggestionModel {
@@ -56,6 +59,7 @@ func (s *SuggestionModel) RefreshWithSkills(input string, skills []SuggestionIte
 	if len(s.items) > 0 {
 		s.visible = true
 		s.selected = 0
+		s.scrollOffset = 0
 	} else {
 		s.visible = false
 		s.items = nil
@@ -76,6 +80,7 @@ func (s *SuggestionModel) RefreshFiles(paths []string) {
 	}
 	s.visible = true
 	s.selected = 0
+	s.scrollOffset = 0
 }
 
 func (s *SuggestionModel) Hide() {
@@ -88,6 +93,7 @@ func (s *SuggestionModel) MoveDown() {
 		return
 	}
 	s.selected = (s.selected + 1) % len(s.items)
+	s.adjustScroll()
 }
 
 func (s *SuggestionModel) MoveUp() {
@@ -95,6 +101,15 @@ func (s *SuggestionModel) MoveUp() {
 		return
 	}
 	s.selected = (s.selected - 1 + len(s.items)) % len(s.items)
+	s.adjustScroll()
+}
+
+func (s *SuggestionModel) adjustScroll() {
+	if s.selected < s.scrollOffset {
+		s.scrollOffset = s.selected
+	} else if s.selected >= s.scrollOffset+maxVisibleItems {
+		s.scrollOffset = s.selected - maxVisibleItems + 1
+	}
 }
 
 func (s SuggestionModel) Current() *SuggestionItem {
@@ -119,7 +134,11 @@ func (s SuggestionModel) Height() int {
 	if !s.visible {
 		return 0
 	}
-	return len(s.items) + 2
+	visible := len(s.items)
+	if visible > maxVisibleItems {
+		visible = maxVisibleItems
+	}
+	return visible + 2
 }
 
 func (s SuggestionModel) Visible() bool {
@@ -131,17 +150,28 @@ func (s SuggestionModel) View(width int) string {
 		return ""
 	}
 
+	end := s.scrollOffset + maxVisibleItems
+	if end > len(s.items) {
+		end = len(s.items)
+	}
+	visible := s.items[s.scrollOffset:end]
+
 	cmdColWidth := 0
-	for _, item := range s.items {
+	for _, item := range visible {
 		if len(item.Name) > cmdColWidth {
 			cmdColWidth = len(item.Name)
 		}
 	}
 	cmdColWidth += 2
 
+	// 2 for border + 2 for container padding
+	maxDescWidth := width - cmdColWidth - 4
+	// Account for description's own left padding (2)
+	maxDescWidth -= 2
+
 	var rows []string
-	for i, item := range s.items {
-		isSelected := i == s.selected
+	for i, item := range visible {
+		isSelected := (i + s.scrollOffset) == s.selected
 
 		var cmdStyle, descStyle lipgloss.Style
 		if isSelected {
@@ -154,10 +184,20 @@ func (s SuggestionModel) View(width int) string {
 
 		var row string
 		if item.Description != "" {
-			row = lipgloss.JoinHorizontal(lipgloss.Left,
-				cmdStyle.Render(item.Name),
-				descStyle.Render(item.Description),
-			)
+			desc := item.Description
+			if maxDescWidth > 3 && len(desc) > maxDescWidth {
+				desc = desc[:maxDescWidth-3] + "..."
+			} else if maxDescWidth <= 3 {
+				desc = ""
+			}
+			if desc != "" {
+				row = lipgloss.JoinHorizontal(lipgloss.Left,
+					cmdStyle.Render(item.Name),
+					descStyle.Render(desc),
+				)
+			} else {
+				row = cmdStyle.Render(item.Name)
+			}
 		} else {
 			row = cmdStyle.Render(item.Name)
 		}

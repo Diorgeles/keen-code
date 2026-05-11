@@ -113,8 +113,13 @@ func TestSuggestionHeight(t *testing.T) {
 		t.Errorf("expected 0 when not visible, got %d", s.Height())
 	}
 	s.Refresh("/")
-	if s.Height() != len(s.items)+2 {
-		t.Errorf("expected %d, got %d", len(s.items)+2, s.Height())
+	expected := len(s.items)
+	if expected > maxVisibleItems {
+		expected = maxVisibleItems
+	}
+	expected += 2
+	if s.Height() != expected {
+		t.Errorf("expected %d, got %d", expected, s.Height())
 	}
 }
 
