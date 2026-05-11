@@ -422,8 +422,10 @@ func (c *OpenAICompatibleClient) buildChatParams(oaiMessages []openai.ChatComple
 	return params
 }
 
-func (c *OpenAICompatibleClient) exitIncomplete(eventCh chan<- StreamEvent, oaiMessages []openai.ChatCompletionMessageParamUnion, turnStartLen int, injectedPending []openai.ChatCompletionMessageParamUnion, err error) {
-	c.savePendingIfAccumulated(oaiMessages, turnStartLen, injectedPending)
+func (c *OpenAICompatibleClient) exitIncomplete(eventCh chan<- StreamEvent, oaiMessages []openai.ChatCompletionMessageParamUnion, turnStartLen int, injectedPending []openai.ChatCompletionMessageParamUnion, err error, oneShot bool) {
+	if !oneShot {
+		c.savePendingIfAccumulated(oaiMessages, turnStartLen, injectedPending)
+	}
 	c.emitTerminalEvent(eventCh, oaiMessages, turnStartLen, injectedPending, err)
 }
 
@@ -440,7 +442,11 @@ func (c *OpenAICompatibleClient) StreamChat(
 		defer close(eventCh)
 
 		oaiMessages := toOpenAIMessages(messages)
-		oaiMessages, injectedPending := c.injectPendingState(oaiMessages)
+		oneShot := streamOpts.OneShot
+		var injectedPending []openai.ChatCompletionMessageParamUnion
+		if !oneShot {
+			oaiMessages, injectedPending = c.injectPendingState(oaiMessages)
+		}
 
 		turnStartLen := len(oaiMessages)
 
@@ -455,12 +461,12 @@ func (c *OpenAICompatibleClient) StreamChat(
 
 			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurnWithRetry(ctx, params, eventCh, requestOpts...)
 			if err != nil {
-				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, err)
+				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, err, oneShot)
 				return
 			}
 
 			if !hasChoice {
-				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil)
+				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil, oneShot)
 				return
 			}
 			if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
@@ -491,7 +497,7 @@ func (c *OpenAICompatibleClient) StreamChat(
 			}
 		}
 
-		c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil)
+		c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil, oneShot)
 	}()
 
 	return eventCh, nil

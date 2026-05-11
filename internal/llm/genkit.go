@@ -180,7 +180,11 @@ func (c *GenkitClient) StreamChat(
 		defer close(eventCh)
 
 		aiMessages := toGenkitMessages(messages)
-		aiMessages, injectedPending := c.injectPendingState(aiMessages)
+		oneShot := streamOptions(opts).OneShot
+		var injectedPending []*ai.Message
+		if !oneShot {
+			aiMessages, injectedPending = c.injectPendingState(aiMessages)
+		}
 		turnStartLen := len(aiMessages)
 
 		var genkitTools []ai.ToolRef
@@ -213,12 +217,12 @@ func (c *GenkitClient) StreamChat(
 
 			modelResponse, err := c.collectTurnWithRetry(ctx, opts, eventCh)
 			if err != nil {
-				c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, err)
+				c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, err, oneShot)
 				return
 			}
 
 			if modelResponse == nil || modelResponse.Message == nil {
-				c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, nil)
+				c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, nil, oneShot)
 				return
 			}
 
@@ -251,7 +255,7 @@ func (c *GenkitClient) StreamChat(
 			}
 		}
 
-		c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, nil)
+		c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, nil, oneShot)
 	}()
 
 	return eventCh, nil
@@ -306,8 +310,10 @@ func (c *GenkitClient) emitTerminalEvent(eventCh chan<- StreamEvent, aiMessages 
 	}
 }
 
-func (c *GenkitClient) exitIncomplete(eventCh chan<- StreamEvent, aiMessages []*ai.Message, turnStartLen int, injectedPending []*ai.Message, err error) {
-	c.savePendingIfAccumulated(aiMessages, turnStartLen, injectedPending)
+func (c *GenkitClient) exitIncomplete(eventCh chan<- StreamEvent, aiMessages []*ai.Message, turnStartLen int, injectedPending []*ai.Message, err error, oneShot bool) {
+	if !oneShot {
+		c.savePendingIfAccumulated(aiMessages, turnStartLen, injectedPending)
+	}
 	c.emitTerminalEvent(eventCh, aiMessages, turnStartLen, injectedPending, err)
 }
 

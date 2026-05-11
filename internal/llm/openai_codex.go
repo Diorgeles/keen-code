@@ -76,7 +76,11 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 		defer close(eventCh)
 
 		instructions, input := codexInstructionsAndInput(messages)
-		input, injectedPending := c.injectPendingState(input)
+		oneShot := streamOptions(opts).OneShot
+		var injectedPending []responses.ResponseInputItemUnionParam
+		if !oneShot {
+			input, injectedPending = c.injectPendingState(input)
+		}
 		turnStartLen := len(input)
 		responseTools := toOpenAIResponseTools(toolRegistry)
 
@@ -100,11 +104,11 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 
 			completed, streamedContent, toolCalls, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
-				c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, err)
+				c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, err, oneShot)
 				return
 			}
 			if completed == nil {
-				c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, nil)
+				c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, nil, oneShot)
 				return
 			}
 
@@ -130,7 +134,7 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 			input = append(input, c.executeTools(ctx, toolCalls, toolRegistry, eventCh)...)
 		}
 
-		c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, nil)
+		c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, nil, oneShot)
 	}()
 
 	return eventCh, nil
@@ -179,8 +183,10 @@ func (c *OpenAICodexClient) injectPendingState(input []responses.ResponseInputIt
 	return input, injectedPending
 }
 
-func (c *OpenAICodexClient) exitIncomplete(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, injectedPending []responses.ResponseInputItemUnionParam, err error) {
-	c.savePendingIfAccumulated(input, turnStartLen, injectedPending)
+func (c *OpenAICodexClient) exitIncomplete(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, injectedPending []responses.ResponseInputItemUnionParam, err error, oneShot bool) {
+	if !oneShot {
+		c.savePendingIfAccumulated(input, turnStartLen, injectedPending)
+	}
 	c.emitTerminalEvent(eventCh, input, turnStartLen, injectedPending, err)
 }
 

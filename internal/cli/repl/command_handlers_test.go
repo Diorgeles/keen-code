@@ -644,3 +644,160 @@ func TestHandleShowThinkingCommand_PersistsToGlobalConfig(t *testing.T) {
 		t.Error("expected globalCfg.ShowThinking to be true after /show-thinking on")
 	}
 }
+
+func TestHandleEnterKey_BtwCommandStartsStream(t *testing.T) {
+	m := newTestModel()
+	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
+	m.appState = replappstate.New(&mockLLMClient{}, "")
+	m.appState.AddMessage(llm.RoleUser, "context message")
+	m.btwStreamHandler = NewStreamHandler(nil)
+	m.textarea.SetValue("/btw what is this?")
+
+	newM, cmd := m.handleEnterKey()
+
+	if !newM.isBtw {
+		t.Fatal("expected btw overlay to be active")
+	}
+	if !newM.btwShowSpinner {
+		t.Fatal("expected btw spinner to be visible")
+	}
+	if newM.btwQuestion != "what is this?" {
+		t.Fatalf("expected btw question %q, got %q", "what is this?", newM.btwQuestion)
+	}
+	if newM.textarea.Value() != "" {
+		t.Fatal("expected textarea to be reset")
+	}
+	if cmd == nil {
+		t.Fatal("expected async btw command")
+	}
+}
+
+func TestHandleEnterKey_BtwCommandDuringActiveStream(t *testing.T) {
+	m := newTestModel()
+	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
+	m.appState = replappstate.New(&mockLLMClient{}, "")
+	m.btwStreamHandler = NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	m.streamHandler.Start(eventCh, "Loading...")
+	m.textarea.SetValue("/btw quick question")
+
+	newM, cmd := m.handleEnterKey()
+
+	if !newM.isBtw {
+		t.Fatal("expected btw to work even during active main stream")
+	}
+	if cmd == nil {
+		t.Fatal("expected async btw command")
+	}
+}
+
+func TestHandleEnterKey_BtwCommandNoQuestion(t *testing.T) {
+	m := newTestModel()
+	m.btwStreamHandler = NewStreamHandler(nil)
+	m.textarea.SetValue("/btw")
+
+	newM, cmd := m.handleEnterKey()
+
+	if newM.isBtw {
+		t.Fatal("expected btw overlay not to show without history")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd for /btw without question and no history")
+	}
+	found := false
+	for _, line := range newM.output.GetLines() {
+		if strings.Contains(line, "Usage:") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected usage hint for /btw without question")
+	}
+}
+
+func TestHandleEnterKey_BtwCommandNoQuestionWithHistory(t *testing.T) {
+	m := newTestModel()
+	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btwHistory = []string{"previous answer"}
+	m.textarea.SetValue("/btw")
+
+	newM, _ := m.handleEnterKey()
+
+	if !newM.isBtw {
+		t.Fatal("expected btw overlay to show with history")
+	}
+	if newM.btwQuestion != "" {
+		t.Fatal("expected empty btw question when just viewing history")
+	}
+}
+
+func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {
+	m := newTestModel()
+	m.ctx.cfg = &config.ResolvedConfig{}
+	m.btwStreamHandler = NewStreamHandler(nil)
+	m.textarea.SetValue("/btw question")
+
+	newM, cmd := m.handleEnterKey()
+
+	if newM.isBtw {
+		t.Fatal("expected btw not to activate when client is not ready")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	found := false
+	for _, line := range newM.output.GetLines() {
+		if strings.Contains(line, "LLM client not initialized") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected error about LLM client not initialized for /btw")
+	}
+}
+
+func TestDispatchCommand_BtwNotHandled(t *testing.T) {
+	m := newTestModel()
+
+	_, _, handled := m.dispatchCommand("/btw question")
+
+	if handled {
+		t.Error("expected /btw to not be handled by dispatchCommand (handled via early return in handleEnterKey)")
+	}
+}
+
+func TestDismissBtw_ResetsUserScrolled(t *testing.T) {
+	m := newTestModel()
+	m.isBtw = true
+	m.btwShowSpinner = true
+	m.btwStreamHandler = NewStreamHandler(nil)
+	m.userScrolled = true
+	m.viewport.SetContent("enough content\n" + strings.Repeat("line\n", 50))
+	m.viewport.GotoBottom()
+
+	m.dismissBtw()
+
+	if m.isBtw {
+		t.Fatal("expected btw to be dismissed")
+	}
+	if m.userScrolled {
+		t.Fatal("expected userScrolled to be false when viewport is at bottom")
+	}
+}
+
+func TestDismissBtw_PreservesUserScrolledWhenNotAtBottom(t *testing.T) {
+	m := newTestModel()
+	m.isBtw = true
+	m.btwStreamHandler = NewStreamHandler(nil)
+	m.viewport.SetHeight(5)
+	m.viewport.SetContent(strings.Repeat("line\n", 50))
+	m.viewport.GotoTop()
+
+	m.dismissBtw()
+
+	if m.userScrolled != true {
+		t.Fatal("expected userScrolled to remain true when viewport is not at bottom")
+	}
+}

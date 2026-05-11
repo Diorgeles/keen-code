@@ -41,3 +41,9 @@ type compactionErrMsg struct {
 type updateCheckMsg struct {
 	latest string
 }
+
+type btwChunkMsg string
+type btwDoneMsg struct{}
+type btwErrorMsg struct {
+	err error
+}

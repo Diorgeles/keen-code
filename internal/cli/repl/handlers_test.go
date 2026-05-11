@@ -706,3 +706,97 @@ func TestHandleLLMStreamMsg_ToolEnd_ReturnsSpinnerTick(t *testing.T) {
 		t.Fatal("expected non-nil cmd")
 	}
 }
+
+func TestHandleBtwStreamMsg_Chunk(t *testing.T) {
+	btwSh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	btwSh.Start(eventCh, "Loading...")
+
+	m := newTestModel()
+	m.btwStreamHandler = btwSh
+	m.isBtw = true
+
+	updated, cmd, handled := m.handleBtwStreamMsg(btwChunkMsg("hello"))
+
+	if !handled {
+		t.Fatal("expected btw chunk msg to be handled")
+	}
+	if btwSh.GetResponse() != "hello" {
+		t.Fatalf("expected btw response 'hello', got %q", btwSh.GetResponse())
+	}
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd for btw chunk")
+	}
+	_ = updated
+}
+
+func TestHandleBtwStreamMsg_Done(t *testing.T) {
+	btwSh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	btwSh.Start(eventCh, "Loading...")
+	btwSh.HandleChunk("answer text")
+
+	m := newTestModel()
+	m.btwStreamHandler = btwSh
+	m.isBtw = true
+	m.btwShowSpinner = true
+	m.btwQuestion = "what?"
+
+	updated, cmd, handled := m.handleBtwStreamMsg(btwDoneMsg{})
+
+	if !handled {
+		t.Fatal("expected btw done msg to be handled")
+	}
+	if updated.btwShowSpinner {
+		t.Fatal("expected btw spinner to stop after done")
+	}
+	if len(updated.btwHistory) != 1 {
+		t.Fatalf("expected 1 btw history entry, got %d", len(updated.btwHistory))
+	}
+	if !strings.Contains(updated.btwHistory[0], "what?") {
+		t.Fatalf("expected btw history to contain question, got %q", updated.btwHistory[0])
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd after btw done")
+	}
+}
+
+func TestHandleBtwStreamMsg_Error(t *testing.T) {
+	btwSh := NewStreamHandler(nil)
+	eventCh := make(chan llm.StreamEvent)
+	btwSh.Start(eventCh, "Loading...")
+
+	m := newTestModel()
+	m.btwStreamHandler = btwSh
+	m.isBtw = true
+	m.btwShowSpinner = true
+	m.btwQuestion = "question"
+
+	updated, cmd, handled := m.handleBtwStreamMsg(btwErrorMsg{err: errors.New("oops")})
+
+	if !handled {
+		t.Fatal("expected btw error msg to be handled")
+	}
+	if updated.btwShowSpinner {
+		t.Fatal("expected btw spinner to stop after error")
+	}
+	if len(updated.btwHistory) != 1 {
+		t.Fatalf("expected 1 btw history entry (with error), got %d", len(updated.btwHistory))
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd after btw error")
+	}
+}
+
+func TestHandleBtwStreamMsg_InactiveHandlerSwallowsMessages(t *testing.T) {
+	btwSh := NewStreamHandler(nil)
+
+	m := newTestModel()
+	m.btwStreamHandler = btwSh
+
+	_, _, handled := m.handleBtwStreamMsg(btwChunkMsg("orphan"))
+
+	if !handled {
+		t.Fatal("expected stale btw chunk to be swallowed")
+	}
+}

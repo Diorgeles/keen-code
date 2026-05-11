@@ -3,6 +3,7 @@ package commands
 import "strings"
 
 const (
+	Btw          = "/btw"
 	Clear        = "/clear"
 	Compact      = "/compact"
 	Exit         = "/exit"
@@ -23,6 +24,7 @@ type SlashCommand struct {
 }
 
 var All = []SlashCommand{
+	{Btw, "Ask a quick side question (not added to conversation)"},
 	{Clear, "Clear the session and create a new one (also /new)"},
 	{Compact, "Compact conversation context"},
 	{Exit, "Quit Keen"},

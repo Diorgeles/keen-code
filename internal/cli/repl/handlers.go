@@ -2,10 +2,8 @@ package repl
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -70,7 +68,6 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 		TurnMemory: m.consumeTurnMemory(),
 	}
 	m.appState.AppendMessage(assistantMessage)
-	// m.logAppStateMessages("assistant_turn_completed")
 	if err := m.sessions.appendAssistantTurn(segments, assistantMessage, false, ""); err != nil {
 		m.handleSessionPersistenceError(err)
 	}
@@ -380,6 +377,12 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		_ = m.history.Flush()
 		return *m, tea.Quit
 	case keyEsc:
+		if m.isBtw {
+			m.dismissBtw()
+			m.updateViewportContent()
+			m.scrollToBottomIfFollowing()
+			return *m, nil
+		}
 		if m.streamHandler != nil && m.streamHandler.IsActive() {
 			m.interruptStream(interruptedPromptText)
 		}
@@ -501,20 +504,6 @@ func (m *replModel) interruptStream(message string) {
 	m.scrollToBottomIfFollowing()
 }
 
-func (m *replModel) logAppStateMessages(reason string) {
-	if m == nil || m.appState == nil {
-		return
-	}
-
-	payload, err := json.MarshalIndent(m.appState.GetMessages(), "", "  ")
-	if err != nil {
-		slog.Debug("AppState messages", "reason", reason, "marshal_error", err.Error())
-		return
-	}
-
-	slog.Debug("AppState messages", "reason", reason, "messages", string(payload))
-}
-
 func (m *replModel) handleSessionPickerKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok || m.sessionPicker == nil {
@@ -602,6 +591,10 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 }
 
 func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
+	if updated, cmd, handled := m.handleBtwStreamMsg(msg); handled {
+		return updated, cmd, true
+	}
+
 	if m.streamHandler == nil || !m.streamHandler.IsActive() {
 		switch msg.(type) {
 		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmIncompleteMsg, llmErrorMsg, llmRetryMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
@@ -654,4 +647,46 @@ func (m *replModel) handleUpdateCheckMsg(msg updateCheckMsg) {
 	m.output.AddEmptyLine()
 	m.updateViewportContent()
 	m.scrollToBottomIfFollowing()
+}
+
+func (m replModel) handleBtwStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
+	if m.btwStreamHandler == nil || !m.btwStreamHandler.IsActive() {
+		switch msg.(type) {
+		case btwChunkMsg, btwDoneMsg, btwErrorMsg:
+			return m, nil, true
+		}
+		return m, nil, false
+	}
+
+	switch msg := msg.(type) {
+	case btwChunkMsg:
+		m.btwStreamHandler.HandleChunk(string(msg))
+		m.updateViewportContent()
+		m.scrollBtwToBottomIfFollowing()
+		return m, waitForBtwEvent(m.btwStreamHandler.eventCh), true
+	case btwDoneMsg:
+		responseLines, _ := m.btwStreamHandler.HandleDone()
+		m.btwShowSpinner = false
+		m.btwLines = responseLines
+		m.appendBtwHistory()
+		m.btwLines = nil
+		m.updateViewportContent()
+		m.scrollBtwToBottomIfFollowing()
+		return m, nil, true
+	case btwErrorMsg:
+		pendingLines, errMsg := m.btwStreamHandler.HandleError(msg.err)
+		m.btwShowSpinner = false
+		lines := pendingLines
+		if msg.err != nil && !errors.Is(msg.err, context.Canceled) {
+			lines = append(lines, "  "+repltheme.ErrorStyle.Render(errMsg))
+		}
+		m.btwLines = lines
+		m.appendBtwHistory()
+		m.btwLines = nil
+		m.updateViewportContent()
+		m.scrollBtwToBottomIfFollowing()
+		return m, nil, true
+	default:
+		return m, nil, false
+	}
 }

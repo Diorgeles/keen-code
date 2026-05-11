@@ -106,6 +106,19 @@ func BuildCompactionPrompt(extraPrompt string) string {
 	return compactionPrompt
 }
 
+const btwPrompt = `You are a helper agent for Keen Code—an expert coding agent running in a terminal.
+
+Your role is to answer a quick side question ("btw") that is separate from the main task.
+You have full context of the ongoing conversation so far between the user and the main agent.
+
+- Be concise and direct. Use GitHub-flavored markdown.
+- One-word or one-line answers are fine when that is all the question needs.
+- You have no tool access — answer based on the conversation context and your knowledge.`
+
+func BuildBtwPrompt(workingDir string) string {
+	return btwPrompt + fmt.Sprintf("\n\nWorking directory: %s", workingDir)
+}
+
 func projectInstructions(workingDir string) string {
 	candidates := []string{"AGENTS.md", "CLAUDE.md", "GEMINI.md"}
 	path, content := findUpward(workingDir, candidates)

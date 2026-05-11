@@ -424,7 +424,11 @@ func (c *AnthropicClient) StreamChat(
 		defer close(eventCh)
 
 		systemBlocks, msgParams := toAnthropicMessages(messages)
-		msgParams, injectedPending := c.injectPendingState(msgParams)
+		oneShot := streamOpts.OneShot
+		var injectedPending []anthropic.MessageParam
+		if !oneShot {
+			msgParams, injectedPending = c.injectPendingState(msgParams)
+		}
 		turnStartLen := len(msgParams)
 		anthropicTools := toAnthropicTools(toolRegistry)
 		requestOpts := c.requestOptions(streamOpts)
@@ -447,7 +451,7 @@ func (c *AnthropicClient) StreamChat(
 
 			assistantBlocks, toolUses, usage, err := c.collectTurnWithRetry(ctx, params, eventCh, requestOpts...)
 			if err != nil {
-				c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, err)
+				c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, err, oneShot)
 				return
 			}
 
@@ -475,7 +479,7 @@ func (c *AnthropicClient) StreamChat(
 			msgParams = append(msgParams, anthropic.NewUserMessage(toolResultBlocks...))
 		}
 
-		c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, nil)
+		c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, nil, oneShot)
 	}()
 
 	return eventCh, nil
@@ -539,8 +543,10 @@ func (c *AnthropicClient) emitTerminalEvent(eventCh chan<- StreamEvent, msgParam
 	}
 }
 
-func (c *AnthropicClient) exitIncomplete(eventCh chan<- StreamEvent, msgParams []anthropic.MessageParam, turnStartLen int, injectedPending []anthropic.MessageParam, err error) {
-	c.savePendingIfAccumulated(msgParams, turnStartLen, injectedPending)
+func (c *AnthropicClient) exitIncomplete(eventCh chan<- StreamEvent, msgParams []anthropic.MessageParam, turnStartLen int, injectedPending []anthropic.MessageParam, err error, oneShot bool) {
+	if !oneShot {
+		c.savePendingIfAccumulated(msgParams, turnStartLen, injectedPending)
+	}
 	c.emitTerminalEvent(eventCh, msgParams, turnStartLen, injectedPending, err)
 }
 

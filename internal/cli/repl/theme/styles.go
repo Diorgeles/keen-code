@@ -64,11 +64,12 @@ var (
 		Dark:  lipgloss.Color("#42A5F5"),
 	}
 
-	NormalStyle = lipgloss.NewStyle()
-	TitleStyle  = lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor)
-	TipStyle    = lipgloss.NewStyle().Foreground(TextDimColor).Italic(true)
-	HintStyle   = lipgloss.NewStyle().Foreground(TextDimColor)
-	BoxStyle    = lipgloss.NewStyle().
+	NormalStyle    = lipgloss.NewStyle()
+	TitleStyle     = lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor)
+	TipStyle       = lipgloss.NewStyle().Foreground(TextDimColor).Italic(true)
+	HintStyle      = lipgloss.NewStyle().Foreground(TextDimColor)
+	UsageHintStyle = lipgloss.NewStyle().Foreground(SecondaryColor).Bold(true)
+	BoxStyle       = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(TextDimColor).
 			Padding(1, 2).
@@ -150,4 +151,8 @@ var (
 
 	UpdateAvailableStyle = lipgloss.NewStyle().Foreground(AccentColor).Bold(true)
 	UpdateCommandStyle   = lipgloss.NewStyle().Foreground(TextDimColor)
+
+	BtwBorderStyle = lipgloss.NewStyle().Foreground(AccentColor)
+	BtwLabelStyle  = lipgloss.NewStyle().Foreground(AccentColor).Bold(true)
+	BtwHintStyle   = lipgloss.NewStyle().Foreground(MutedColor).Faint(true)
 )

@@ -14,6 +14,7 @@ type LLMClient interface {
 
 type StreamOptions struct {
 	SessionID string
+	OneShot   bool
 }
 
 func streamOptions(opts []StreamOptions) StreamOptions {

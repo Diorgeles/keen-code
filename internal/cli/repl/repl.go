@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
+	replcommands "github.com/user/keen-code/internal/cli/repl/commands"
 	replfilesearch "github.com/user/keen-code/internal/cli/repl/filesearch"
 	replhistory "github.com/user/keen-code/internal/cli/repl/history"
 	replmarkdown "github.com/user/keen-code/internal/cli/repl/markdown"
@@ -76,6 +77,14 @@ type replModel struct {
 	history             replhistory.InputHistory
 	selection           viewportSelection
 	inputSelection      viewportSelection
+	isBtw               bool
+	btwViewport         viewport.Model
+	btwLines            []string
+	btwHistory          []string
+	btwQuestion         string
+	btwStreamHandler    *StreamHandler
+	btwStreamCancel     context.CancelFunc
+	btwShowSpinner      bool
 }
 
 func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) replModel {
@@ -137,6 +146,8 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 
 	vp := viewport.New(viewport.WithWidth(defaultWidth), viewport.WithHeight(24))
 
+	btwVp := viewport.New(viewport.WithWidth(defaultWidth), viewport.WithHeight(24))
+
 	model := replModel{
 		textarea:            ta,
 		viewport:            vp,
@@ -152,6 +163,8 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		suggestion:          replwidgets.NewSuggestionModel(),
 		fileSearcher:        fileSearcher,
 		showThinking:        true,
+		btwViewport:         btwVp,
+		btwStreamHandler:    NewStreamHandler(mdRenderer),
 	}
 	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
 		model.showThinking = *ctx.globalCfg.ShowThinking
@@ -191,6 +204,14 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	input := m.textarea.Value()
 	if input == "" {
 		return *m, nil
+	}
+
+	if input == replcommands.Btw || strings.HasPrefix(input, replcommands.Btw+" ") {
+		m.output.AddUserInput(input, repltheme.PromptStyle)
+		m.history.Push(input)
+		m.textarea.Reset()
+		result, cmd := m.handleBtwCommand(input)
+		return result, cmd
 	}
 
 	if m.streamHandler.IsActive() {
@@ -278,6 +299,10 @@ func (m *replModel) updateViewportContent() {
 		return
 	}
 
+	if m.isBtw {
+		m.updateBtwViewportContent()
+	}
+
 	contentWidth := m.width
 	if contentWidth <= 0 {
 		contentWidth = m.viewport.Width()
@@ -304,6 +329,33 @@ func (m *replModel) updateViewportContent() {
 	viewportContent := content.String()
 	m.viewport.SetContent(viewportContent)
 	m.selection.setContent(viewportContent)
+}
+
+func (m *replModel) updateBtwViewportContent() {
+	contentWidth := m.btwViewport.Width()
+	if contentWidth <= 0 {
+		contentWidth = defaultWidth
+	}
+
+	var content strings.Builder
+
+	for i, entry := range m.btwHistory {
+		content.WriteString(entry)
+		if i < len(m.btwHistory)-1 || m.btwLines != nil || (m.btwStreamHandler != nil && m.btwStreamHandler.IsActive()) {
+			content.WriteString("\n\n")
+		}
+	}
+
+	if m.btwLines != nil {
+		content.WriteString(renderBtwQuestionHeader(m.btwQuestion))
+		content.WriteString("\n")
+		content.WriteString(strings.Join(m.btwLines, "\n"))
+	} else if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
+		content.WriteString(renderBtwQuestionHeader(m.btwQuestion))
+		content.WriteString(m.btwStreamHandler.View(contentWidth))
+	}
+
+	m.btwViewport.SetContent(content.String())
 }
 
 func (m replModel) waitForAsyncEvent() tea.Cmd {
@@ -421,11 +473,19 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			m.viewport.ScrollUp(3)
-			m.userScrolled = !m.viewport.AtBottom()
+			if m.isBtw {
+				m.btwViewport.ScrollUp(3)
+			} else {
+				m.viewport.ScrollUp(3)
+			}
+			m.userScrolled = !m.activeViewportAtBottom()
 		case tea.MouseWheelDown:
-			m.viewport.ScrollDown(3)
-			m.userScrolled = !m.viewport.AtBottom()
+			if m.isBtw {
+				m.btwViewport.ScrollDown(3)
+			} else {
+				m.viewport.ScrollDown(3)
+			}
+			m.userScrolled = !m.activeViewportAtBottom()
 		}
 		return m, nil
 	}
@@ -466,7 +526,7 @@ func (m replModel) consumeModelSelectionResult(msg tea.Msg) (replModel, tea.Cmd,
 }
 
 func (m replModel) handleSpinnerTick(msg spinner.TickMsg) (replModel, tea.Cmd, bool) {
-	if !m.showSpinner {
+	if !m.showSpinner && !m.btwShowSpinner {
 		return m, nil, false
 	}
 
@@ -481,6 +541,8 @@ func (m replModel) View() tea.View {
 
 	if m.quitting {
 		content = lipgloss.NewStyle().Foreground(repltheme.MutedColor).Render("\n  Goodbye!\n")
+	} else if m.isBtw {
+		content = m.btwOverlayView()
 	} else {
 		var view strings.Builder
 
@@ -511,6 +573,39 @@ func (m replModel) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
+}
+
+func (m replModel) btwOverlayView() string {
+	fullWidth := m.width
+	if fullWidth <= 0 {
+		fullWidth = defaultWidth
+	}
+
+	var view strings.Builder
+	view.WriteString(renderBtwTopBorder(fullWidth))
+	view.WriteString("\n")
+	view.WriteString(renderBtwSideBorders(m.btwViewport.View(), fullWidth))
+	view.WriteString("\n")
+	view.WriteString(renderBtwEmptyBorderLine(fullWidth))
+	view.WriteString("\n")
+	view.WriteString(renderBtwBottomBorder(fullWidth))
+	view.WriteString("\n")
+
+	hint := repltheme.BtwHintStyle.Render("ESC to return")
+	if m.btwShowSpinner {
+		btwSpinner := m.spinner
+		btwSpinner.Style = lipgloss.NewStyle().Foreground(repltheme.AccentColor)
+		spinnerText := " " + btwSpinner.View() + " " + repltheme.BtwLabelStyle.Render(m.btwStreamHandler.GetLoadingText())
+		hintWidth := lipgloss.Width(hint)
+		spinnerWidth := lipgloss.Width(spinnerText)
+		gap := max(fullWidth-spinnerWidth-hintWidth-1, 1)
+		view.WriteString(spinnerText + strings.Repeat(" ", gap) + hint)
+	} else {
+		padding := max(fullWidth-lipgloss.Width(hint)-1, 1)
+		view.WriteString(strings.Repeat(" ", padding) + hint)
+	}
+
+	return view.String()
 }
 
 func (m replModel) inputMetaView() string {

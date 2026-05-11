@@ -511,6 +511,88 @@ func TestAppState_ApplyCompactionReplacesHistoryWithSingleSummaryMessage(t *test
 	}
 }
 
+func TestAppState_StreamBtwBuildsCorrectMessages(t *testing.T) {
+	var capturedMessages []llm.Message
+	var capturedRegistry *tools.Registry
+
+	client := &mockLLMClient{
+		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
+			capturedMessages = append([]llm.Message(nil), messages...)
+			capturedRegistry = toolRegistry
+
+			ch := make(chan llm.StreamEvent, 2)
+			ch <- llm.StreamEvent{Type: llm.StreamEventTypeChunk, Content: "answer"}
+			ch <- llm.StreamEvent{Type: llm.StreamEventTypeDone}
+			close(ch)
+			return ch, nil
+		},
+	}
+
+	state := New(client, t.TempDir())
+	state.AddMessage(llm.RoleUser, "fix the bug")
+	state.AddMessage(llm.RoleAssistant, "done")
+
+	eventCh, err := state.StreamBtw(context.Background(), "what is the bug about?")
+	if err != nil {
+		t.Fatalf("StreamBtw() returned error: %v", err)
+	}
+	if eventCh == nil {
+		t.Fatal("expected btw stream")
+	}
+
+	// Drain events
+	for range eventCh {
+	}
+
+	if capturedRegistry != nil {
+		t.Fatal("expected btw to pass nil tool registry")
+	}
+	if len(capturedMessages) != 4 {
+		t.Fatalf("expected 4 messages (system + 2 context + user question), got %d", len(capturedMessages))
+	}
+	if capturedMessages[0].Role != llm.RoleSystem {
+		t.Fatalf("expected first message to be system, got %s", capturedMessages[0].Role)
+	}
+	if !strings.Contains(capturedMessages[0].Content, "btw") {
+		t.Fatalf("expected btw system prompt, got %q", capturedMessages[0].Content)
+	}
+	if capturedMessages[1].Role != llm.RoleUser || capturedMessages[1].Content != "fix the bug" {
+		t.Fatalf("expected appstate messages to be included, got %#v", capturedMessages[1])
+	}
+	if capturedMessages[2].Role != llm.RoleAssistant || capturedMessages[2].Content != "done" {
+		t.Fatalf("expected appstate messages to be included, got %#v", capturedMessages[2])
+	}
+	if capturedMessages[3].Role != llm.RoleUser || capturedMessages[3].Content != "what is the bug about?" {
+		t.Fatalf("expected user question as last message, got %#v", capturedMessages[3])
+	}
+}
+
+func TestAppState_StreamBtwNilClient(t *testing.T) {
+	state := New(nil, t.TempDir())
+	state.AddMessage(llm.RoleUser, "hello")
+
+	eventCh, err := state.StreamBtw(context.Background(), "question")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if eventCh != nil {
+		t.Error("expected nil event channel when client is nil")
+	}
+}
+
+func TestAppState_StreamBtwDoesNotModifyMessages(t *testing.T) {
+	client := &mockLLMClient{}
+	state := New(client, t.TempDir())
+	state.AddMessage(llm.RoleUser, "original")
+
+	_, _ = state.StreamBtw(context.Background(), "side question")
+
+	messages := state.GetMessages()
+	if len(messages) != 1 || messages[0].Content != "original" {
+		t.Fatalf("expected btw not to modify appstate messages, got %#v", messages)
+	}
+}
+
 func TestAppState_ApplyCompactionLeavesMessagesUntouchedOnError(t *testing.T) {
 	state := New(&mockLLMClient{}, t.TempDir())
 	state.AddMessage(llm.RoleUser, "hello")

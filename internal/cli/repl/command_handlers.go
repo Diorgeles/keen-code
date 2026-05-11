@@ -385,6 +385,65 @@ func (m *replModel) saveShowThinking(val bool) {
 	_ = m.ctx.loader.Save(m.ctx.globalCfg)
 }
 
+func (m *replModel) handleBtwCommand(input string) (replModel, tea.Cmd) {
+	question := strings.TrimSpace(strings.TrimPrefix(input, replcommands.Btw))
+	if question == "" {
+		if len(m.btwHistory) > 0 {
+			m.isBtw = true
+			m.btwLines = nil
+			m.btwQuestion = ""
+			m.btwViewport.SetWidth(m.width - 6)
+			btwContentHeight := max(m.height-4, 10)
+			m.btwViewport.SetHeight(btwContentHeight)
+			m.updateViewportContent()
+			m.btwViewport.GotoBottom()
+			return *m, nil
+		}
+		m.output.AddStyledLine("  Usage: /btw <question>", repltheme.UsageHintStyle)
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	if !m.appState.IsClientReady(m.ctx.cfg) {
+		m.output.AddError("LLM client not initialized. Use /model to configure.", repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	if m.btwStreamCancel != nil {
+		m.btwStreamCancel()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.btwStreamCancel = cancel
+
+	eventCh, err := m.appState.StreamBtw(ctx, question)
+	if err != nil {
+		cancel()
+		m.btwStreamCancel = nil
+		m.output.AddError(err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	m.isBtw = true
+	m.btwLines = nil
+	m.btwQuestion = question
+	m.btwViewport.SetWidth(m.width - 6)
+	btwContentHeight := max(m.height-4, 10)
+	m.btwViewport.SetHeight(btwContentHeight)
+	m.btwStreamHandler.Start(eventCh, nextLoadingText())
+	m.btwShowSpinner = true
+	m.userScrolled = false
+	m.updateViewportContent()
+	m.btwViewport.GotoBottom()
+
+	return *m, tea.Batch(m.spinner.Tick, waitForBtwEvent(eventCh))
+}
+
 func (m *replModel) handleLogoutCommand() replModel {
 	if m.ctx == nil || m.ctx.cfg == nil || m.ctx.cfg.Provider == "" {
 		m.output.AddError("No provider is configured.", repltheme.ErrorStyle)

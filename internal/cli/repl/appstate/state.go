@@ -174,6 +174,21 @@ func (s *AppState) StreamCompact(ctx context.Context, cfg *config.ResolvedConfig
 	return s.llmClient.StreamChat(ctx, requestMessages, nil, opts...)
 }
 
+func (s *AppState) StreamBtw(ctx context.Context, question string, opts ...llm.StreamOptions) (<-chan llm.StreamEvent, error) {
+	if s.llmClient == nil {
+		return nil, nil
+	}
+	messages := make([]llm.Message, 0, len(s.messages)+2)
+	messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: llm.BuildBtwPrompt(s.workingDir)})
+	messages = append(messages, s.GetMessages()...)
+	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: question})
+	streamOpts := llm.StreamOptions{OneShot: true}
+	if len(opts) > 0 {
+		streamOpts.SessionID = opts[0].SessionID
+	}
+	return s.llmClient.StreamChat(ctx, messages, nil, streamOpts)
+}
+
 func (s *AppState) ApplyCompaction(summary string) error {
 	compacted := strings.TrimSpace(summary)
 	if compacted == "" {

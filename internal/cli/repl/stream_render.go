@@ -338,3 +338,69 @@ func renderDiffSegment(seg *streamSegment, width int) []string {
 	lines = append(lines, rule)
 	return lines
 }
+
+func renderBtwQuestionHeader(question string) string {
+	return repltheme.BtwLabelStyle.Render("▶ " + question)
+}
+
+func renderBtwTopBorder(width int) string {
+	if width <= 0 {
+		width = defaultWidth
+	}
+	label := " btw "
+	labelLen := lipgloss.Width(label)
+	// ╭── btw ─────────────────────────────╮
+	leftRuleLen := 2
+	rightRuleLen := width - 2 - leftRuleLen - labelLen // 2 for ╭ and ╮
+	if rightRuleLen < 1 {
+		rightRuleLen = 1
+	}
+	left := repltheme.BtwBorderStyle.Render("╭" + strings.Repeat("─", leftRuleLen))
+	right := repltheme.BtwBorderStyle.Render(strings.Repeat("─", rightRuleLen) + "╮")
+	return left + repltheme.BtwLabelStyle.Render(label) + right
+}
+
+func renderBtwBottomBorder(width int) string {
+	if width <= 0 {
+		width = defaultWidth
+	}
+	innerWidth := width - 2 // 2 for ╰ and ╯
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	return repltheme.BtwBorderStyle.Render("╰" + strings.Repeat("─", innerWidth) + "╯")
+}
+
+func renderBtwEmptyBorderLine(width int) string {
+	if width <= 0 {
+		width = defaultWidth
+	}
+	innerWidth := width - 6 // "│ " (2) + content + "   │" (4)
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	border := repltheme.BtwBorderStyle.Render("│")
+	return border + " " + strings.Repeat(" ", innerWidth) + "   " + border
+}
+
+func renderBtwSideBorders(content string, width int) string {
+	if width <= 0 {
+		width = defaultWidth
+	}
+	lines := strings.Split(content, "\n")
+	innerWidth := max(width-6, 1) // "│ " (2) + content + "   │" (4)
+	border := repltheme.BtwBorderStyle.Render("│")
+	var result strings.Builder
+	for i, line := range lines {
+		lineWidth := lipgloss.Width(line)
+		padding := ""
+		if lineWidth < innerWidth {
+			padding = strings.Repeat(" ", innerWidth-lineWidth)
+		}
+		result.WriteString(border + " " + line + padding + "   " + border)
+		if i < len(lines)-1 {
+			result.WriteString("\n")
+		}
+	}
+	return result.String()
+}

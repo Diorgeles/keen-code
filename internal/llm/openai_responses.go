@@ -153,7 +153,11 @@ func (c *OpenAIResponsesClient) StreamChat(
 		defer close(eventCh)
 
 		input := toOpenAIResponseInput(messages)
-		input, replayedPendingInput := c.injectPendingState(input)
+		oneShot := streamOptions(opts).OneShot
+		var replayedPendingInput []responses.ResponseInputItemUnionParam
+		if !oneShot {
+			input, replayedPendingInput = c.injectPendingState(input)
+		}
 		turnStartLen := len(input)
 		responseTools := toOpenAIResponseTools(toolRegistry)
 
@@ -176,11 +180,11 @@ func (c *OpenAIResponsesClient) StreamChat(
 
 			completed, streamedContent, toolCalls, err := c.collectTurnWithRetry(ctx, params, eventCh)
 			if err != nil {
-				c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, err)
+				c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, err, oneShot)
 				return
 			}
 			if completed == nil {
-				c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil)
+				c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil, oneShot)
 				return
 			}
 
@@ -206,7 +210,7 @@ func (c *OpenAIResponsesClient) StreamChat(
 			input = append(input, c.executeTools(ctx, toolCalls, toolRegistry, eventCh)...)
 		}
 
-		c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil)
+		c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil, oneShot)
 	}()
 
 	return eventCh, nil
@@ -239,8 +243,10 @@ func (c *OpenAIResponsesClient) injectPendingState(input []responses.ResponseInp
 	return input, replayedPendingInput
 }
 
-func (c *OpenAIResponsesClient) exitIncomplete(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, replayedPendingInput []responses.ResponseInputItemUnionParam, err error) {
-	c.savePendingIfAccumulated(input, turnStartLen, replayedPendingInput)
+func (c *OpenAIResponsesClient) exitIncomplete(eventCh chan<- StreamEvent, input []responses.ResponseInputItemUnionParam, turnStartLen int, replayedPendingInput []responses.ResponseInputItemUnionParam, err error, oneShot bool) {
+	if !oneShot {
+		c.savePendingIfAccumulated(input, turnStartLen, replayedPendingInput)
+	}
 	c.emitTerminalEvent(eventCh, input, turnStartLen, replayedPendingInput, err)
 }
 
