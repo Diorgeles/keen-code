@@ -107,7 +107,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	styles.Focused.Prompt = repltheme.PromptStyle
 	styles.Focused.Text = lipgloss.NewStyle()
 	styles.Focused.CursorLine = lipgloss.NewStyle()
-	styles.Blurred.Prompt = repltheme.PromptStyle
+	styles.Blurred.Prompt = repltheme.InputRuleBlurredStyle
 	styles.Blurred.Text = lipgloss.NewStyle()
 	styles.Blurred.CursorLine = lipgloss.NewStyle()
 	ta.SetStyles(styles)
@@ -558,7 +558,7 @@ func (m replModel) View() tea.View {
 		}
 
 		textareaView := m.inputSelection.renderWithColumnOffset(m.textarea.View(), m.textarea.Width()+inputPromptWidth, m.textarea.Height(), m.textarea.ScrollYOffset(), inputPromptWidth)
-		view.WriteString(renderInputArea(textareaView, m.width))
+		view.WriteString(renderInputArea(textareaView, m.width, m.textarea.Focused()))
 		view.WriteString("\n")
 		if m.suggestion.Visible() {
 			view.WriteString(m.suggestion.View(m.width))

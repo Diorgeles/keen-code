@@ -176,9 +176,10 @@ func buildInitialScreen(ctx *replContext) []string {
 	lines = append(lines, "")
 
 	tips := []string{
-		"Use /help  for available commands",
-		"Use /model to change provider or model",
-		"Press Enter to send, Shift+Enter for new line",
+		"Use /help for all commands, `/skills list` for available skills",
+		"Use /model to change provider and model",
+		"Press Enter to send, shift+Enter for new line",
+		"Press Ctrl+C or cmd+C for copying, tab to switch focus",
 	}
 	tipsBox := repltheme.BoxStyle.Render(repltheme.TipStyle.Render(strings.Join(tips, "\n")))
 	lines = append(lines, tipsBox)
@@ -219,7 +220,7 @@ func formatModelSelectionCard(ms *replwidgets.Model, width int) string {
 	return sb.String()
 }
 
-func renderInputArea(content string, width int) string {
+func renderInputArea(content string, width int, focused bool) string {
 	ruleWidth := defaultWidth
 	if width > 0 {
 		ruleWidth = width
@@ -228,7 +229,11 @@ func renderInputArea(content string, width int) string {
 		ruleWidth = 1
 	}
 
-	rule := repltheme.InputRuleStyle.Render(strings.Repeat("─", ruleWidth))
+	ruleStyle := repltheme.InputRuleStyle
+	if !focused {
+		ruleStyle = repltheme.InputRuleBlurredStyle
+	}
+	rule := ruleStyle.Render(strings.Repeat("─", ruleWidth))
 	return rule + "\n" + content + "\n" + rule
 }
 
@@ -295,6 +300,54 @@ func (m replModel) isAtTopOfInput() bool {
 
 func (m replModel) isAtBottomOfInput() bool {
 	return m.textarea.Line() >= m.textarea.LineCount()-1
+}
+
+func (m *replModel) focusInput() tea.Cmd {
+	m.suggestion.Hide()
+	return m.textarea.Focus()
+}
+
+func (m *replModel) blurInput() {
+	m.suggestion.Hide()
+	m.textarea.Blur()
+}
+
+func (m *replModel) toggleInputFocus() tea.Cmd {
+	if m.textarea.Focused() {
+		m.blurInput()
+		return nil
+	}
+	return m.focusInput()
+}
+
+func (m *replModel) handleViewportFocusKeyMsg(msg tea.KeyPressMsg) bool {
+	switch msg.String() {
+	case keyUp, keyShiftUp:
+		m.viewport.ScrollUp(1)
+		m.userScrolled = !m.viewport.AtBottom()
+		return true
+	case keyDown, keyShiftDown:
+		m.viewport.ScrollDown(1)
+		m.userScrolled = !m.viewport.AtBottom()
+		return true
+	case keyPageUp:
+		m.viewport.HalfPageUp()
+		m.userScrolled = !m.viewport.AtBottom()
+		return true
+	case keyPageDown:
+		m.viewport.HalfPageDown()
+		m.userScrolled = !m.viewport.AtBottom()
+		return true
+	case keyHome:
+		m.viewport.GotoTop()
+		m.userScrolled = true
+		return true
+	case keyEnd:
+		m.viewport.GotoBottom()
+		m.userScrolled = false
+		return true
+	}
+	return false
 }
 
 func (m *replModel) startStreamContext() context.Context {

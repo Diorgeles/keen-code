@@ -50,6 +50,7 @@ func TestReplSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
 	m := newTestModel()
 	m.output.AddLine("hello world")
 	m.updateViewportContent()
+	m.blurInput()
 
 	updated, cmd := m.updateNormalMode(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 0, Button: tea.MouseLeft}))
 	if cmd != nil {
@@ -65,6 +66,20 @@ func TestReplSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
 	}
 	if got := updated.selection.selectedText(); got != "hello" {
 		t.Fatalf("expected selected text to remain available, got %q", got)
+	}
+}
+
+func TestReplSelectionMouseClickFocusesViewport(t *testing.T) {
+	m := newTestModel()
+	m.output.AddLine("hello world")
+	m.updateViewportContent()
+
+	updated, cmd := m.updateNormalMode(tea.MouseClickMsg(tea.Mouse{X: 0, Y: 0, Button: tea.MouseLeft}))
+	if cmd != nil {
+		t.Fatal("expected no command on viewport mouse down")
+	}
+	if updated.textarea.Focused() {
+		t.Fatal("expected viewport click to blur input")
 	}
 }
 
@@ -106,11 +121,12 @@ func TestReplSelectionCmdCCopiesSelection(t *testing.T) {
 func TestReplInputSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("hello world")
+	m.blurInput()
 	textY := m.inputAreaTop() + 1
 
 	updated, cmd := m.updateNormalMode(tea.MouseClickMsg(tea.Mouse{X: inputPromptWidth, Y: textY, Button: tea.MouseLeft}))
-	if cmd != nil {
-		t.Fatal("expected no command on input mouse down")
+	if cmd == nil {
+		t.Fatal("expected focus command on input mouse down")
 	}
 	updated, cmd = updated.updateNormalMode(tea.MouseMotionMsg(tea.Mouse{X: inputPromptWidth + 5, Y: textY, Button: tea.MouseLeft}))
 	if cmd != nil {
@@ -125,6 +141,9 @@ func TestReplInputSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
 	}
 	if strings.Contains(updated.selection.selectedText(), "hello") {
 		t.Fatalf("expected viewport selection to stay clear, got %q", updated.selection.selectedText())
+	}
+	if !updated.textarea.Focused() {
+		t.Fatal("expected input click to focus textarea")
 	}
 }
 

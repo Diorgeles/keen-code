@@ -48,7 +48,7 @@ func (h *InputHistory) NavigateUp(current string) (string, bool) {
 }
 
 func (h *InputHistory) NavigateDown() (string, bool) {
-	if h.idx == -1 {
+	if len(h.entries) == 0 || h.idx == -1 {
 		return "", false
 	}
 	if h.idx == len(h.entries)-1 {

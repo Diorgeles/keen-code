@@ -301,6 +301,7 @@ func (m *replModel) handleSelectionMouseDown(msg tea.MouseClickMsg) (bool, tea.C
 		return false, nil
 	}
 
+	m.blurInput()
 	clickCount := m.selection.registerClick(mouse.X, mouse.Y)
 	switch clickCount {
 	case 2:
@@ -330,6 +331,7 @@ func (m *replModel) handleInputSelectionMouseDown(msg tea.MouseClickMsg) (bool, 
 		return false, nil
 	}
 
+	cmd := m.focusInput()
 	m.inputSelection.setContent(m.textarea.Value())
 	m.selection.clear()
 	x, y := m.inputSelectionLocalPosition(mouse.X, mouse.Y)
@@ -347,7 +349,7 @@ func (m *replModel) handleInputSelectionMouseDown(msg tea.MouseClickMsg) (bool, 
 	default:
 		m.inputSelection.start(x, y, m.textarea.ScrollYOffset())
 	}
-	return true, nil
+	return true, cmd
 }
 
 func (m *replModel) handleSelectionMouseDrag(msg tea.MouseMotionMsg) bool {

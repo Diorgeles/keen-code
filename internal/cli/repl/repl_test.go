@@ -285,8 +285,26 @@ func TestBuildInitialScreen_HighlightsModelOnly(t *testing.T) {
 	}
 }
 
+func TestInitialModel_DimsBlurredPromptGlyph(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	m := initialModel(&replContext{version: "test", workingDir: t.TempDir(), cfg: &config.ResolvedConfig{}}, nil, false)
+	styles := m.textarea.Styles()
+
+	got := styles.Blurred.Prompt.Render(" ▶ ")
+	want := repltheme.InputRuleBlurredStyle.Render(" ▶ ")
+	if got != want {
+		t.Fatalf("expected blurred prompt glyph to use blurred input style, got %q want %q", got, want)
+	}
+}
+
 func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
-	wide := renderInputArea("▶ hello", 80)
+	focusedWide := renderInputArea("▶ hello", 80, true)
+	blurredWide := renderInputArea("▶ hello", 80, false)
+	if focusedWide == blurredWide {
+		t.Fatal("expected focused and blurred input areas to render differently")
+	}
+
+	wide := focusedWide
 	wideLines := strings.Split(strings.TrimRight(wide, "\n"), "\n")
 	if len(wideLines) != 3 {
 		t.Fatalf("expected 3 input-area lines, got %v", wideLines)
@@ -298,7 +316,7 @@ func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
 		t.Fatalf("expected wide input rules to match viewport width, got width %d", wideRuleWidth)
 	}
 
-	narrow := renderInputArea("▶ hi", 24)
+	narrow := renderInputArea("▶ hi", 24, true)
 	narrowLines := strings.Split(strings.TrimRight(narrow, "\n"), "\n")
 	if len(narrowLines) != 3 {
 		t.Fatalf("expected 3 narrow input-area lines, got %v", narrowLines)

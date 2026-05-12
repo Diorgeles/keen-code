@@ -311,6 +311,96 @@ func TestHandleKeyMsg_IgnoresTypingDuringCompaction(t *testing.T) {
 	}
 }
 
+func TestHandleKeyMsg_TabTogglesInputFocus(t *testing.T) {
+	m := newTestModel()
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyTab})
+	if newM.textarea.Focused() {
+		t.Fatal("expected tab to blur focused input")
+	}
+	if cmd != nil {
+		t.Fatal("expected nil cmd when blurring input")
+	}
+
+	newM, cmd = newM.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyTab})
+	if !newM.textarea.Focused() {
+		t.Fatal("expected tab to focus blurred input")
+	}
+	if cmd == nil {
+		t.Fatal("expected focus command when focusing input")
+	}
+}
+
+func TestHandleKeyMsg_InputFocusUpDownDoesNotScrollViewportWhenHistoryExhausted(t *testing.T) {
+	m := newTestModel()
+	m.textarea.SetValue("draft")
+	offset := scrollViewportAwayFromBottom(t, &m)
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyUp})
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if got := newM.viewport.YOffset(); got != offset {
+		t.Fatalf("expected input-focused up key not to scroll viewport, got offset %d want %d", got, offset)
+	}
+	if newM.textarea.Value() != "draft" {
+		t.Fatalf("expected exhausted history to leave input unchanged, got %q", newM.textarea.Value())
+	}
+
+	newM, cmd = m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if got := newM.viewport.YOffset(); got != offset {
+		t.Fatalf("expected input-focused down key not to scroll viewport, got offset %d want %d", got, offset)
+	}
+}
+
+func TestHandleKeyMsg_ViewportFocusUpDownScrolls(t *testing.T) {
+	m := newTestModel()
+	m.blurInput()
+	m.viewport.SetHeight(6)
+	for range 40 {
+		m.output.AddLine("existing output")
+	}
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	bottomOffset := m.viewport.YOffset()
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyUp})
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if newM.viewport.YOffset() >= bottomOffset {
+		t.Fatalf("expected viewport-focused up key to scroll up from %d, got %d", bottomOffset, newM.viewport.YOffset())
+	}
+	upOffset := newM.viewport.YOffset()
+
+	newM, cmd = newM.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if newM.viewport.YOffset() <= upOffset {
+		t.Fatalf("expected viewport-focused down key to scroll down from %d, got %d", upOffset, newM.viewport.YOffset())
+	}
+}
+
+func TestHandleKeyMsg_ViewportFocusTypingFocusesInputAndTypes(t *testing.T) {
+	m := newTestModel()
+	m.blurInput()
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	if !newM.textarea.Focused() {
+		t.Fatal("expected typing to focus input")
+	}
+	if newM.textarea.Value() != "x" {
+		t.Fatalf("expected typed character in input, got %q", newM.textarea.Value())
+	}
+	if cmd == nil {
+		t.Fatal("expected focus/update command")
+	}
+}
+
 func TestHandleKeyMsg_CtrlJ(t *testing.T) {
 	ta := textarea.New()
 	ta.Focus()

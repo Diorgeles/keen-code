@@ -361,7 +361,26 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			return result, cmd
 		}
 	} else if keyMsg.String() == keyTab {
-		return *m, nil
+		return *m, m.toggleInputFocus()
+	}
+
+	if !m.textarea.Focused() {
+		if handled := m.handleViewportFocusKeyMsg(keyMsg); handled {
+			return *m, nil
+		}
+		if keyMsg.Text != "" {
+			cmd := m.focusInput()
+			var textCmd tea.Cmd
+			m.textarea, textCmd = m.textarea.Update(keyMsg)
+			input := m.textarea.Value()
+			if strings.HasPrefix(input, "/") {
+				m.suggestion.RefreshWithSkills(input, m.skillSuggestions())
+			} else {
+				m.refreshFileSuggestions(input)
+			}
+			m.adjustTextareaHeight()
+			return *m, tea.Batch(cmd, textCmd)
+		}
 	}
 
 	switch keyMsg.String() {
@@ -393,10 +412,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 				m.textarea.SetValue(val)
 				m.textarea.MoveToEnd()
 				m.adjustTextareaHeight()
-				return *m, nil
 			}
-			m.viewport.ScrollUp(1)
-			m.userScrolled = !m.viewport.AtBottom()
 			return *m, nil
 		}
 	case keyDown, keyShiftDown:
@@ -405,10 +421,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 				m.textarea.SetValue(val)
 				m.textarea.MoveToEnd()
 				m.adjustTextareaHeight()
-				return *m, nil
 			}
-			m.viewport.ScrollDown(1)
-			m.userScrolled = !m.viewport.AtBottom()
 			return *m, nil
 		}
 	case keyPageUp:

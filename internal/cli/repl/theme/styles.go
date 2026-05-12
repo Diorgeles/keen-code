@@ -80,8 +80,9 @@ var (
 			Bold(true).
 			Foreground(PrimaryColor).
 			MarginTop(2)
-	InputRuleStyle      = lipgloss.NewStyle().Foreground(PrimaryColor)
-	UserInputBlockStyle = lipgloss.NewStyle().
+	InputRuleStyle        = lipgloss.NewStyle().Foreground(PrimaryColor)
+	InputRuleBlurredStyle = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
+	UserInputBlockStyle   = lipgloss.NewStyle().
 				Background(UserInputBlockBackground).
 				Padding(1, 1)
 
