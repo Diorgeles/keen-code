@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-05-12
+
+### Added
+- Toggle focus between input and viewport via Tab and mouse clicks.
+- Route up/down keys based on focused region.
+- Dim input chrome and prompt glyph when focus is in the viewport.
+
+### Changed
+- Merged PR #41: add basic benchmark.
+
 ## [0.16.1] - 2026-05-12
 
 ### Added
@@ -299,7 +309,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/mochow13/keen-code/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/mochow13/keen-code/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/mochow13/keen-code/compare/v0.15.3...v0.16.0
 [0.15.3]: https://github.com/mochow13/keen-code/compare/v0.15.2...v0.15.3
