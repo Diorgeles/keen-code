@@ -38,7 +38,7 @@ IMPORTANT:
 - Always read the file first to get the exact current content.
 - oldString must match the file content exactly, including whitespace and indentation.
 - If oldString is not found, the edit fails. Copy text precisely from read_file output.
-- Do not use line numbers in oldString; use the actual text content.`
+- read_file prefixes each line as "N: text". Do not include that line number prefix in oldString.`
 }
 
 func (t *EditFileTool) InputSchema() map[string]any {

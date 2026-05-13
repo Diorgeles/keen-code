@@ -56,6 +56,24 @@ func TestReadFileTool_InputSchema(t *testing.T) {
 		t.Error("path type should be 'string'")
 	}
 
+	offsetProp, ok := properties["offset"].(map[string]any)
+	if !ok {
+		t.Fatal("offset property should be a map")
+	}
+
+	if offsetProp["type"] != "integer" {
+		t.Error("offset type should be 'integer'")
+	}
+
+	limitProp, ok := properties["limit"].(map[string]any)
+	if !ok {
+		t.Fatal("limit property should be a map")
+	}
+
+	if limitProp["type"] != "integer" {
+		t.Error("limit type should be 'integer'")
+	}
+
 	if schema["additionalProperties"] != false {
 		t.Error("additionalProperties should be false")
 	}
@@ -75,6 +93,10 @@ func TestReadFileTool_Execute_InvalidInput(t *testing.T) {
 		{"missing path", map[string]any{}},
 		{"non-string path", map[string]any{"path": 123}},
 		{"empty path", map[string]any{"path": ""}},
+		{"zero offset", map[string]any{"path": "test.txt", "offset": 0}},
+		{"fractional offset", map[string]any{"path": "test.txt", "offset": 1.5}},
+		{"zero limit", map[string]any{"path": "test.txt", "limit": 0}},
+		{"string limit", map[string]any{"path": "test.txt", "limit": "10"}},
 	}
 
 	for _, tt := range tests {
@@ -110,12 +132,21 @@ func TestReadFileTool_Execute_GrantedRead(t *testing.T) {
 		t.Fatal("result should be a map")
 	}
 
-	if resultMap["content"] != content {
-		t.Errorf("expected content %q, got %q", content, resultMap["content"])
+	expectedContent := "1: Hello, World!"
+	if resultMap["content"] != expectedContent {
+		t.Errorf("expected content %q, got %q", expectedContent, resultMap["content"])
 	}
 
 	if resultMap["bytes_read"] != len(content) {
 		t.Errorf("expected bytes_read %d, got %v", len(content), resultMap["bytes_read"])
+	}
+
+	if resultMap["total_lines"] != 1 {
+		t.Errorf("expected total_lines 1, got %v", resultMap["total_lines"])
+	}
+
+	if resultMap["truncated"] != false {
+		t.Errorf("expected truncated false, got %v", resultMap["truncated"])
 	}
 }
 
@@ -148,8 +179,9 @@ func TestReadFileTool_Execute_PendingRead_Allow(t *testing.T) {
 		t.Fatal("result should be a map")
 	}
 
-	if resultMap["content"] != content {
-		t.Errorf("expected content %q, got %q", content, resultMap["content"])
+	expectedContent := "1: Hello from other dir!"
+	if resultMap["content"] != expectedContent {
+		t.Errorf("expected content %q, got %q", expectedContent, resultMap["content"])
 	}
 }
 
@@ -317,8 +349,9 @@ func TestReadFileTool_Execute_JSONFile(t *testing.T) {
 		t.Fatal("result should be a map")
 	}
 
-	if resultMap["content"] != content {
-		t.Errorf("expected content %q, got %q", content, resultMap["content"])
+	expectedContent := `1: {"key": "value"}`
+	if resultMap["content"] != expectedContent {
+		t.Errorf("expected content %q, got %q", expectedContent, resultMap["content"])
 	}
 }
 
@@ -345,8 +378,72 @@ func TestReadFileTool_Execute_RelativePath(t *testing.T) {
 		t.Fatal("result should be a map")
 	}
 
-	if resultMap["content"] != content {
-		t.Errorf("expected content %q, got %q", content, resultMap["content"])
+	expectedContent := "1: Hello, relative path!"
+	if resultMap["content"] != expectedContent {
+		t.Errorf("expected content %q, got %q", expectedContent, resultMap["content"])
+	}
+}
+
+func TestReadFileTool_Execute_OffsetAndLimit(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	content := "line one\nline two\nline three\nline four\n"
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	guard := filesystem.NewGuard(tmpDir, nil)
+	tool := NewReadFileTool(guard, nil)
+	ctx := context.Background()
+
+	input := map[string]any{"path": testFile, "offset": 2, "limit": 2}
+	result, err := tool.Execute(ctx, input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatal("result should be a map")
+	}
+
+	expectedContent := "2: line two\n3: line three"
+	if resultMap["content"] != expectedContent {
+		t.Errorf("expected content %q, got %q", expectedContent, resultMap["content"])
+	}
+
+	if resultMap["offset"] != 2 {
+		t.Errorf("expected offset 2, got %v", resultMap["offset"])
+	}
+
+	if resultMap["limit"] != 2 {
+		t.Errorf("expected limit 2, got %v", resultMap["limit"])
+	}
+
+	if resultMap["total_lines"] != 4 {
+		t.Errorf("expected total_lines 4, got %v", resultMap["total_lines"])
+	}
+
+	if resultMap["truncated"] != true {
+		t.Errorf("expected truncated true, got %v", resultMap["truncated"])
+	}
+}
+
+func TestReadFileTool_Execute_OffsetOutOfRange(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("only line"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	guard := filesystem.NewGuard(tmpDir, nil)
+	tool := NewReadFileTool(guard, nil)
+	ctx := context.Background()
+
+	input := map[string]any{"path": testFile, "offset": 2}
+	_, err := tool.Execute(ctx, input)
+	if err == nil {
+		t.Error("expected error for out-of-range offset")
 	}
 }
 

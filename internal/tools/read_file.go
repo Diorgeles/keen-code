@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/user/keen-code/internal/filesystem"
 )
 
 const (
-	maxFileSize = 10_485_760 // 10MB
+	maxFileSize   = 10_485_760 // 10MB
+	defaultLimit  = 2000
+	maxLineLength = 2000
 )
 
 type ReadFileTool struct {
@@ -35,11 +38,12 @@ func (t *ReadFileTool) Description() string {
 - Use this when you know the exact file path and need its contents
 - Do not use this when you are unsure of the filename — use glob to find it first
 - Do not use this to search for content across files — use grep instead
+- By default, this returns up to 2000 lines from the start of the file
+- Use offset and limit to read a specific line range
 
 IMPORTANT:
-- The file must be valid UTF-8 text and under 10 MB. Binary files and files with
-invalid UTF-8 are rejected.
-- There is no pagination; the entire file is returned.`
+- The file must be valid UTF-8 text and under 10 MB. Binary files and files with invalid UTF-8 are rejected.
+- Content is returned with line numbers as "N: text". When copying text into edit_file oldString, do not include the line number prefix.`
 }
 
 func (t *ReadFileTool) InputSchema() map[string]any {
@@ -49,6 +53,14 @@ func (t *ReadFileTool) InputSchema() map[string]any {
 			"path": map[string]any{
 				"type":        "string",
 				"description": "Absolute or relative path to the file to read",
+			},
+			"offset": map[string]any{
+				"type":        "integer",
+				"description": "Optional 1-based line number to start reading from (defaults to 1)",
+			},
+			"limit": map[string]any{
+				"type":        "integer",
+				"description": "Optional maximum number of lines to return (defaults to 2000)",
 			},
 		},
 		"required":             []string{"path"},
@@ -70,6 +82,15 @@ func (t *ReadFileTool) Execute(ctx context.Context, input any) (any, error) {
 	path, ok := pathValue.(string)
 	if !ok || path == "" {
 		return nil, fmt.Errorf("invalid input: path must be a non-empty string")
+	}
+
+	offset, err := optionalPositiveInt(params, "offset", 1)
+	if err != nil {
+		return nil, err
+	}
+	limit, err := optionalPositiveInt(params, "limit", defaultLimit)
+	if err != nil {
+		return nil, err
 	}
 
 	resolvedPath, err := t.guard.ResolvePath(path)
@@ -95,16 +116,50 @@ func (t *ReadFileTool) Execute(ctx context.Context, input any) (any, error) {
 		}
 	}
 
-	content, err := readFileContent(resolvedPath)
+	rawContent, err := readFileContent(resolvedPath)
+	if err != nil {
+		return nil, err
+	}
+
+	content, totalLines, truncated, err := formatFileContent(rawContent, offset, limit)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]any{
-		"path":       resolvedPath,
-		"content":    string(content),
-		"bytes_read": len(content),
+		"path":        resolvedPath,
+		"content":     content,
+		"bytes_read":  len(rawContent),
+		"offset":      offset,
+		"limit":       limit,
+		"total_lines": totalLines,
+		"truncated":   truncated,
 	}, nil
+}
+
+func optionalPositiveInt(params map[string]any, name string, defaultValue int) (int, error) {
+	value, exists := params[name]
+	if !exists {
+		return defaultValue, nil
+	}
+
+	switch v := value.(type) {
+	case int:
+		if v > 0 {
+			return v, nil
+		}
+	case int64:
+		if v > 0 {
+			return int(v), nil
+		}
+	case float64:
+		i := int(v)
+		if v == float64(i) && i > 0 {
+			return i, nil
+		}
+	}
+
+	return 0, fmt.Errorf("invalid input: %s must be a positive integer", name)
 }
 
 func readFileContent(path string) ([]byte, error) {
@@ -147,4 +202,47 @@ func containsNullByte(content []byte) bool {
 		}
 	}
 	return false
+}
+
+func formatFileContent(content []byte, offset, limit int) (string, int, bool, error) {
+	lines := splitLines(string(content))
+	total := len(lines)
+	if total == 0 {
+		if offset > 1 {
+			return "", total, false, fmt.Errorf("offset %d is out of range for empty file", offset)
+		}
+		return "", total, false, nil
+	}
+	if offset > total {
+		return "", total, false, fmt.Errorf("offset %d is out of range for file with %d lines", offset, total)
+	}
+
+	start := offset - 1
+	end := start + limit
+	if end > total {
+		end = total
+	}
+	truncated := end < total
+
+	numbered := make([]string, 0, end-start)
+	for i, line := range lines[start:end] {
+		runes := []rune(line)
+		if len(runes) > maxLineLength {
+			line = string(runes[:maxLineLength]) + "... (line truncated)"
+		}
+		numbered = append(numbered, fmt.Sprintf("%d: %s", start+i+1, line))
+	}
+
+	return strings.Join(numbered, "\n"), total, truncated, nil
+}
+
+func splitLines(content string) []string {
+	if content == "" {
+		return nil
+	}
+	lines := strings.Split(content, "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
