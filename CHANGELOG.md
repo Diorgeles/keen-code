@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-05-13
+
+### Added
+- Paginate `read_file` output and add line number prefixes.
+- OpenCode usage scripts and restructured benchmark output with usage timestamp filtering.
+- Refined system prompt exploration guidance for efficient tool use.
+
+### Changed
+- Restructured benchmark layout.
+
 ## [0.16.2] - 2026-05-12
 
 ### Added
@@ -309,7 +319,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.16.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.16.3...HEAD
+[0.16.3]: https://github.com/mochow13/keen-code/compare/v0.16.2...v0.16.3
 [0.16.2]: https://github.com/mochow13/keen-code/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/mochow13/keen-code/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/mochow13/keen-code/compare/v0.15.3...v0.16.0
