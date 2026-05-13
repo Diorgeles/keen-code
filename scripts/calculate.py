@@ -3,9 +3,11 @@
 
 import argparse
 import csv
+import os
 import sys
 
 COST_DIVISOR = 100_000_000
+DEFAULT_CSV = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bench", "usage.csv")
 
 
 def normalize_session_id(session_id: str) -> str:
@@ -111,8 +113,8 @@ def main() -> None:
     parser.add_argument(
         "--csv",
         "-c",
-        default="usage.csv",
-        help="Usage CSV file exported by scripts/usage.py (default: usage.csv)",
+        default=DEFAULT_CSV,
+        help="Usage CSV file exported by scripts/usage.py (default: bench/usage.csv)",
     )
     args = parser.parse_args()
 

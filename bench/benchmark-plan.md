@@ -18,8 +18,9 @@ The first benchmark only executes tasks and saves normalized outputs. Usage and 
 - Use two separate worktrees for the benchmark:
   - one for Keen
   - one for OpenCode
-- Worktrees are created under `bench/worktrees/<run_id>/`.
-- Fail if `bench/worktrees/<run_id>/` or `bench/results/<run_id>/` already exists.
+- Each run is created under `bench/<run_id>/`.
+- Worktrees are created under `bench/<run_id>/worktrees/`.
+- Fail if `bench/<run_id>/` already exists.
 - Delete worktrees when the benchmark finishes.
 - Run tasks sequentially.
 - Generate tasks before running the benchmark, based on the target repository.
@@ -71,9 +72,12 @@ OpenCode emits newline-delimited JSON events, not a single JSON object. The harn
 bench/
   benchmark-plan.md
   run.sh
+  run.go
   tasks.json
-  results/
-    <run_id>/
+  usage.csv
+  <run_id>/
+    tasks.json
+    results/
       summary.json
       sessions.txt
       task-01.jsonl
@@ -81,26 +85,25 @@ bench/
       task-03.jsonl
       task-04.jsonl
       task-05.jsonl
-  worktrees/
-    <run_id>/
+    worktrees/
       keen/
       opencode/
 ```
 
-`bench/worktrees/<run_id>/` should be removed after the benchmark finishes, even if a task fails. `bench/results/<run_id>/` should remain.
+`bench/<run_id>/worktrees/` should be removed after the benchmark finishes, even if a task fails. `bench/<run_id>/tasks.json` and `bench/<run_id>/results/` should remain. `bench/usage.csv` stores the latest pulled OpenCode usage export and is replaced independently of benchmark runs.
 
 ## Command Shape
 
-Initial script interface:
+Runner interface:
 
 ```bash
-bench/run.sh --repo /path/to/target/repo --run-id bench-20260512-001
+go run bench/run.go --repo /path/to/target/repo --run-id bench-20260512-001
 ```
 
 Optional flags that are useful but not required in the first version:
 
 ```bash
-bench/run.sh \
+go run bench/run.go \
   --repo /path/to/target/repo \
   --run-id bench-20260512-001 \
   --tasks bench/tasks.json \
@@ -114,7 +117,7 @@ Defaults:
 
 ## Task Generation
 
-Tasks should be generated before the benchmark run, but they must be based on the repository being benchmarked. This is a separate preparation step, not part of `bench/run.sh`.
+Tasks should be generated before the benchmark run, but they must be based on the repository being benchmarked. This is a separate preparation step, not part of the runner.
 
 The intended flow is:
 
@@ -168,16 +171,15 @@ For a target repo `/path/to/repo` and run id `bench-20260512-001`:
 1. Verify `/path/to/repo` is a git repo.
 2. Verify `main` exists.
 3. Fail if target repo has no `main` branch.
-4. Fail if `bench/results/bench-20260512-001` exists.
-5. Fail if `bench/worktrees/bench-20260512-001` exists.
-6. Create:
+4. Fail if `bench/bench-20260512-001` exists.
+5. Create:
 
 ```bash
-git -C /path/to/repo worktree add /path/to/keen-code/bench/worktrees/bench-20260512-001/keen main
-git -C /path/to/repo worktree add /path/to/keen-code/bench/worktrees/bench-20260512-001/opencode main
+git -C /path/to/repo worktree add /path/to/keen-code/bench/bench-20260512-001/worktrees/keen main
+git -C /path/to/repo worktree add /path/to/keen-code/bench/bench-20260512-001/worktrees/opencode main
 ```
 
-7. Record the checked-out commit for each worktree.
+6. Record the checked-out commit for each worktree.
 
 If the target repo already has `main` checked out and git refuses to add duplicate worktrees for the same branch, the implementation should create detached worktrees from `main`:
 
@@ -203,7 +205,7 @@ For each task:
    8. Append normalized turn results.
    9. Check `git status --short` in both worktrees.
    10. If either worktree is dirty, mark the task as failed because the task was expected to be read-only.
-3. Append one normalized JSON object per tool turn to `bench/results/<run_id>/<task_id>.jsonl`.
+3. Append one normalized JSON object per tool turn to `bench/<run_id>/results/<task_id>.jsonl`.
 
 The per-task JSONL file should contain both tools in the same file, ordered by execution:
 
@@ -346,44 +348,38 @@ task-01  ses_...
 task-02  ses_...
 
 Results:
-bench/results/bench-20260512-001
+bench/bench-20260512-001/results
 ```
 
 Also save the same information to:
 
 ```text
-bench/results/<run_id>/sessions.txt
+bench/<run_id>/results/sessions.txt
 ```
 
 ## Initial Implementation Choice
 
-Use a shell script for the first version:
+Use the Go runner in `bench/run.go`:
 
-- It is the smallest implementation.
 - It directly exercises the real CLI commands.
-- It avoids adding product code or Go package structure.
-- It is easy to replace later with Go if the benchmark grows.
-
-The shell script can use `jq` for:
-
-- validating `tasks.json`
-- parsing Keen JSON
-- collapsing OpenCode NDJSON
-- writing normalized JSON
+- It validates `tasks.json`.
+- It parses Keen JSON and OpenCode NDJSON.
+- It writes normalized JSONL results, summary metadata, and session IDs.
 
 ## Verification
 
 Manual smoke test:
 
 ```bash
-bench/run.sh --repo /path/to/repo --run-id bench-smoke-001
+go run bench/run.go --repo /path/to/repo --run-id bench-smoke-001 --smoke
 ```
 
 Verify:
 
 - Worktrees are created from `main`.
 - Worktrees are removed after completion.
-- `bench/results/<run_id>/task-*.jsonl` files exist.
+- `bench/<run_id>/tasks.json` exists.
+- `bench/<run_id>/results/task-*.jsonl` files exist.
 - There are no separate Keen/OpenCode output files.
 - Parse failures or command failures include raw stdout/stderr in the task JSONL record.
 - `sessions.txt` contains all Keen and OpenCode session IDs.
