@@ -36,7 +36,9 @@ should be your first step when exploring a codebase.
 
 Tips:
 - Results are capped at 1000 files. Narrow your pattern or path if you hit this limit.
-- Batch multiple patterns in parallel calls when exploring.
+- When exploring, issue multiple likely glob patterns in parallel instead of trying one pattern at a time.
+- Prefer specific roots and patterns over broad repository-wide scans.
+- After globbing, read only the files most likely to answer the user's question.
 
 Examples: '*.go', '**/*.md', 'src/**/*_test.go', 'cmd/*/main.go'.`
 }

@@ -54,6 +54,11 @@ Do not use this when you already know the file — use read_file instead.
 Tips:
 - Escape regex metacharacters when searching for literal strings
 - Narrow your search with path and include to avoid scanning the entire tree 
+- Batch related grep searches in parallel when exploring a topic
+- Use grep for discovery, then read only the most relevant files
+- Do not repeatedly grep to exhaust all matches unless the user asks for exhaustive coverage
+- If there are many matches, narrow by path/include before reading files
+- Use output_mode=file first when you only need candidate files
 - Results are capped at 1000 matches. Use include and path to stay within this limit`
 }
 

@@ -39,6 +39,10 @@ dedicated tools when they exist:
 - glob for finding files by name
 - grep for searching file contents
 
+Do not use bash for reading files, file search, or content search when read_file,
+glob, or grep can do it. For read-only investigation, prefer dedicated tools
+because their output is structured for later reasoning.
+
 Use this for: running tests, installing dependencies, git operations, build commands,
 and other shell-native tasks not covered by dedicated tools.
 

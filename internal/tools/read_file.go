@@ -40,6 +40,10 @@ func (t *ReadFileTool) Description() string {
 - Do not use this to search for content across files — use grep instead
 - By default, this returns up to 2000 lines from the start of the file
 - Use offset and limit to read a specific line range
+- Call this tool in parallel when you already know multiple files you need to inspect
+- Avoid many tiny repeated reads. If you need surrounding context, read a larger window with limit
+- If the result is truncated, continue with offset only when the missing section is needed
+- For code tracing, read the primary implementation file first, then callers/tests only if needed
 
 IMPORTANT:
 - The file must be valid UTF-8 text and under 10 MB. Binary files and files with invalid UTF-8 are rejected.
