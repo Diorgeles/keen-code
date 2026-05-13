@@ -1,4 +1,5 @@
 keen-cli
 keen
 .env
-scripts/
+scripts/.venv
+bench/

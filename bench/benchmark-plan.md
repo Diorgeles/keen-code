@@ -22,11 +22,15 @@ The first benchmark only executes tasks and saves normalized outputs. Usage and 
 - Fail if `bench/worktrees/<run_id>/` or `bench/results/<run_id>/` already exists.
 - Delete worktrees when the benchmark finishes.
 - Run tasks sequentially.
-- For now, use 5 read-only multi-turn tasks.
+- Generate tasks before running the benchmark, based on the target repository.
+- Task generation is not part of the benchmark script.
+- The benchmark script assumes the tasks file already exists.
+- For now, generate 5 read-only multi-turn tasks.
 - Each task should contain 5 to 10 user turns.
 - Task definitions will live in `bench/tasks.json`.
-- Each task produces one combined normalized output file containing both Keen and OpenCode results.
-- Raw CLI outputs should also be saved for debugging parser or normalization issues.
+- Each task produces one combined JSONL output file containing both Keen and OpenCode turn results.
+- Do not create separate output files for Keen and OpenCode.
+- Do not create separate raw output files per tool. If raw stdout/stderr is needed for debugging, embed it in the JSONL record for that tool turn.
 - Multi-turn state must be preserved by passing the session ID returned by each tool into later turns.
 - No permission prompt should be required.
 - If either tool requests permission, the benchmark should fail that task/run.
@@ -72,17 +76,11 @@ bench/
     <run_id>/
       summary.json
       sessions.txt
-      task-01.json
-      task-02.json
-      task-03.json
-      task-04.json
-      task-05.json
-      raw/
-        task-01/
-          keen-turn-01.json
-          keen-turn-02.json
-          opencode-turn-01.ndjson
-          opencode-turn-02.ndjson
+      task-01.jsonl
+      task-02.jsonl
+      task-03.jsonl
+      task-04.jsonl
+      task-05.jsonl
   worktrees/
     <run_id>/
       keen/
@@ -114,9 +112,27 @@ Defaults:
 - `--tasks`: `bench/tasks.json`
 - `--opencode-model`: `opencode-go/kimi-k2.6`
 
+## Task Generation
+
+Tasks should be generated before the benchmark run, but they must be based on the repository being benchmarked. This is a separate preparation step, not part of `bench/run.sh`.
+
+The intended flow is:
+
+1. Inspect the target repo.
+2. Identify important read-only investigation areas, such as CLI entry points, configuration flow, session handling, tool registration, tests, or package boundaries.
+3. Generate 5 fixed multi-turn tasks for that specific repo.
+4. Save them to `bench/tasks.json`.
+5. Run the benchmark using that generated `bench/tasks.json`.
+
+Task generation should happen once per benchmark target/revision. After generation, both Keen and OpenCode must receive the exact same saved tasks.
+
+The benchmark script must not generate or modify tasks. It should only validate that the configured tasks file exists and has the expected schema.
+
+The generated tasks should be preserved with the benchmark results so the run is reproducible.
+
 ## Task File
 
-`bench/tasks.json` should contain fixed benchmark tasks.
+`bench/tasks.json` should contain fixed benchmark tasks generated from the target repo.
 
 Proposed schema:
 
@@ -139,6 +155,7 @@ Proposed schema:
 Rules for tasks:
 
 - Read-only only.
+- Based on the target repository's actual structure and source files.
 - Avoid requests to edit files, run formatters, commit changes, install dependencies, or change config.
 - Prefer repository-understanding tasks that require navigating code.
 - Make Keen and OpenCode answer the same prompts in the same order.
@@ -182,11 +199,20 @@ For each task:
    4. Run OpenCode in the OpenCode worktree.
    5. Parse OpenCode NDJSON.
    6. Store OpenCode session ID from the first event and pass it to later turns.
-   7. Save raw outputs for both tools.
+   7. Append normalized output for both tools to the same task JSONL file.
    8. Append normalized turn results.
    9. Check `git status --short` in both worktrees.
    10. If either worktree is dirty, mark the task as failed because the task was expected to be read-only.
-3. Write `bench/results/<run_id>/<task_id>.json`.
+3. Append one normalized JSON object per tool turn to `bench/results/<run_id>/<task_id>.jsonl`.
+
+The per-task JSONL file should contain both tools in the same file, ordered by execution:
+
+```text
+{"run_id":"bench-20260512-001","task_id":"task-01","tool":"keen","turn":1,...}
+{"run_id":"bench-20260512-001","task_id":"task-01","tool":"opencode","turn":1,...}
+{"run_id":"bench-20260512-001","task_id":"task-01","tool":"keen","turn":2,...}
+{"run_id":"bench-20260512-001","task_id":"task-01","tool":"opencode","turn":2,...}
+```
 
 Sequential ordering should be:
 
@@ -202,40 +228,21 @@ task-02 turn-01 opencode
 
 ## Normalized Output
 
-Each task output should contain both tools:
+Each task output should be JSONL. Every line is one normalized tool-turn result.
 
 ```json
 {
   "run_id": "bench-20260512-001",
-  "task": {
-    "id": "task-01",
-    "title": "Map CLI command flow"
-  },
+  "task_id": "task-01",
+  "task_title": "Map CLI command flow",
+  "tool": "keen",
+  "turn": 1,
+  "prompt": "Find the entry point...",
   "target_repo": {
     "path": "/path/to/repo",
     "ref": "main",
-    "keen_commit": "abc123",
-    "opencode_commit": "abc123"
+    "commit": "abc123"
   },
-  "tools": {
-    "keen": {
-      "session_id": "uuid-or-id",
-      "turns": []
-    },
-    "opencode": {
-      "session_id": "ses_...",
-      "turns": []
-    }
-  }
-}
-```
-
-Each turn should include:
-
-```json
-{
-  "turn": 1,
-  "prompt": "Find the entry point...",
   "command": ["keen", "run", "--format", "json", "..."],
   "cwd": "/path/to/worktree",
   "started_at": "2026-05-12T10:00:00Z",
@@ -253,13 +260,15 @@ Each turn should include:
     "total": 0,
     "cost": 0
   },
-  "raw_output": "raw/task-01/keen-turn-01.json",
-  "stderr": "",
+  "raw_stdout": "{\"session_id\":\"...\"}\n",
+  "raw_stderr": "",
   "dirty_status": ""
 }
 ```
 
 Usage fields may be zero or omitted if the tool does not provide them reliably. Dashboard usage remains the source of truth for cost comparison.
+
+`raw_stdout` and `raw_stderr` may be omitted on successful turns if the normalized fields are enough. On parse errors, permission failures, command failures, or non-zero exits, include them in the JSONL record so the single task output file still contains everything needed to debug that turn.
 
 ## Keen Normalization
 
@@ -374,8 +383,9 @@ Verify:
 
 - Worktrees are created from `main`.
 - Worktrees are removed after completion.
-- `bench/results/<run_id>/task-*.json` files exist.
-- Raw outputs exist.
+- `bench/results/<run_id>/task-*.jsonl` files exist.
+- There are no separate Keen/OpenCode output files.
+- Parse failures or command failures include raw stdout/stderr in the task JSONL record.
 - `sessions.txt` contains all Keen and OpenCode session IDs.
 - OpenCode session IDs match sessions visible in the OpenCode dashboard.
 - Dirty worktree status is empty for both tools after every turn.
