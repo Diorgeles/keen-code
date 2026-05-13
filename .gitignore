@@ -2,4 +2,7 @@ keen-cli
 keen
 .env
 scripts/.venv
-bench/
+bench/bench-*
+bench/swebench/
+bench/tasks.json
+bench/usage.csv
