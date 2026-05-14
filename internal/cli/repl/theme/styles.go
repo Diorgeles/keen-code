@@ -74,7 +74,10 @@ var (
 			BorderForeground(SecondaryColor).
 			Padding(1, 2).
 			MarginTop(1)
-	HighlightStyle = lipgloss.NewStyle().Foreground(SecondaryColor)
+	HighlightStyle   = lipgloss.NewStyle().Foreground(SecondaryColor)
+	MutedStyle       = lipgloss.NewStyle().Foreground(MutedColor)
+	PrimaryBoldStyle = lipgloss.NewStyle().Foreground(PrimaryColor).Bold(true)
+	AccentStyle      = lipgloss.NewStyle().Foreground(AccentColor)
 
 	PromptStyle = lipgloss.NewStyle().
 			Bold(true).

@@ -1,6 +1,7 @@
 keen-cli
 keen
 .env
+.keen/
 scripts/.venv
 bench/bench-*
 bench/swebench/

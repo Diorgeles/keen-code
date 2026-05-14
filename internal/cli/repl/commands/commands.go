@@ -3,19 +3,21 @@ package commands
 import "strings"
 
 const (
-	Btw          = "/btw"
-	Clear        = "/clear"
-	Compact      = "/compact"
-	Exit         = "/exit"
-	Help         = "/help"
-	Logout       = "/logout"
-	Model        = "/model"
-	New          = "/new"
-	Resume       = "/resume"
-	Sessions     = "/sessions"
-	ShowThinking = "/show-thinking"
-	Skills       = "/skills"
-	Thinking     = "/thinking"
+	Btw             = "/btw"
+	Clear           = "/clear"
+	Compact         = "/compact"
+	Exit            = "/exit"
+	Help            = "/help"
+	Logout          = "/logout"
+	Model           = "/model"
+	New             = "/new"
+	AllowPermission = "/allow-permission"
+	ResetPermission = "/reset-permission"
+	Resume          = "/resume"
+	Sessions        = "/sessions"
+	ShowThinking    = "/show-thinking"
+	Skills          = "/skills"
+	Thinking        = "/thinking"
 )
 
 type SlashCommand struct {
@@ -24,6 +26,7 @@ type SlashCommand struct {
 }
 
 var All = []SlashCommand{
+	{AllowPermission, "Always allow a tool (bypasses prompts, including dangerous bash)"},
 	{Btw, "Ask a quick side question (not added to conversation)"},
 	{Clear, "Clear the session and create a new one (also /new)"},
 	{Compact, "Compact conversation context"},
@@ -32,6 +35,7 @@ var All = []SlashCommand{
 	{Logout, "Sign out of the current OAuth provider"},
 	{Model, "Change provider or model"},
 	{New, "Start a new session (also /clear)"},
+	{ResetPermission, "Reset tool permissions to Keen's default mechanism"},
 	{Resume, "Open the session picker"},
 	{Sessions, "List saved sessions for this directory"},
 	{ShowThinking, "Toggle thinking token display (on|off)"},

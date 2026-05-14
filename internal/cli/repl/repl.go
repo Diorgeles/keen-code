@@ -53,6 +53,7 @@ type replModel struct {
 	output              *reploutput.OutputBuilder
 	modelSelection      *replwidgets.Model
 	permissionRequester *replpermissions.Requester
+	projectPerms        *config.ProjectPermissions
 	diffEmitter         *repltooling.DiffEmitter
 	sessions            *replSessionState
 	sessionPicker       *replwidgets.SessionPicker
@@ -121,7 +122,12 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 
 	appState := replappstate.New(llmClient, ctx.workingDir)
 
-	permissionRequester := replpermissions.NewRequester()
+	projectPerms, projectPermsErr := config.LoadProjectPermissions(ctx.workingDir)
+	if projectPermsErr != nil {
+		projectPerms = config.NewProjectPermissions()
+	}
+
+	permissionRequester := replpermissions.NewRequester(projectPerms)
 	diffEmitter := repltooling.NewDiffEmitter()
 	sessions := newReplSessionState(ctx.workingDir)
 
@@ -143,6 +149,10 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	for _, line := range initialLines {
 		output.AddLine(line)
 	}
+	if projectPermsErr != nil {
+		output.AddError("Failed to load .keen/permissions.json: "+projectPermsErr.Error()+" (using defaults)", repltheme.ErrorStyle)
+		output.AddEmptyLine()
+	}
 
 	vp := viewport.New(viewport.WithWidth(defaultWidth), viewport.WithHeight(24))
 
@@ -158,6 +168,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		streamHandler:       NewStreamHandler(mdRenderer),
 		mdRenderer:          mdRenderer,
 		permissionRequester: permissionRequester,
+		projectPerms:        projectPerms,
 		diffEmitter:         diffEmitter,
 		sessions:            sessions,
 		suggestion:          replwidgets.NewSuggestionModel(),

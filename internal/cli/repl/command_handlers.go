@@ -52,7 +52,7 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 			return *m, nil, true
 		}
 		if len(summaries) == 0 {
-			m.output.AddStyledLine("  No saved sessions for this directory.", lipgloss.NewStyle().Foreground(repltheme.MutedColor))
+			m.output.AddStyledLine("  No saved sessions for this directory.", repltheme.MutedStyle)
 			m.output.AddEmptyLine()
 			m.updateViewportContent()
 			m.viewport.GotoBottom()
@@ -81,6 +81,16 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	case input == replcommands.Skills || strings.HasPrefix(input, replcommands.Skills+" "):
 		m.textarea.Reset()
 		result := m.handleSkillsCommand(input)
+		return result, nil, true
+
+	case input == replcommands.AllowPermission || strings.HasPrefix(input, replcommands.AllowPermission+" "):
+		m.textarea.Reset()
+		result := m.handleToolPermissionCommand(input, replcommands.AllowPermission, true)
+		return result, nil, true
+
+	case input == replcommands.ResetPermission || strings.HasPrefix(input, replcommands.ResetPermission+" "):
+		m.textarea.Reset()
+		result := m.handleToolPermissionCommand(input, replcommands.ResetPermission, false)
 		return result, nil, true
 
 	case input == replcommands.Compact || strings.HasPrefix(input, replcommands.Compact+" "):
@@ -221,6 +231,64 @@ func (m *replModel) handleShowThinkingCommand(input string) replModel {
 	return *m
 }
 
+func (m *replModel) handleToolPermissionCommand(input, command string, allow bool) replModel {
+	args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, command)))
+	toolNames := m.registeredToolNames()
+
+	if len(args) == 0 {
+		m.output.AddStyledLine("  Usage: "+command+" <tool_names...>", repltheme.UsageHintStyle)
+		m.output.AddStyledLine("  Available tools: "+strings.Join(toolNames, ", "), repltheme.MutedStyle)
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	for _, name := range args {
+		if !slices.Contains(toolNames, name) {
+			m.output.AddError("Unknown tool: "+name, repltheme.ErrorStyle)
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m
+		}
+	}
+
+	for _, name := range args {
+		if allow {
+			m.projectPerms.Allow[name] = struct{}{}
+		} else {
+			delete(m.projectPerms.Allow, name)
+		}
+	}
+
+	if err := config.SaveProjectPermissions(m.ctx.workingDir, m.projectPerms); err != nil {
+		m.output.AddError("Failed to save permissions: "+err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	verb := "Allowed"
+	if !allow {
+		verb = "Reset"
+	}
+	m.output.AddStyledLine("  ✓ "+verb+": "+strings.Join(args, ", "), repltheme.HighlightStyle)
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
+}
+
+func (m *replModel) registeredToolNames() []string {
+	all := m.appState.GetToolRegistry().All()
+	names := make([]string, 0, len(all))
+	for _, t := range all {
+		names = append(names, t.Name())
+	}
+	slices.Sort(names)
+	return names
+}
+
 func (m *replModel) handleSkillsCommand(input string) replModel {
 	args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, replcommands.Skills)))
 	discovery := m.appState.GetSkills()
@@ -231,9 +299,9 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 	}
 
 	if len(args) == 0 || (len(args) == 1 && args[0] == "list") {
-		m.output.AddStyledLine("  Available Skills\n", lipgloss.NewStyle().Foreground(repltheme.MutedColor).Bold(true))
+		m.output.AddStyledLine("  Available Skills\n", repltheme.MutedStyle.Bold(true))
 		if len(discovery.Skills) == 0 {
-			m.output.AddStyledLine("    No skills found.", lipgloss.NewStyle().Foreground(repltheme.MutedColor))
+			m.output.AddStyledLine("    No skills found.", repltheme.MutedStyle)
 		} else {
 			m.addSkillTable(discovery.Skills, cfg)
 		}
@@ -318,9 +386,9 @@ func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
 		rows = append(rows, []string{skill.Name, status, skill.Description})
 	}
 
-	headerStyle := lipgloss.NewStyle().Foreground(repltheme.MutedColor).Bold(true)
-	nameStyle := lipgloss.NewStyle().Foreground(repltheme.PrimaryColor).Bold(true)
-	disabledStatusStyle := lipgloss.NewStyle().Foreground(repltheme.AccentColor)
+	headerStyle := repltheme.MutedStyle.Bold(true)
+	nameStyle := repltheme.PrimaryBoldStyle
+	disabledStatusStyle := repltheme.AccentStyle
 
 	rendered := table.New().
 		Headers("Skill", "Status", "Description").

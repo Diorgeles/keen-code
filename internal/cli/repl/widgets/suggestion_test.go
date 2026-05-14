@@ -14,11 +14,17 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := replcommands.Filter("/")
-	if len(got) != 13 {
-		t.Fatalf("expected 13 commands, got %d", len(got))
+	if len(got) != 15 {
+		t.Fatalf("expected 15 commands, got %d", len(got))
 	}
-	if got[0].Name != "/btw" || got[1].Name != "/clear" || got[2].Name != "/compact" || got[3].Name != "/exit" || got[4].Name != "/help" || got[5].Name != "/logout" || got[6].Name != "/model" || got[7].Name != "/new" || got[8].Name != "/resume" || got[9].Name != "/sessions" || got[10].Name != "/show-thinking" || got[11].Name != "/skills" || got[12].Name != "/thinking" {
-		t.Errorf("unexpected order: %v", got)
+	want := []string{
+		"/allow-permission", "/btw", "/clear", "/compact", "/exit", "/help", "/logout", "/model", "/new",
+		"/reset-permission", "/resume", "/sessions", "/show-thinking", "/skills", "/thinking",
+	}
+	for i, name := range want {
+		if got[i].Name != name {
+			t.Errorf("position %d: want %q, got %q", i, name, got[i].Name)
+		}
 	}
 }
 

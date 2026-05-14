@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync/atomic"
+
+	"github.com/user/keen-code/internal/config"
 )
 
 type Status string
@@ -37,23 +39,29 @@ type Requester struct {
 	pending             *Request
 	sessionAllowedTools map[string]bool
 	autoApprove         bool
+	projectPerms        *config.ProjectPermissions
 }
 
-func NewRequester() *Requester {
+func NewRequester(projectPerms *config.ProjectPermissions) *Requester {
 	return &Requester{
 		requestChan:         make(chan *Request, 1),
 		sessionAllowedTools: make(map[string]bool),
+		projectPerms:        projectPerms,
 	}
 }
 
 func NewAutoApproveRequester() *Requester {
-	r := NewRequester()
+	r := NewRequester(nil)
 	r.autoApprove = true
 	return r
 }
 
 func (r *Requester) RequestPermission(ctx context.Context, toolName, path, resolvedPath string, isDangerous bool) (bool, error) {
 	if r.autoApprove {
+		return true, nil
+	}
+
+	if r.projectPerms != nil && r.projectPerms.Allow.Contains(toolName) {
 		return true, nil
 	}
 

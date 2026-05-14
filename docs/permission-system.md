@@ -199,3 +199,27 @@ Dangerous commands include:
 - Git operations that modify repository state
 - Process termination
 - System modifications
+
+Non-dangerous bash commands are auto-granted when the working directory check passes. The only interactive prompt for `bash` is the dangerous-command prompt.
+
+## Project-Level Allow List
+
+Users can pre-allow specific tools for the current project via the `/allow-permission` command. Settings are stored in `.keen/permissions.json`:
+
+```json
+{
+  "allow": ["bash"]
+}
+```
+
+- Tools in `allow` skip the interactive prompt entirely (including the dangerous-command prompt for `bash`). The filesystem guard still applies — system directories, `.gitignore`d files, and dotfiles under `$HOME` remain blocked.
+- Tools absent from `allow` follow the normal mechanism described above.
+
+`/reset-permission <tool_names...>` removes tools from the allow list, restoring default behavior.
+
+The lookup order inside `RequestPermission` is:
+
+1. `autoApprove` (headless mode) → grant
+2. project `allow` list → grant
+3. session-allowed tools (non-dangerous only) → grant
+4. prompt the user

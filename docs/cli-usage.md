@@ -9,10 +9,13 @@ Keen Code provides slash commands (prefixed with `/`) for controlling the agent.
 | `/btw <question>` | Ask a quick side question without adding it to the main conversation |
 | `/help` | Show available commands |
 | `/model` | Change provider or model |
+| `/allow-permission <tool_names...>` | Always allow these tools without prompting |
+| `/reset-permission <tool_names...>` | Reset tool permissions to Keen's default mechanism |
 | `/thinking <effort>` | Set thinking effort for the current model |
 | `/show-thinking [on\|off]` | Show, hide, or inspect thinking token display |
 | `/sessions` or `/resume` | Open the saved-session picker for the current directory |
-| `/skills [list\|reload\|<name> enable\|disable]` | List, reload, enable, or disable skills |
+| `/skills [list\|reload]` | List or reload skills |
+| `/skills <name> [enable\|disable]` | Enable or disable a skill |
 | `/<skill-name> [args...]` | Activate an enabled skill |
 | `/compact [prompt]` | Compact conversation context; provide a prompt to guide what to retain |
 | `/clear` or `/new` | Clear the current session and start a new one |
@@ -66,6 +69,34 @@ Navigation:
 | `Esc` | Cancel model selection |
 
 API keys are masked while typed. If an API key already exists for the provider, press `Enter` on an empty API-key prompt to keep it.
+
+## `/allow-permission <tool_names...>`
+
+Always allow the listed tools without prompting. The setting is saved to `.keen/permissions.json` in the working directory and takes effect immediately.
+
+```text
+/allow-permission bash                  # Always run bash without prompting, including dangerous commands
+/allow-permission write_file edit_file  # Allow multiple tools at once
+```
+
+Running `/allow-permission` with no arguments prints usage and lists the available tool names.
+
+Notes:
+
+- `allow-permission` bypasses the interactive prompt but the filesystem guard still applies — the agent cannot reach system directories, `.gitignore`d files, or dotfiles under `$HOME` regardless of this setting.
+- For `bash`, non-dangerous commands are already auto-granted; the only effect of allowing it is suppressing the prompt for dangerous commands.
+- Settings are project-scoped and do not affect other working directories.
+
+## `/reset-permission <tool_names...>`
+
+Removes the project-level allow setting for the listed tools, falling back to Keen's default permission mechanism.
+
+```text
+/reset-permission bash
+/reset-permission write_file edit_file
+```
+
+Running `/reset-permission` with no arguments prints usage and lists the available tool names.
 
 ## `/thinking <effort>`
 

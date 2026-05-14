@@ -1,12 +1,16 @@
 package theme
 
-import "github.com/charmbracelet/glamour/ansi"
+import (
+	"strings"
+
+	"github.com/charmbracelet/glamour/ansi"
+)
 
 const markdownMargin = 2
 
 // MarkdownStyleConfig keeps assistant markdown on the terminal's default
 // foreground color while preserving markdown structure.
-func MarkdownStyleConfig() ansi.StyleConfig {
+func MarkdownStyleConfig(wordWrap int) ansi.StyleConfig {
 	return ansi.StyleConfig{
 		Document: ansi.StyleBlock{
 			StylePrimitive: ansi.StylePrimitive{
@@ -69,10 +73,10 @@ func MarkdownStyleConfig() ansi.StyleConfig {
 			Bold: boolPtr(true),
 		},
 		HorizontalRule: ansi.StylePrimitive{
-			Format: "\n--------\n",
+			Format: "\n" + strings.Repeat("─", markdownContentWidth(wordWrap)) + "\n",
 		},
 		Item: ansi.StylePrimitive{
-			BlockPrefix: "- ",
+			BlockPrefix: "• ",
 		},
 		Enumeration: ansi.StylePrimitive{
 			BlockPrefix: ". ",
@@ -104,14 +108,22 @@ func MarkdownStyleConfig() ansi.StyleConfig {
 			Chroma: markdownChromaStyle(),
 		},
 		Table: ansi.StyleTable{
-			CenterSeparator: stringPtr("|"),
-			ColumnSeparator: stringPtr("|"),
-			RowSeparator:    stringPtr("-"),
+			CenterSeparator: stringPtr("┼"),
+			ColumnSeparator: stringPtr("│"),
+			RowSeparator:    stringPtr("─"),
 		},
 		DefinitionDescription: ansi.StylePrimitive{
 			BlockPrefix: "\n* ",
 		},
 	}
+}
+
+func markdownContentWidth(wordWrap int) int {
+	width := wordWrap - markdownMargin*2
+	if width < 1 {
+		return 1
+	}
+	return width
 }
 
 func markdownChromaStyle() *ansi.Chroma {
