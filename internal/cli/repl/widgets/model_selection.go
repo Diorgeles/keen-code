@@ -401,7 +401,7 @@ func (m *Model) renderBaseURLInput() string {
 	providerName := m.getProviderName(m.SelectedProvider)
 	existingURL := m.getExistingBaseURL(m.SelectedProvider)
 
-	title := fmt.Sprintf("Base URL for %s (optional)", providerName)
+	title := fmt.Sprintf("Base URL for %s (optional), empty means use default", providerName)
 	if existingURL != "" {
 		title += "\n" + repltheme.HintStyle.Render("current: "+existingURL)
 	}

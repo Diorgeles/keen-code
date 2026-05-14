@@ -15,7 +15,7 @@ import (
 	"github.com/user/keen-code/internal/tools"
 )
 
-const anthropicMaxTokens = 65536
+const anthropicMaxTokens = 64000
 
 type anthropicStream interface {
 	Next() bool
@@ -203,6 +203,7 @@ func (c *AnthropicClient) collectTurn(
 
 	var assistantBlocks []anthropic.ContentBlockParamUnion
 	var usage *TokenUsage
+	var cacheReadInputTokens int64
 
 	for stream.Next() {
 		ev := stream.Current()
@@ -218,6 +219,7 @@ func (c *AnthropicClient) collectTurn(
 				"cache_creation_input_tokens", ms.Message.Usage.CacheCreationInputTokens,
 				"cache_read_input_tokens", ms.Message.Usage.CacheReadInputTokens,
 			)
+			cacheReadInputTokens = ms.Message.Usage.CacheReadInputTokens
 			if ms.Message.Usage.InputTokens > 0 {
 				totalInputTokens := int(ms.Message.Usage.InputTokens + ms.Message.Usage.CacheCreationInputTokens + ms.Message.Usage.CacheReadInputTokens)
 				cachedTokens := int(ms.Message.Usage.CacheCreationInputTokens + ms.Message.Usage.CacheReadInputTokens)
@@ -239,6 +241,7 @@ func (c *AnthropicClient) collectTurn(
 				"cache_creation_input_tokens", md.Usage.CacheCreationInputTokens,
 				"cache_read_input_tokens", md.Usage.CacheReadInputTokens,
 			)
+			cacheReadInputTokens = md.Usage.CacheReadInputTokens
 			if usage == nil && md.Usage.InputTokens > 0 {
 				usage = &TokenUsage{}
 			}
@@ -366,6 +369,7 @@ func (c *AnthropicClient) collectTurn(
 	if err := stream.Err(); err != nil {
 		return nil, nil, nil, fmt.Errorf("stream error: %w", err)
 	}
+	slog.Debug("Anthropic prompt cache hit", "cache_read_input_tokens", cacheReadInputTokens)
 
 	var toolUses []toolUseEntry
 	for _, block := range assistantBlocks {
@@ -441,6 +445,9 @@ func (c *AnthropicClient) StreamChat(
 				Messages:     msgParams,
 				Thinking:     thinking,
 				OutputConfig: outCfg,
+			}
+			if c.provider == Provider(config.ProviderAnthropic) && !oneShot {
+				params.CacheControl = anthropic.NewCacheControlEphemeralParam()
 			}
 			if len(systemBlocks) > 0 {
 				params.System = systemBlocks

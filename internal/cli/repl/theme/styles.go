@@ -66,12 +66,12 @@ var (
 
 	NormalStyle    = lipgloss.NewStyle()
 	TitleStyle     = lipgloss.NewStyle().Bold(true).Foreground(PrimaryColor)
-	TipStyle       = lipgloss.NewStyle().Foreground(TextDimColor).Italic(true)
+	TipStyle       = lipgloss.NewStyle().Foreground(TextDimColor).Bold(true)
 	HintStyle      = lipgloss.NewStyle().Foreground(TextDimColor)
 	UsageHintStyle = lipgloss.NewStyle().Foreground(SecondaryColor).Bold(true)
 	BoxStyle       = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(TextDimColor).
+			BorderForeground(SecondaryColor).
 			Padding(1, 2).
 			MarginTop(1)
 	HighlightStyle = lipgloss.NewStyle().Foreground(SecondaryColor)

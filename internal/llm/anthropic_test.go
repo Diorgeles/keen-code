@@ -1,11 +1,14 @@
 package llm
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -313,6 +316,39 @@ func TestAnthropicClient_StreamChat_IncludesCacheTokensInInputFootprint(t *testi
 	}
 	if usage.TotalTokens != 3520 {
 		t.Fatalf("expected total tokens 3520, got %d", usage.TotalTokens)
+	}
+}
+
+func TestAnthropicClient_StreamChat_LogsPromptCacheHits(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	defer slog.SetDefault(previousLogger)
+
+	events := []anthropic.MessageStreamEventUnion{
+		makeMessageStartEvent(0, 0, 0, 0),
+		makeMessageDeltaUsageEvent(8, 12, 0, 900),
+		makeTextDeltaEvent(0, "ok"),
+		makeContentBlockStopEvent(0),
+	}
+
+	client := newTestAnthropicClient(events)
+	eventCh, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for event := range eventCh {
+		if event.Type == StreamEventTypeError {
+			t.Fatalf("unexpected error: %v", event.Error)
+		}
+	}
+
+	got := logs.String()
+	if !strings.Contains(got, "Anthropic prompt cache hit") {
+		t.Fatalf("expected prompt cache hit log, got:\n%s", got)
+	}
+	if !strings.Contains(got, "cache_read_input_tokens=900") {
+		t.Fatalf("expected cache read token count in log, got:\n%s", got)
 	}
 }
 
@@ -747,6 +783,63 @@ func TestAnthropicClient_NoThinkingEffort_DisablesThinking(t *testing.T) {
 	}
 	if capturedParams.MaxTokens != anthropicMaxTokens {
 		t.Errorf("expected anthropicMaxTokens %d, got %d", anthropicMaxTokens, capturedParams.MaxTokens)
+	}
+}
+
+func TestAnthropicClient_AnthropicProviderEnablesAutomaticPromptCaching(t *testing.T) {
+	var capturedParams anthropic.MessageNewParams
+
+	c := &AnthropicClient{
+		provider: Provider(config.ProviderAnthropic),
+		model:    "claude-sonnet-4-6",
+	}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
+		capturedParams = params
+		return &mockAnthropicStream{events: []anthropic.MessageStreamEventUnion{
+			makeTextDeltaEvent(0, "ok"),
+			makeContentBlockStopEvent(0),
+		}}
+	}
+
+	eventCh, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if string(capturedParams.CacheControl.Type) != "ephemeral" {
+		t.Fatalf("expected automatic prompt cache control, got %q", capturedParams.CacheControl.Type)
+	}
+	if capturedParams.CacheControl.TTL != "" {
+		t.Fatalf("expected default cache TTL, got %q", capturedParams.CacheControl.TTL)
+	}
+}
+
+func TestAnthropicClient_AutomaticPromptCachingDisabledForCompatibleProviders(t *testing.T) {
+	var capturedParams anthropic.MessageNewParams
+
+	c := &AnthropicClient{
+		provider: Provider(config.ProviderMiniMax),
+		model:    "MiniMax-M2.7",
+	}
+	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
+		capturedParams = params
+		return &mockAnthropicStream{events: []anthropic.MessageStreamEventUnion{
+			makeTextDeltaEvent(0, "ok"),
+			makeContentBlockStopEvent(0),
+		}}
+	}
+
+	eventCh, err := c.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for range eventCh {
+	}
+
+	if string(capturedParams.CacheControl.Type) != "" {
+		t.Fatalf("expected no cache control for compatible provider, got %q", capturedParams.CacheControl.Type)
 	}
 }
 
