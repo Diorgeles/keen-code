@@ -21,12 +21,18 @@ Let the agent pull in external documentation, release notes, or API references w
 ## Tier 2 — Capability Expansion
 
 ### Native Code Review Mode
+
+✅ - Implemented using Agents Skills.
+
 A first-class way to review changes rather than implement them. Point it at unstaged changes, a diff, or specific files and get findings ordered by severity — bugs, regressions, risks, missing tests. Optionally generate fix suggestions without applying them automatically.
 
 ### MCP Support
+
 Add [Model Context Protocol](https://modelcontextprotocol.io) support so Keen can connect to external tools and systems through a standard layer. This is the extensibility path — instead of bundling one-off integrations, MCP lets users bring their own tools without waiting on core changes.
 
 ### Custom Commands and Reusable Workflows
+
+✅
 Define reusable slash commands that package common prompts or workflow entry points. Commands can live in the repo (team-shared) or in user config (personal). Think `/review`, `/release-notes`, `/fix-tests` — the kind of repeated tasks every team has. Agent `skills` can be leveraged for this.
 
 ### Persistent Memory

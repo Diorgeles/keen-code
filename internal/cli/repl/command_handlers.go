@@ -37,6 +37,11 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 		m.textarea.Reset()
 		return m.startModelSelection(), nil, true
 
+	case input == replcommands.Mode || strings.HasPrefix(input, replcommands.Mode+" "):
+		m.textarea.Reset()
+		result := m.handleModeCommand(input)
+		return result, nil, true
+
 	case input == replcommands.Logout:
 		m.textarea.Reset()
 		result := m.handleLogoutCommand()
@@ -201,6 +206,28 @@ func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil
+}
+
+func (m *replModel) handleModeCommand(input string) replModel {
+	arg := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(input, replcommands.Mode)))
+
+	switch arg {
+	case "plan":
+		m.setMode(llm.ModePlan)
+		m.output.AddStyledLine("  ✓ Mode set to: plan", repltheme.HighlightStyle)
+	case "build":
+		m.setMode(llm.ModeBuild)
+		m.output.AddStyledLine("  ✓ Mode set to: build", repltheme.HighlightStyle)
+	case "":
+		m.output.AddStyledLine("  Mode: "+string(m.currentMode())+" (use /mode plan|build)", repltheme.HighlightStyle)
+	default:
+		m.output.AddError("Usage: /mode plan|build", repltheme.ErrorStyle)
+	}
+
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
 }
 
 func (m *replModel) handleShowThinkingCommand(input string) replModel {
@@ -540,9 +567,11 @@ func (m *replModel) handleLogoutCommand() replModel {
 }
 
 func (m *replModel) handleClearCommand() replModel {
+	currentMode := m.currentMode()
 	m.appState.ClearMessages()
 	m.appState.ResetClientState()
 	m.appState.ClearContextMetrics()
+	m.appState.SetMode(currentMode)
 	m.sessions.resetSession()
 	if m.permissionRequester != nil {
 		m.permissionRequester.ResetSessionPermissions()
@@ -553,6 +582,9 @@ func (m *replModel) handleClearCommand() replModel {
 	initialLines := buildInitialScreen(m.ctx)
 	for _, line := range initialLines {
 		newOutput.AddLine(line)
+	}
+	if currentMode != llm.ModeBuild {
+		newOutput.AddStyledLine("  ✓ Mode restored: "+string(currentMode), repltheme.HighlightStyle)
 	}
 	newOutput.AddStyledLine("  ✓ New session started", repltheme.CompactionSuccessStyle)
 	newOutput.AddEmptyLine()

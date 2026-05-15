@@ -37,6 +37,7 @@ func newTestModel() replModel {
 		textarea:            ta,
 		viewport:            vp,
 		ctx:                 &replContext{cfg: &config.ResolvedConfig{}},
+		mode:                llm.ModeBuild,
 		appState:            replappstate.New(nil, ""),
 		output:              reploutput.NewOutputBuilder(80, ""),
 		streamHandler:       NewStreamHandler(nil),
@@ -637,6 +638,17 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	if !strings.Contains(meta, repltheme.HighlightStyle.Render("openai/gpt-5.4")) {
 		t.Fatalf("expected provider/model to use the same highlight style, got %q", meta)
 	}
+	if !strings.Contains(meta, repltheme.PrimaryBoldStyle.Render("✦")+" "+repltheme.PrimaryBoldStyle.Render("build")) {
+		t.Fatalf("expected build mode glyph and value to use primary bold style, got %q", meta)
+	}
+	if strings.Contains(meta, "Mode:") {
+		t.Fatalf("did not expect mode label, got %q", meta)
+	}
+	contextIdx := strings.Index(meta, "50%")
+	modeIdx := strings.Index(meta, "build")
+	if contextIdx == -1 || modeIdx == -1 || modeIdx <= contextIdx {
+		t.Fatalf("expected mode after context percentage, got %q", meta)
+	}
 	if !strings.Contains(meta, "·") {
 		t.Fatalf("expected separator dot between model and context, got %q", meta)
 	}
@@ -710,6 +722,17 @@ func TestInputMetaView_ShowsThinkingGlyphForNonAnthropic(t *testing.T) {
 	}
 	if strings.Contains(meta, "effort:") {
 		t.Fatalf("did not expect effort label for non-anthropic provider, got %q", meta)
+	}
+}
+
+func TestInputMetaView_UsesAccentStyleForPlanMode(t *testing.T) {
+	m := newTestModel()
+	m.mode = llm.ModePlan
+	m.width = 120
+
+	meta := m.inputMetaView()
+	if !strings.Contains(meta, repltheme.AccentStyle.Render("✦")+" "+repltheme.AccentStyle.Render("plan")) {
+		t.Fatalf("expected plan mode glyph and value to use accent style, got %q", meta)
 	}
 }
 
@@ -822,7 +845,7 @@ func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
 	}
 }
 
-func TestInputMetaView_RendersElapsedTimerAfterContextStatus(t *testing.T) {
+func TestInputMetaView_RendersElapsedTimerLast(t *testing.T) {
 	m := newTestModel()
 	m.showSpinner = true
 	m.loadingStartedAt = time.Now().Add(-65 * time.Second)
@@ -836,18 +859,22 @@ func TestInputMetaView_RendersElapsedTimerAfterContextStatus(t *testing.T) {
 
 	meta := m.inputMetaView()
 	contextIdx := strings.Index(meta, "◷")
+	modeIdx := strings.Index(meta, "build")
 	timerIdx := strings.Index(meta, "1:05")
-	if contextIdx == -1 || timerIdx == -1 {
-		t.Fatalf("expected context status and elapsed timer in meta, got %q", meta)
+	if contextIdx == -1 || modeIdx == -1 || timerIdx == -1 {
+		t.Fatalf("expected context status, mode, and elapsed timer in meta, got %q", meta)
 	}
-	if timerIdx <= contextIdx {
-		t.Fatalf("expected elapsed timer after context status, got %q", meta)
+	if modeIdx <= contextIdx {
+		t.Fatalf("expected mode after context status, got %q", meta)
 	}
-	if !strings.Contains(meta[contextIdx:timerIdx], "⏱") {
+	if timerIdx <= modeIdx {
+		t.Fatalf("expected elapsed timer after mode, got %q", meta)
+	}
+	if !strings.Contains(meta[modeIdx:timerIdx], "⏱") {
 		t.Fatalf("expected timer icon before timer, got %q", meta)
 	}
-	if !strings.Contains(meta[contextIdx:timerIdx], "·") {
-		t.Fatalf("expected dot separator between context status and timer, got %q", meta)
+	if !strings.Contains(meta[modeIdx:timerIdx], "·") {
+		t.Fatalf("expected dot separator between mode and timer, got %q", meta)
 	}
 }
 

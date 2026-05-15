@@ -102,3 +102,39 @@ func TestBuild_IncludesSkillsCatalog(t *testing.T) {
 		t.Fatalf("expected demo skill in catalog, got %q", result)
 	}
 }
+
+func TestBuildForMode_PlanIncludesPlanInstructions(t *testing.T) {
+	result := BuildForMode(t.TempDir(), "", ModePlan)
+	for _, expected := range []string{"# Active mode: plan", "write_file and edit_file are not available", "/mode build or Shift+Tab"} {
+		if !strings.Contains(result, expected) {
+			t.Fatalf("expected %q in plan prompt, got %q", expected, result)
+		}
+	}
+}
+
+func TestBuildForMode_BuildIncludesBuildInstructions(t *testing.T) {
+	result := BuildForMode(t.TempDir(), "", ModeBuild)
+	if !strings.Contains(result, "# Active mode: build") {
+		t.Fatalf("expected build mode prompt, got %q", result)
+	}
+	if strings.Contains(result, "write_file and edit_file are not available") {
+		t.Fatalf("did not expect plan restrictions in build prompt, got %q", result)
+	}
+}
+
+func TestBuildForMode_ModeInstructionsAreAtEnd(t *testing.T) {
+	dir := t.TempDir()
+	catalog := skills.Catalog([]skills.Skill{{Name: "demo", Description: "Demo skill", Location: "/tmp/demo/SKILL.md"}}, skills.Config{})
+
+	result := BuildForMode(dir, catalog, ModePlan)
+	modeIndex := strings.Index(result, "# Active mode: plan")
+	if modeIndex == -1 {
+		t.Fatal("expected active mode section")
+	}
+	if strings.Contains(result[modeIndex:], "Working directory:") {
+		t.Fatal("expected working directory before mode section")
+	}
+	if strings.Contains(result[modeIndex:], "## Available Skills") {
+		t.Fatal("expected skills catalog before mode section")
+	}
+}

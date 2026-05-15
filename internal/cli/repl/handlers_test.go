@@ -331,6 +331,26 @@ func TestHandleKeyMsg_TabTogglesInputFocus(t *testing.T) {
 	}
 }
 
+func TestHandleKeyMsg_ShiftTabTogglesMode(t *testing.T) {
+	m := newTestModel()
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Text: "shift+tab"})
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if newM.currentMode() != llm.ModePlan {
+		t.Fatalf("expected plan mode, got %q", newM.currentMode())
+	}
+	if newM.appState.Mode() != llm.ModePlan {
+		t.Fatalf("expected app state plan mode, got %q", newM.appState.Mode())
+	}
+
+	newM, _ = newM.handleKeyMsg(tea.KeyPressMsg{Text: "shift+tab"})
+	if newM.currentMode() != llm.ModeBuild {
+		t.Fatalf("expected build mode, got %q", newM.currentMode())
+	}
+}
+
 func TestHandleKeyMsg_InputFocusUpDownDoesNotScrollViewportWhenHistoryExhausted(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("draft")

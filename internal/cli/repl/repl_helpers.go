@@ -130,6 +130,36 @@ func formatLoadingElapsed(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", minutes, seconds)
 }
 
+func (m *replModel) currentMode() llm.AgentMode {
+	if m.mode == "" {
+		return llm.ModeBuild
+	}
+	return m.mode
+}
+
+func (m *replModel) setMode(mode llm.AgentMode) {
+	if mode != llm.ModePlan {
+		mode = llm.ModeBuild
+	}
+	m.mode = mode
+	if m.appState != nil {
+		m.appState.SetMode(mode)
+	}
+}
+
+func (m *replModel) toggleMode() {
+	if m.currentMode() == llm.ModePlan {
+		m.setMode(llm.ModeBuild)
+		m.output.AddStyledLine("  ✓ Mode set to: build", repltheme.HighlightStyle)
+	} else {
+		m.setMode(llm.ModePlan)
+		m.output.AddStyledLine("  ✓ Mode set to: plan", repltheme.HighlightStyle)
+	}
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+}
+
 func abbreviateHome(path string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -178,6 +208,7 @@ func buildInitialScreen(ctx *replContext) []string {
 	tips := []string{
 		"Use /help for all commands, `/skills list` for available skills",
 		"Use /model to change provider and model",
+		"Use /mode plan|build or Shift+Tab to switch modes",
 		"Press enter to send, shift+enter for new line",
 		"Press ctrl+C or cmd+C for copying, tab to switch focus",
 	}

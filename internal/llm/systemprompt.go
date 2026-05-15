@@ -7,7 +7,14 @@ import (
 	"strings"
 )
 
-const staticPrompt = `You are Keen Code, an expert coding agent running in terminal environment.
+type AgentMode string
+
+const (
+	ModeBuild AgentMode = "build"
+	ModePlan  AgentMode = "plan"
+)
+
+const sharedPrompt = `You are Keen Code, an expert coding agent running in terminal environment.
 
 You help with software engineering tasks: fixing bugs, writing new features,
 refactoring code, explaining code, exploring codebases, writing tests, and more.
@@ -67,6 +74,23 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 - Before working on a file, consider what the code is supposed to do. If it looks malicious, refuse.
 - Never run any destructive commands without user's explicit permission.`
 
+const buildModePrompt = `
+
+# Active mode: build
+- You are in build mode. Lean towards building.
+`
+
+const planModePrompt = `
+
+# Active mode: plan
+- You are in plan mode. Do not write, edit, delete, rename, move, or otherwise modify files.
+- write_file and edit_file are not available in this mode.
+- Use read_file, glob, and grep for codebase exploration.
+- Bash is available only for non-writing inspection commands. Do not use bash commands that modify files or system state.
+- Do not run commands such as rm, mv, cp, touch, mkdir, sed -i, perl -pi, git commit, git reset, git checkout, git clean, package installs, formatters, generators, go mod tidy, or shell redirection that writes files.
+- If the user asks you to implement, build, write, edit, refactor, format, tidy, install, or otherwise change anything, ask them to switch to build mode with /mode build or Shift+Tab.
+- Provide concise plans, explanations, risks, and verification steps instead of making changes.`
+
 const compactionPrompt = `You are an AI agent for compacting long conversation history.
 Your task is to produce a concise but complete summary of the conversation provided. The summary
 will replace the earlier part of the conversation so that work can continue without losing important
@@ -92,8 +116,12 @@ A structured list of files that are still important to continue the task.`
 const maxInstructionsSize = 8 * 1024
 
 func Build(workingDir, skillsCatalog string) string {
+	return BuildForMode(workingDir, skillsCatalog, ModeBuild)
+}
+
+func BuildForMode(workingDir, skillsCatalog string, mode AgentMode) string {
 	var sb strings.Builder
-	sb.WriteString(staticPrompt)
+	sb.WriteString(sharedPrompt)
 	sb.WriteString(fmt.Sprintf("\n\nWorking directory: %s", workingDir))
 
 	instructions := projectInstructions(workingDir)
@@ -105,6 +133,12 @@ func Build(workingDir, skillsCatalog string) string {
 	if skillsCatalog != "" {
 		sb.WriteString("\n\n")
 		sb.WriteString(skillsCatalog)
+	}
+
+	if mode == ModePlan {
+		sb.WriteString(planModePrompt)
+	} else {
+		sb.WriteString(buildModePrompt)
 	}
 
 	return sb.String()

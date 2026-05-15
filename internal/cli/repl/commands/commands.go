@@ -10,6 +10,7 @@ const (
 	Help            = "/help"
 	Logout          = "/logout"
 	Model           = "/model"
+	Mode            = "/mode"
 	New             = "/new"
 	AllowPermission = "/allow-permission"
 	ResetPermission = "/reset-permission"
@@ -34,6 +35,7 @@ var All = []SlashCommand{
 	{Help, "Show available commands"},
 	{Logout, "Sign out of the current OAuth provider"},
 	{Model, "Change provider or model"},
+	{Mode, "Switch agent mode (plan|build)"},
 	{New, "Start a new session (also /clear)"},
 	{ResetPermission, "Reset tool permissions to Keen's default mechanism"},
 	{Resume, "Open the session picker"},

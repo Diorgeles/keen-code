@@ -53,6 +53,21 @@ func (r *Registry) All() []Tool {
 	return all
 }
 
+func (r *Registry) Without(names ...string) *Registry {
+	filtered := NewRegistry()
+	excluded := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		excluded[name] = struct{}{}
+	}
+	for name, tool := range r.tools {
+		if _, ok := excluded[name]; ok {
+			continue
+		}
+		filtered.tools[name] = tool
+	}
+	return filtered
+}
+
 func (r *Registry) Count() int {
 	return len(r.tools)
 }

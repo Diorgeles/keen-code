@@ -49,6 +49,7 @@ type replModel struct {
 	textarea            textarea.Model
 	viewport            viewport.Model
 	ctx                 *replContext
+	mode                llm.AgentMode
 	appState            *replappstate.AppState
 	output              *reploutput.OutputBuilder
 	modelSelection      *replwidgets.Model
@@ -162,6 +163,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		textarea:            ta,
 		viewport:            vp,
 		ctx:                 ctx,
+		mode:                llm.ModeBuild,
 		appState:            appState,
 		output:              output,
 		spinner:             s,
@@ -644,10 +646,20 @@ func (m replModel) inputMetaView() string {
 	}
 	contextText := renderContextStatus(m.contextStatus)
 	separator := repltheme.MetaLabelStyle.Render("·")
+	timerText := ""
 	if m.showSpinner {
-		contextText += " " + separator + " " + repltheme.LoadingTimerStyle.Render("⏱ "+m.loadingElapsedText())
+		timerText = repltheme.LoadingTimerStyle.Render("⏱ " + m.loadingElapsedText())
 	}
-	left := modelText + " " + separator + " " + contextText
+	modeStyle := repltheme.PrimaryBoldStyle
+	if m.currentMode() == llm.ModePlan {
+		modeStyle = repltheme.AccentStyle
+	}
+	modeValue := modeStyle.Render("✦") + " " + modeStyle.Render(string(m.currentMode()))
+	modeText := modeValue
+	left := modelText + " " + separator + " " + contextText + " " + separator + " " + modeText
+	if timerText != "" {
+		left += " " + separator + " " + timerText
+	}
 	right := ""
 	if m.contextStatus.ShouldSuggestCompaction() {
 		right = repltheme.CompactionSuggestionStyle.Render("Try /compact")
@@ -678,20 +690,6 @@ func (m replModel) inputMetaView() string {
 	space := available - lipgloss.Width(left) - lipgloss.Width(right)
 	if space >= 1 {
 		return leftPad + left + strings.Repeat(" ", space) + right
-	}
-
-	compactLeft := repltheme.MetaLabelStyle.Render("M:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model) +
-		" " + separator + " " + repltheme.MetaLabelStyle.Render("C:") + " " + contextPercentStyle(m.contextStatus.Percent).Render(formatPercent(m.contextStatus.Percent))
-	if !m.contextStatus.KnownWindow || m.contextStatus.ContextWindow <= 0 {
-		compactLeft = repltheme.MetaLabelStyle.Render("M:") + " " + repltheme.HighlightStyle.Render(provider+"/"+model) +
-			" " + separator + " " + repltheme.MetaLabelStyle.Render("C:") + " " + repltheme.ContextStatusUnknownStyle.Render("N/A")
-	}
-	if m.showSpinner {
-		compactLeft += " " + separator + " " + repltheme.LoadingTimerStyle.Render("⏱ "+m.loadingElapsedText())
-	}
-	space = available - lipgloss.Width(compactLeft) - lipgloss.Width(right)
-	if space >= 1 {
-		return leftPad + compactLeft + strings.Repeat(" ", space) + right
 	}
 
 	return leftPad + left

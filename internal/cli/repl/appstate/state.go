@@ -17,6 +17,7 @@ type AppState struct {
 	messages     []llm.Message
 	llmClient    llm.LLMClient
 	toolRegistry *tools.Registry
+	mode         llm.AgentMode
 	workingDir   string
 	lastUsage    *llm.TokenUsage
 	skills       skills.Discovery
@@ -28,6 +29,7 @@ func New(client llm.LLMClient, workingDir string) *AppState {
 		messages:     []llm.Message{},
 		llmClient:    client,
 		toolRegistry: tools.NewRegistry(),
+		mode:         llm.ModeBuild,
 		workingDir:   workingDir,
 	}
 	state.ReloadSkills()
@@ -135,10 +137,14 @@ func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig, o
 	}
 	systemMsg := llm.Message{
 		Role:    llm.RoleSystem,
-		Content: llm.Build(s.workingDir, s.SkillsCatalog()),
+		Content: llm.BuildForMode(s.workingDir, s.SkillsCatalog(), s.mode),
 	}
 	messages := append([]llm.Message{systemMsg}, s.GetMessages()...)
-	return s.llmClient.StreamChat(ctx, messages, s.toolRegistry, opts...)
+	registry := s.toolRegistry
+	if s.mode == llm.ModePlan {
+		registry = s.toolRegistry.Without("write_file", "edit_file")
+	}
+	return s.llmClient.StreamChat(ctx, messages, registry, opts...)
 }
 
 func (s *AppState) buildCompactionRequest(cfg *config.ResolvedConfig, extraPrompt string) ([]llm.Message, error) {
@@ -219,6 +225,20 @@ func (s *AppState) GetToolRegistry() *tools.Registry {
 
 func (s *AppState) RegisterTool(tool tools.Tool) error {
 	return s.toolRegistry.Register(tool)
+}
+
+func (s *AppState) SetMode(mode llm.AgentMode) {
+	if mode != llm.ModePlan {
+		mode = llm.ModeBuild
+	}
+	s.mode = mode
+}
+
+func (s *AppState) Mode() llm.AgentMode {
+	if s.mode == "" {
+		return llm.ModeBuild
+	}
+	return s.mode
 }
 
 func (s *AppState) WorkingDir() string {

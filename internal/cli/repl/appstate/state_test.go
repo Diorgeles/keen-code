@@ -19,6 +19,18 @@ type mockLLMClient struct {
 	resetCount     int
 }
 
+type dummyTool struct {
+	name string
+}
+
+func (d dummyTool) Name() string { return d.name }
+
+func (d dummyTool) Description() string { return "dummy" }
+
+func (d dummyTool) InputSchema() map[string]any { return nil }
+
+func (d dummyTool) Execute(ctx context.Context, input any) (any, error) { return nil, nil }
+
 func (m *mockLLMClient) StreamChat(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry, opts ...llm.StreamOptions) (<-chan llm.StreamEvent, error) {
 	if m.streamChatFunc != nil {
 		return m.streamChatFunc(ctx, messages, toolRegistry)
@@ -308,6 +320,58 @@ func TestAppState_StreamChat_NilClient(t *testing.T) {
 	}
 	if eventCh != nil {
 		t.Error("expected nil event channel when client is nil")
+	}
+}
+
+func TestAppState_StreamChatPlanModeUsesPlanPromptAndRemovesWriteTools(t *testing.T) {
+	var capturedMessages []llm.Message
+	var capturedRegistry *tools.Registry
+	client := &mockLLMClient{
+		streamChatFunc: func(ctx context.Context, messages []llm.Message, toolRegistry *tools.Registry) (<-chan llm.StreamEvent, error) {
+			capturedMessages = append([]llm.Message(nil), messages...)
+			capturedRegistry = toolRegistry
+			ch := make(chan llm.StreamEvent)
+			close(ch)
+			return ch, nil
+		},
+	}
+	state := New(client, t.TempDir())
+	if err := state.RegisterTool(dummyTool{name: "read_file"}); err != nil {
+		t.Fatalf("register read_file: %v", err)
+	}
+	if err := state.RegisterTool(dummyTool{name: "write_file"}); err != nil {
+		t.Fatalf("register write_file: %v", err)
+	}
+	if err := state.RegisterTool(dummyTool{name: "edit_file"}); err != nil {
+		t.Fatalf("register edit_file: %v", err)
+	}
+	if err := state.RegisterTool(dummyTool{name: "bash"}); err != nil {
+		t.Fatalf("register bash: %v", err)
+	}
+	state.SetMode(llm.ModePlan)
+
+	if _, err := state.StreamChat(context.Background(), &config.ResolvedConfig{APIKey: "key", Model: "model"}); err != nil {
+		t.Fatalf("StreamChat() error = %v", err)
+	}
+
+	if len(capturedMessages) == 0 || !strings.Contains(capturedMessages[0].Content, "# Active mode: plan") {
+		t.Fatalf("expected plan system prompt, got %#v", capturedMessages)
+	}
+	for _, name := range []string{"read_file", "bash"} {
+		if _, ok := capturedRegistry.Get(name); !ok {
+			t.Fatalf("expected %s to remain in the plan mode registry", name)
+		}
+	}
+	for _, name := range []string{"write_file", "edit_file"} {
+		if _, ok := capturedRegistry.Get(name); ok {
+			t.Fatalf("expected %s to be removed from the plan mode registry", name)
+		}
+	}
+	if _, ok := state.GetToolRegistry().Get("write_file"); !ok {
+		t.Fatal("expected original registry to keep write_file")
+	}
+	if _, ok := state.GetToolRegistry().Get("edit_file"); !ok {
+		t.Fatal("expected original registry to keep edit_file")
 	}
 }
 

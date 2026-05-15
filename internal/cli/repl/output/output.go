@@ -122,15 +122,15 @@ func (ob *OutputBuilder) AddToolEnd(toolCall *llm.ToolCall) {
 
 func FormatToolStart(toolCall *llm.ToolCall, workingDir string) string {
 	inputDisplay := FormatToolInput(toolCall.Name, toolCall.Input, workingDir)
-	return "\n  " + repltheme.ToolStartStyle.Render(fmt.Sprintf("⚙ %s(%s)...", toolCall.Name, inputDisplay))
+	return "\n  " + repltheme.ToolStartStyle.Render(fmt.Sprintf("⚙ %s • %s...", toolCall.Name, inputDisplay))
 }
 
 func FormatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string {
 	inputDisplay := FormatToolInput(startCall.Name, startCall.Input, workingDir)
 	if endCall.Error != "" {
-		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s(%s) failed: %s", startCall.Name, inputDisplay, endCall.Error))
+		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s • %s failed: %s", startCall.Name, inputDisplay, endCall.Error))
 	}
-	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s(%s) ➜ [%s]", startCall.Name, inputDisplay, endCall.Duration))
+	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s • %s", startCall.Name, inputDisplay))
 }
 
 func FormatToolInput(toolName string, input map[string]any, workingDir string) string {
@@ -175,7 +175,7 @@ func jsonMarshalCompact(v map[string]any) string {
 	for _, k := range keys {
 		parts = append(parts, fmt.Sprintf("%s=%v", k, v[k]))
 	}
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, " · ")
 }
 
 func formatToolPathForUI(path, workingDir string) string {

@@ -179,6 +179,9 @@ func TestGetHelpText(t *testing.T) {
 	if !strings.Contains(text, "/model") {
 		t.Error("expected /model in help text")
 	}
+	if !strings.Contains(text, "/mode") {
+		t.Error("expected /mode in help text")
+	}
 	if !strings.Contains(text, "/exit") {
 		t.Error("expected /exit in help text")
 	}
@@ -218,6 +221,31 @@ func TestDispatchCommand_UnknownCommandFallsThrough(t *testing.T) {
 
 	if handled {
 		t.Error("expected unknown input to not be handled by dispatchCommand")
+	}
+}
+
+func TestHandleModeCommand(t *testing.T) {
+	m := newTestModel()
+	m.textarea.SetValue("/mode plan")
+
+	newM, cmd := m.handleEnterKey()
+	if cmd != nil {
+		t.Fatal("expected nil cmd")
+	}
+	if newM.currentMode() != llm.ModePlan {
+		t.Fatalf("expected plan mode, got %q", newM.currentMode())
+	}
+	if newM.appState.Mode() != llm.ModePlan {
+		t.Fatalf("expected app state plan mode, got %q", newM.appState.Mode())
+	}
+	if !strings.Contains(newM.output.Join(), "Mode set to: plan") {
+		t.Fatalf("expected mode confirmation, got %q", newM.output.Join())
+	}
+
+	newM.textarea.SetValue("/mode build")
+	newM, _ = newM.handleEnterKey()
+	if newM.currentMode() != llm.ModeBuild {
+		t.Fatalf("expected build mode, got %q", newM.currentMode())
 	}
 }
 

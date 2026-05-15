@@ -360,6 +360,9 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		if handled, result, cmd := m.handleSuggestionKeyMsg(keyMsg); handled {
 			return result, cmd
 		}
+	} else if keyMsg.String() == "shift+tab" {
+		m.toggleMode()
+		return *m, nil
 	} else if keyMsg.String() == keyTab {
 		return *m, m.toggleInputFocus()
 	}
