@@ -13,17 +13,15 @@
 <img src="./assets/keen-demo-2x.gif" alt="Keen Code demo" style="width: 100%; height: auto;"/>
 </div>
 
-**Keen Code** is a terminal-based AI coding agent like Claude Code or OpenCode. Written in Go, it is simpler, lighter, and avoids feature bloat. It is designed to be a minimalistic but useful coding agent for typical software engineering tasks.
+**Keen Code** is a terminal-based AI coding agent like Claude Code or Codex CLI. Written in Go, it is simpler, lighter, minimalistic but useful coding agent for typical software engineering tasks.
 
-Keen Code is also highly opinionated. It avoids features that are not necessarily needed or useful for a regular software engineer. It tries to avoid unnecessary complexity and attempts to keep the agent harness as simple as possible.
+Keen Code is highly opinionated. It avoids features that are not necessarily needed or useful for a regular software engineer. It tries to avoid unnecessary complexity and attempts to keep the agent harness as simple as possible.
 
-Keen also has higher trust in the models. This is why Keen doesn't have a `plan` mode because SOTA models are very capable of planning tasks without attempting to make edits to the codebase. These models have gone through rigorous post-training which includes effective planning and execution capabilities.
+From requirements to implementation, Keen Code was engineered using a wide range of coding agents and agentic IDEs like Cursor, Windsurf, Claude Code, OpenCode, Codex CLI, and Kimi CLI. At any given time, Keen Code was developed by a single agent, meaning, no multi-agent orchestration was used.
 
-From requirements to implementation, Keen Code was engineered using a wide range of coding agents and agentic IDEs like Cursor, Windsurf, Claude Code, OpenCode, Codex CLI, and Kimi CLI. Note that it was always a single agent that was used to develop the project at any given time. No multi-agent orchestration was used.
+By far, AI coding agents are the most ubiquitous use case in the era of AI agents. The goal of the project is to showcase how coding agents can be used to develop coding agents themselves. This is why most prompts and output docs are saved as markdown files in the `.ai-interactions` directory. 
 
-By far, AI coding agents are the most ubiquitous use case for AI in the era of AI agents. The goal of the project is to showcase how coding agents can be used to develop the coding agents themselves. This is why most prompts are saved as markdown files in the `.ai-interactions` directory. 
-
-Keen Code is an experiment to play with the *new way of working* where engineers work with AI agents to develop software. In this setting, engineers are sometimes referred to as "orchestrators".
+Keen Code is also an experiment to play with the *new way of working* where engineers work with AI agents to develop software. In this setting, engineers are sometimes referred to as "orchestrators".
 
 > **Every line of code in this repo was written by an AI agent.** The full paper trail — prompts, plans, design docs — is preserved in [`.ai-interactions/`](.ai-interactions/). See [TOUR.md](TOUR.md) for the full story.
 
