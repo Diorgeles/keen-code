@@ -333,6 +333,9 @@ func TestFormatModelSelectionCard_UsesViewportWidthRules(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(card, "\n"), "\n")
 	nonEmpty := make([]string, 0, len(lines))
 	for _, line := range lines {
+		if w := lipgloss.Width(line); w > 24 {
+			t.Fatalf("line exceeds viewport width (%d > %d): %q", w, 24, line)
+		}
 		if strings.TrimSpace(line) != "" {
 			nonEmpty = append(nonEmpty, line)
 		}
@@ -351,6 +354,24 @@ func TestFormatModelSelectionCard_UsesViewportWidthRules(t *testing.T) {
 	}
 	if strings.TrimSpace(lines[len(lines)-2]) != "" {
 		t.Fatalf("expected blank line before bottom rule, got %q", lines[len(lines)-2])
+	}
+}
+
+func TestFormatModelSelectionCard_WrapsOAuthURLWithinViewportWidth(t *testing.T) {
+	url := "https://auth.openai.com/oauth/authorize?" + strings.Repeat("abcdef", 16)
+	card := formatModelSelectionCard(&replwidgets.Model{
+		Step:        replwidgets.StepOAuth,
+		OAuthStatus: "Complete authentication in your browser.",
+		OAuthURL:    url,
+	}, 40)
+
+	if !strings.Contains(card, "https://auth.openai.com") {
+		t.Fatalf("expected OAuth URL in card, got %q", card)
+	}
+	for _, line := range strings.Split(strings.TrimRight(card, "\n"), "\n") {
+		if w := lipgloss.Width(line); w > 40 {
+			t.Fatalf("line exceeds viewport width (%d > %d): %q", w, 40, line)
+		}
 	}
 }
 
@@ -638,7 +659,7 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	if !strings.Contains(meta, repltheme.HighlightStyle.Render("openai/gpt-5.4")) {
 		t.Fatalf("expected provider/model to use the same highlight style, got %q", meta)
 	}
-	if !strings.Contains(meta, repltheme.PrimaryBoldStyle.Render("✦")+" "+repltheme.PrimaryBoldStyle.Render("build")) {
+	if !strings.Contains(meta, repltheme.PrimaryBoldStyle.Render("⚒")+" "+repltheme.PrimaryBoldStyle.Render("build")) {
 		t.Fatalf("expected build mode glyph and value to use primary bold style, got %q", meta)
 	}
 	if strings.Contains(meta, "Mode:") {
@@ -731,7 +752,7 @@ func TestInputMetaView_UsesAccentStyleForPlanMode(t *testing.T) {
 	m.width = 120
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, repltheme.AccentStyle.Render("✦")+" "+repltheme.AccentStyle.Render("plan")) {
+	if !strings.Contains(meta, repltheme.AccentStyle.Render("◆")+" "+repltheme.AccentStyle.Render("plan")) {
 		t.Fatalf("expected plan mode glyph and value to use accent style, got %q", meta)
 	}
 }

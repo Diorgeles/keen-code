@@ -150,12 +150,9 @@ func (m *replModel) setMode(mode llm.AgentMode) {
 func (m *replModel) toggleMode() {
 	if m.currentMode() == llm.ModePlan {
 		m.setMode(llm.ModeBuild)
-		m.output.AddStyledLine("  ✓ Mode set to: build", repltheme.HighlightStyle)
 	} else {
 		m.setMode(llm.ModePlan)
-		m.output.AddStyledLine("  ✓ Mode set to: plan", repltheme.HighlightStyle)
 	}
-	m.output.AddEmptyLine()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 }
@@ -238,13 +235,18 @@ func formatModelSelectionCard(ms *replwidgets.Model, width int) string {
 		ruleWidth = 1
 	}
 
+	contentWidth := max(ruleWidth-2, 1)
+
 	rule := repltheme.ModelSelectionRuleStyle.Render(strings.Repeat("─", ruleWidth))
 	lines := strings.Split(strings.TrimRight(ms.ViewString(), "\n"), "\n")
 	var sb strings.Builder
 	sb.WriteString("\n")
 	sb.WriteString(rule + "\n\n")
 	for _, l := range lines {
-		sb.WriteString("  " + l + "\n")
+		wrapped := lipgloss.NewStyle().Width(contentWidth).Render(l)
+		for _, wrappedLine := range strings.Split(wrapped, "\n") {
+			sb.WriteString("  " + wrappedLine + "\n")
+		}
 	}
 	sb.WriteString("\n")
 	sb.WriteString(rule + "\n")

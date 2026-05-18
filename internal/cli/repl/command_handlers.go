@@ -214,10 +214,8 @@ func (m *replModel) handleModeCommand(input string) replModel {
 	switch arg {
 	case "plan":
 		m.setMode(llm.ModePlan)
-		m.output.AddStyledLine("  ✓ Mode set to: plan", repltheme.HighlightStyle)
 	case "build":
 		m.setMode(llm.ModeBuild)
-		m.output.AddStyledLine("  ✓ Mode set to: build", repltheme.HighlightStyle)
 	case "":
 		m.output.AddStyledLine("  Mode: "+string(m.currentMode())+" (use /mode plan|build)", repltheme.HighlightStyle)
 	default:

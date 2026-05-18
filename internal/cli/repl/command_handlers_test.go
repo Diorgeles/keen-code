@@ -238,9 +238,6 @@ func TestHandleModeCommand(t *testing.T) {
 	if newM.appState.Mode() != llm.ModePlan {
 		t.Fatalf("expected app state plan mode, got %q", newM.appState.Mode())
 	}
-	if !strings.Contains(newM.output.Join(), "Mode set to: plan") {
-		t.Fatalf("expected mode confirmation, got %q", newM.output.Join())
-	}
 
 	newM.textarea.SetValue("/mode build")
 	newM, _ = newM.handleEnterKey()

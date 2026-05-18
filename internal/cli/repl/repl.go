@@ -654,7 +654,15 @@ func (m replModel) inputMetaView() string {
 	if m.currentMode() == llm.ModePlan {
 		modeStyle = repltheme.AccentStyle
 	}
-	modeValue := modeStyle.Render("✦") + " " + modeStyle.Render(string(m.currentMode()))
+
+	var modeValue string
+
+	if m.currentMode() == llm.ModePlan {
+		modeValue = modeStyle.Render("◆") + " " + modeStyle.Render(string(m.currentMode()))
+	} else {
+		modeValue = modeStyle.Render("⚒") + " " + modeStyle.Render(string(m.currentMode()))
+	}
+
 	modeText := modeValue
 	left := modelText + " " + separator + " " + contextText + " " + separator + " " + modeText
 	if timerText != "" {
