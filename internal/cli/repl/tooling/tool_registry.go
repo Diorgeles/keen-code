@@ -36,4 +36,7 @@ func SetupToolRegistry(
 
 	bashTool := tools.NewBashTool(guard, permissionRequester)
 	appState.RegisterTool(bashTool)
+
+	webFetchTool := tools.NewWebFetchTool()
+	appState.RegisterTool(webFetchTool)
 }

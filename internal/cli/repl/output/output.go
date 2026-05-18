@@ -122,7 +122,7 @@ func (ob *OutputBuilder) AddToolEnd(toolCall *llm.ToolCall) {
 
 func FormatToolStart(toolCall *llm.ToolCall, workingDir string) string {
 	inputDisplay := FormatToolInput(toolCall.Name, toolCall.Input, workingDir)
-	return "\n  " + repltheme.ToolStartStyle.Render(fmt.Sprintf("⚙ %s • %s...", toolCall.Name, inputDisplay))
+	return "  " + repltheme.ToolStartStyle.Render(fmt.Sprintf("⚙ %s • %s...", toolCall.Name, inputDisplay))
 }
 
 func FormatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string {

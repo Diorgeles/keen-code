@@ -106,7 +106,7 @@ var (
 	CompactionErrorStyle     = lipgloss.NewStyle().Foreground(ErrorColor)
 	CompactionCancelledStyle = lipgloss.NewStyle().Foreground(TextDimColor)
 
-	ToolStartStyle    = lipgloss.NewStyle().Foreground(TextDimColor).Bold(true)
+	ToolStartStyle    = lipgloss.NewStyle().Foreground(SecondaryColor)
 	ToolSuccessStyle  = lipgloss.NewStyle().Foreground(SecondaryColor)
 	ToolErrorStyle    = lipgloss.NewStyle().Foreground(ErrorColor)
 	WarningTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(ErrorColor)
