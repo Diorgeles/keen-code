@@ -10,6 +10,7 @@ const (
 	Help            = "/help"
 	Logout          = "/logout"
 	Model           = "/model"
+	MCP             = "/mcp"
 	Mode            = "/mode"
 	New             = "/new"
 	AllowPermission = "/allow-permission"
@@ -34,6 +35,7 @@ var All = []SlashCommand{
 	{Exit, "Quit Keen"},
 	{Help, "Show available commands"},
 	{Logout, "Sign out of the current OAuth provider"},
+	{MCP, "Show MCP status or refresh a server"},
 	{Model, "Change provider or model"},
 	{Mode, "Switch agent mode (plan|build)"},
 	{New, "Start a new session (also /clear)"},

@@ -179,20 +179,9 @@ func renderPermissionCard(seg *streamSegment, width int) []string {
 	return result
 }
 
-func wrapTextWithStyle(text string, style lipgloss.Style, width int) string {
-	if width < 1 {
-		width = 1
-	}
-	return lipgloss.NewStyle().Width(width).Render(style.Render(text))
-}
-
 func formatPermissionKeyValue(label, value string, labelWidth, valueWidth int) string {
-	if labelWidth < 1 {
-		labelWidth = 1
-	}
-	if valueWidth < 1 {
-		valueWidth = 1
-	}
+	labelWidth = max(1, labelWidth)
+	valueWidth = max(1, valueWidth)
 
 	prefix := repltheme.InfoLabelStyle.Width(labelWidth).Render(label)
 	continuation := strings.Repeat(" ", labelWidth+1)

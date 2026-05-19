@@ -1,6 +1,8 @@
 package repl
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/providers"
 )
@@ -221,6 +224,89 @@ func TestDispatchCommand_UnknownCommandFallsThrough(t *testing.T) {
 
 	if handled {
 		t.Error("expected unknown input to not be handled by dispatchCommand")
+	}
+}
+
+func TestHandleMCPCommandStatus(t *testing.T) {
+	m := newTestModel()
+	m.ctx.mcp = &fakeMCPRuntime{
+		statuses: []keenmcp.ServerStatus{
+			{Name: "deepwiki", State: keenmcp.StateConnected, AuthType: keenmcp.AuthNone, ToolCount: 3},
+			{Name: "posthog", State: keenmcp.StateAuthRequired, AuthType: keenmcp.AuthOAuth, LastError: "mcp authentication required"},
+			{Name: "context7", State: keenmcp.StateDisconnected, AuthType: keenmcp.AuthAPIKey, LastError: "connection refused"},
+		},
+	}
+
+	result, cmd := m.handleMCPCommand("/mcp status")
+
+	if cmd != nil {
+		t.Fatal("expected nil command")
+	}
+	out := ansi.Strip(result.output.Join())
+	if !strings.Contains(out, "deepwiki") || !strings.Contains(out, "posthog") {
+		t.Fatalf("output = %q, want MCP statuses", out)
+	}
+	for _, expected := range []string{"Server", "Status", "Auth", "Detail", "────", "✓ connected", "✗ auth_required"} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected %q in MCP status output, got %q", expected, out)
+		}
+	}
+	if !strings.Contains(result.output.Join(), "38;2;239;83;80m✗ disconnected") {
+		t.Fatalf("expected error-colored disconnected status, got %q", result.output.Join())
+	}
+}
+
+func TestHandleMCPCommandRefreshUnknown(t *testing.T) {
+	m := newTestModel()
+	m.ctx.mcp = &fakeMCPRuntime{statuses: []keenmcp.ServerStatus{{Name: "deepwiki", State: keenmcp.StateConnected}}}
+
+	result, cmd := m.handleMCPCommand("/mcp refresh missing")
+
+	if cmd != nil {
+		t.Fatal("expected nil command")
+	}
+	if !strings.Contains(ansi.Strip(result.output.Join()), "unknown MCP server or tool") {
+		t.Fatalf("output = %q, want unknown error", result.output.Join())
+	}
+}
+
+func TestHandleMCPRefreshDone(t *testing.T) {
+	m := newTestModel()
+	m.showSpinner = true
+
+	m.handleMCPRefreshDone(mcpRefreshDoneMsg{Server: "deepwiki"})
+
+	if m.showSpinner {
+		t.Fatal("expected spinner to stop")
+	}
+	if !strings.Contains(ansi.Strip(m.output.Join()), "MCP server connected: deepwiki") {
+		t.Fatalf("output = %q, want success", m.output.Join())
+	}
+}
+
+func TestHandleMCPStartupStatusShowsFailures(t *testing.T) {
+	m := newTestModel()
+	m.width = 50
+	m.viewport.SetWidth(50)
+	m.output.SetWidth(50)
+
+	m.handleMCPStartupStatus([]keenmcp.ServerStatus{
+		{Name: "deepwiki", State: keenmcp.StateConnected},
+		{Name: "posthog", State: keenmcp.StateAuthRequired, LastError: "mcp authentication required because the stored token is missing or expired"},
+	})
+
+	out := ansi.Strip(m.output.Join())
+	if strings.Contains(out, "deepwiki") {
+		t.Fatalf("output = %q, did not expect connected server notice", out)
+	}
+	compactOut := strings.Join(strings.Fields(out), " ")
+	if !strings.Contains(compactOut, "/mcp refresh posthog") {
+		t.Fatalf("output = %q, want refresh hint", out)
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if lipgloss.Width(line) > 46 {
+			t.Fatalf("MCP startup notice exceeds content width (%d > 46): %q", lipgloss.Width(line), line)
+		}
 	}
 }
 
@@ -755,6 +841,50 @@ func TestHandleEnterKey_BtwCommandNoQuestionWithHistory(t *testing.T) {
 	if newM.btwQuestion != "" {
 		t.Fatal("expected empty btw question when just viewing history")
 	}
+}
+
+type fakeMCPRuntime struct {
+	statuses   []keenmcp.ServerStatus
+	tools      map[string][]keenmcp.Tool
+	refreshErr error
+	refreshed  string
+}
+
+func (f *fakeMCPRuntime) Start(context.Context) error {
+	return nil
+}
+
+func (f *fakeMCPRuntime) Close() error {
+	return nil
+}
+
+func (f *fakeMCPRuntime) Servers() []keenmcp.ServerStatus {
+	return f.statuses
+}
+
+func (f *fakeMCPRuntime) Status(server string) keenmcp.ServerStatus {
+	for _, status := range f.statuses {
+		if status.Name == server {
+			return status
+		}
+	}
+	return keenmcp.ServerStatus{Name: server}
+}
+
+func (f *fakeMCPRuntime) WaitInitialScan(context.Context) error {
+	return nil
+}
+
+func (f *fakeMCPRuntime) ListTools(_ context.Context, server string) ([]keenmcp.Tool, error) {
+	if f.tools == nil {
+		return nil, errors.New("no tools")
+	}
+	return f.tools[server], nil
+}
+
+func (f *fakeMCPRuntime) Refresh(_ context.Context, server string, _ ...keenmcp.RefreshOption) error {
+	f.refreshed = server
+	return f.refreshErr
 }
 
 func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {

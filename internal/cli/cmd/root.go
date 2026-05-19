@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -12,8 +13,13 @@ import (
 	"github.com/user/keen-code/internal/cli/repl"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/providers"
 )
+
+var newMCPManager = func(opts ...keenmcp.Option) (keenmcp.Runtime, error) {
+	return keenmcp.NewManager(opts...)
+}
 
 func NewRootCommand(version string) *cobra.Command {
 	cmd := &cobra.Command{
@@ -30,13 +36,37 @@ func NewRootCommand(version string) *cobra.Command {
 				wd = "."
 			}
 
-			return repl.RunREPL(version, wd, resolvedCfg, loader, globalCfg, registry, needsSetup)
+			mcpManager, closeMCP := startMCPRuntime(context.Background())
+			defer closeMCP()
+
+			return repl.RunREPL(version, wd, resolvedCfg, loader, globalCfg, registry, needsSetup, mcpManager)
 		},
 	}
 
 	cmd.Version = version
 	cmd.AddCommand(newRunCommand())
 	return cmd
+}
+
+func startMCPRuntime(ctx context.Context) (keenmcp.Runtime, func()) {
+	manager, err := newMCPManager()
+	if err != nil {
+		slog.Warn("MCP startup skipped", "error", err)
+		return nil, func() {}
+	}
+	if err := manager.Start(ctx); err != nil {
+		slog.Warn("MCP startup failed", "error", err)
+		if closeErr := manager.Close(); closeErr != nil {
+			slog.Warn("MCP shutdown failed after startup error", "error", closeErr)
+		}
+		return nil, func() {}
+	}
+	slog.Debug("MCP manager started")
+	return manager, func() {
+		if err := manager.Close(); err != nil {
+			slog.Warn("MCP shutdown failed", "error", err)
+		}
+	}
 }
 
 func newRunCommand() *cobra.Command {
@@ -85,6 +115,9 @@ func newRunCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			_, closeMCP := startMCPRuntime(context.Background())
+			defer closeMCP()
+
 			_, err = repl.RunHeadless(context.Background(), repl.HeadlessRunOptions{
 				WorkingDir: wd,
 				Config:     resolvedCfg,

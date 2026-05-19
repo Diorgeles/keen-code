@@ -14,11 +14,11 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := replcommands.Filter("/")
-	if len(got) != 16 {
-		t.Fatalf("expected 16 commands, got %d", len(got))
+	if len(got) != 17 {
+		t.Fatalf("expected 17 commands, got %d", len(got))
 	}
 	want := []string{
-		"/allow-permission", "/btw", "/clear", "/compact", "/exit", "/help", "/logout", "/model", "/mode", "/new",
+		"/allow-permission", "/btw", "/clear", "/compact", "/exit", "/help", "/logout", "/mcp", "/model", "/mode", "/new",
 		"/reset-permission", "/resume", "/sessions", "/show-thinking", "/skills", "/thinking",
 	}
 	for i, name := range want {
@@ -44,8 +44,8 @@ func TestFilterCommandsH(t *testing.T) {
 
 func TestFilterCommandsM(t *testing.T) {
 	got := replcommands.Filter("/m")
-	if len(got) != 2 || got[0].Name != "/model" || got[1].Name != "/mode" {
-		t.Errorf("expected /model and /mode, got %v", got)
+	if len(got) != 3 || got[0].Name != "/mcp" || got[1].Name != "/model" || got[2].Name != "/mode" {
+		t.Errorf("expected /mcp, /model and /mode, got %v", got)
 	}
 }
 

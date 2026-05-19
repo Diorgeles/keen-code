@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `web_fetch` tool to fetch URL content and convert HTML pages to Markdown for LLM consumption.
+
+### Changed
+- Streamlined README intro section.
+- Updated REPL mode glyphs and removed mode-change confirmation messages.
+
 ## [0.18.0] - 2026-05-16
 
 ### Added

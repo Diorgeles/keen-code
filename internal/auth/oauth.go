@@ -241,6 +241,7 @@ func randomBase64URL(size int) (string, error) {
 
 type oauthCallbackResult struct {
 	Code      string
+	State     string
 	Err       error
 	respondCh chan callbackResponse
 }
@@ -513,4 +514,104 @@ func OpenDefaultBrowser(rawURL string) error {
 		cmd = exec.Command("xdg-open", rawURL)
 	}
 	return cmd.Start()
+}
+
+func FetchOAuthAuthorizationCode(ctx context.Context, authURL, redirectURL string, openBrowser BrowserOpener) (string, string, error) {
+	u, err := url.Parse(redirectURL)
+	if err != nil {
+		return "", "", fmt.Errorf("parse OAuth redirect URL: %w", err)
+	}
+	if u.Host == "" {
+		return "", "", fmt.Errorf("OAuth redirect URL must include host")
+	}
+	path := u.Path
+	if path == "" {
+		path = "/"
+	}
+
+	codeCh := make(chan oauthCallbackResult, 1)
+	server, err := startOAuthCallbackServer(ctx, u.Host, path, codeCh)
+	if err != nil {
+		return "", "", err
+	}
+	defer shutdownOAuthServer(server)
+
+	if openBrowser == nil {
+		openBrowser = OpenDefaultBrowser
+	}
+	if err := openBrowser(authURL); err != nil {
+		return "", "", err
+	}
+
+	select {
+	case <-ctx.Done():
+		return "", "", ctx.Err()
+	case result := <-codeCh:
+		if result.Err != nil {
+			return "", "", result.Err
+		}
+		result.Respond(true, "Authentication successful. You can close this window and return to Keen Code.")
+		return result.Code, result.State, nil
+	case <-time.After(5 * time.Minute):
+		return "", "", fmt.Errorf("OAuth login timed out")
+	}
+}
+
+func startOAuthCallbackServer(ctx context.Context, host, path string, resultCh chan<- oauthCallbackResult) (*http.Server, error) {
+	mux := http.NewServeMux()
+	server := &http.Server{
+		Addr:              host,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context {
+			return ctx
+		},
+	}
+
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if errText := q.Get("error"); errText != "" {
+			writeOAuthPage(w, false, "Authentication was not completed.")
+			select {
+			case resultCh <- oauthCallbackResult{Err: fmt.Errorf("OAuth authorization failed: %s", errText)}:
+			default:
+			}
+			return
+		}
+		code := q.Get("code")
+		if code == "" {
+			writeOAuthPage(w, false, "Authentication failed. Return to Keen Code and try again.")
+			select {
+			case resultCh <- oauthCallbackResult{Err: fmt.Errorf("OAuth callback missing code")}:
+			default:
+			}
+			return
+		}
+
+		respondCh := make(chan callbackResponse, 1)
+		select {
+		case resultCh <- oauthCallbackResult{Code: code, State: q.Get("state"), respondCh: respondCh}:
+		default:
+			writeOAuthPage(w, false, "Authentication already handled.")
+			return
+		}
+
+		select {
+		case response := <-respondCh:
+			writeOAuthPage(w, response.Success, response.Message)
+		case <-ctx.Done():
+			writeOAuthPage(w, false, "Authentication timed out.")
+		case <-time.After(30 * time.Second):
+			writeOAuthPage(w, false, "Authentication timed out.")
+		}
+	})
+
+	ln, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return nil, fmt.Errorf("OAuth callback address %s is unavailable; close the app using it and try again: %w", server.Addr, err)
+	}
+	go func() {
+		_ = server.Serve(ln)
+	}()
+	return server, nil
 }

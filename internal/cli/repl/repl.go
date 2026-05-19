@@ -26,6 +26,7 @@ import (
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/filesystem"
 	"github.com/user/keen-code/internal/llm"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/providers"
@@ -43,6 +44,7 @@ type replContext struct {
 	globalCfg  *config.GlobalConfig
 	loader     *config.Loader
 	registry   *providers.Registry
+	mcp        keenmcp.Runtime
 }
 
 type replModel struct {
@@ -210,7 +212,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 }
 
 func (m replModel) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, checkForUpdate(m.ctx.version))
+	return tea.Batch(textarea.Blink, checkForUpdate(m.ctx.version), waitForMCPStartup(m.ctx.mcp))
 }
 
 func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
@@ -423,6 +425,12 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 		return m.handleCompactionError(msg.err)
 	case updateCheckMsg:
 		m.handleUpdateCheckMsg(msg)
+		return m, nil
+	case mcpStartupStatusMsg:
+		m.handleMCPStartupStatus(msg.Statuses)
+		return m, nil
+	case mcpRefreshDoneMsg:
+		m.handleMCPRefreshDone(msg)
 		return m, nil
 	case diffReadyMsg:
 		m.streamHandler.HandleDiff(msg.req.Lines)
@@ -734,6 +742,7 @@ func RunREPL(
 	globalCfg *config.GlobalConfig,
 	registry *providers.Registry,
 	needsSetup bool,
+	mcpRuntime keenmcp.Runtime,
 ) error {
 	ctx := &replContext{
 		version:    version,
@@ -742,6 +751,7 @@ func RunREPL(
 		globalCfg:  globalCfg,
 		loader:     loader,
 		registry:   registry,
+		mcp:        mcpRuntime,
 	}
 
 	var llmClient llm.LLMClient

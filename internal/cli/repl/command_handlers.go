@@ -2,8 +2,11 @@ package repl
 
 import (
 	"context"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -15,8 +18,11 @@ import (
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/skills"
 )
+
+const mcpRefreshTimeout = 5 * time.Minute
 
 func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	switch {
@@ -36,6 +42,11 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	case input == replcommands.Model:
 		m.textarea.Reset()
 		return m.startModelSelection(), nil, true
+
+	case input == replcommands.MCP || strings.HasPrefix(input, replcommands.MCP+" "):
+		m.textarea.Reset()
+		result, cmd := m.handleMCPCommand(input)
+		return result, cmd, true
 
 	case input == replcommands.Mode || strings.HasPrefix(input, replcommands.Mode+" "):
 		m.textarea.Reset()
@@ -256,6 +267,156 @@ func (m *replModel) handleShowThinkingCommand(input string) replModel {
 	return *m
 }
 
+func (m *replModel) handleMCPCommand(input string) (replModel, tea.Cmd) {
+	args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, replcommands.MCP)))
+	if m.ctx == nil || m.ctx.mcp == nil {
+		m.output.AddStyledLine("  MCP is not configured.", repltheme.MutedStyle)
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	if len(args) == 0 || args[0] == "status" {
+		m.addMCPStatus(m.ctx.mcp.Servers())
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	if args[0] != "refresh" || len(args) != 2 {
+		m.output.AddStyledLine("  Usage: /mcp status | /mcp refresh <server>", repltheme.UsageHintStyle)
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	server, err := m.resolveMCPServer(args[1])
+	if err != nil {
+		m.output.AddError(err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	m.startLoading("Refreshing MCP server " + server + "...")
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m, tea.Batch(m.spinner.Tick, m.refreshMCPCmd(server))
+}
+
+func (m *replModel) addMCPStatus(statuses []keenmcp.ServerStatus) {
+	if len(statuses) == 0 {
+		m.output.AddStyledLine("  No MCP servers configured.", repltheme.MutedStyle)
+		m.output.AddEmptyLine()
+		return
+	}
+	rows := make([][]string, 0, len(statuses))
+	states := make([]keenmcp.ServerState, 0, len(statuses))
+	for _, status := range statuses {
+		detail := status.LastError
+		if status.State == keenmcp.StateConnected {
+			detail = strings.TrimSpace(status.NegotiatedServerName + " " + status.NegotiatedServerVersion)
+			if detail == "" {
+				detail = "tools: " + strconv.Itoa(status.ToolCount)
+			}
+		}
+		rows = append(rows, []string{status.Name, mcpStatusLabel(status.State), status.AuthType, detail})
+		states = append(states, status.State)
+	}
+
+	nameWidth := maxColumnWidth("Server", rows, 0)
+	statusWidth := maxColumnWidth("Status", rows, 1)
+	authWidth := maxColumnWidth("Auth", rows, 2)
+	m.addCommandTable([]string{"Server", "Status", "Auth", "Detail"}, rows, func(row, col int, style lipgloss.Style) lipgloss.Style {
+		if col == 0 {
+			style = style.Width(nameWidth + commandTableCellPadding)
+			if row != table.HeaderRow {
+				style = style.Inherit(repltheme.PrimaryBoldStyle)
+			}
+		}
+		if col == 1 {
+			style = style.Width(statusWidth + commandTableCellPadding)
+			if row != table.HeaderRow {
+				switch states[row] {
+				case keenmcp.StateConnected:
+					style = style.Inherit(repltheme.HighlightStyle)
+				case keenmcp.StateDisconnected:
+					style = style.Inherit(repltheme.ErrorStyle)
+				default:
+					style = style.Inherit(repltheme.AccentStyle)
+				}
+			}
+		}
+		if col == 2 {
+			style = style.Width(authWidth + commandTableCellPadding)
+		}
+		if col == 3 && row != table.HeaderRow {
+			style = style.Inherit(repltheme.HelpDescStyle)
+		}
+		return style
+	})
+	m.output.AddEmptyLine()
+}
+
+func mcpStatusLabel(state keenmcp.ServerState) string {
+	switch state {
+	case keenmcp.StateConnected:
+		return "✓ connected"
+	case keenmcp.StateConnecting:
+		return "• connecting"
+	default:
+		return "✗ " + string(state)
+	}
+}
+
+func (m *replModel) resolveMCPServer(name string) (string, error) {
+	servers := m.ctx.mcp.Servers()
+	for _, server := range servers {
+		if server.Name == name {
+			return name, nil
+		}
+	}
+	var matches []string
+	for _, server := range servers {
+		tools, err := m.ctx.mcp.ListTools(context.Background(), server.Name)
+		if err != nil {
+			continue
+		}
+		for _, tool := range tools {
+			if tool.Name == name {
+				matches = append(matches, server.Name)
+				break
+			}
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		return "", fmt.Errorf("MCP tool %q is provided by multiple servers: %s", name, strings.Join(matches, ", "))
+	}
+	return "", fmt.Errorf("unknown MCP server or tool: %s", name)
+}
+
+func (m replModel) refreshMCPCmd(server string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), mcpRefreshTimeout)
+		defer cancel()
+		redirectURL := keenmcp.DefaultOAuthRedirectURL
+		fetcher := keenmcp.NewBrowserOAuthCodeFetcher(redirectURL)
+		err := m.ctx.mcp.Refresh(
+			ctx,
+			server,
+			keenmcp.WithRefreshConnectTimeout(mcpRefreshTimeout),
+			keenmcp.WithRefreshOAuthRedirectURL(redirectURL),
+			keenmcp.WithRefreshOAuthAuthorizationCodeFetcher(fetcher),
+		)
+		return mcpRefreshDoneMsg{Server: server, Status: m.ctx.mcp.Status(server), Err: err}
+	}
+}
+
 func (m *replModel) handleToolPermissionCommand(input, command string, allow bool) replModel {
 	args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, command)))
 	toolNames := m.registeredToolNames()
@@ -383,24 +544,8 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 }
 
 func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
-	const (
-		leftPadding  = "    "
-		rightPadding = 2
-		cellPadding  = 2
-	)
-
-	nameWidth := maxSkillNameWidth(skillList)
-	if nameWidth < len("Skill") {
-		nameWidth = len("Skill")
-	}
+	nameWidth := max(maxSkillNameWidth(skillList), len("Skill"))
 	statusWidth := max(lipgloss.Width("Status"), lipgloss.Width("✗ disabled"))
-	tableWidth := m.width - lipgloss.Width(leftPadding) - rightPadding
-	if tableWidth < 1 {
-		tableWidth = m.viewport.Width() - lipgloss.Width(leftPadding) - rightPadding
-	}
-	if tableWidth < 1 {
-		tableWidth = 1
-	}
 
 	rows := make([][]string, 0, len(skillList))
 	for _, skill := range skillList {
@@ -411,12 +556,47 @@ func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
 		rows = append(rows, []string{skill.Name, status, skill.Description})
 	}
 
-	headerStyle := repltheme.MutedStyle.Bold(true)
-	nameStyle := repltheme.PrimaryBoldStyle
 	disabledStatusStyle := repltheme.AccentStyle
 
+	m.addCommandTable([]string{"Skill", "Status", "Description"}, rows, func(row, col int, style lipgloss.Style) lipgloss.Style {
+		if col == 0 {
+			style = style.Width(nameWidth + commandTableCellPadding)
+			if row != table.HeaderRow {
+				style = style.Inherit(repltheme.PrimaryBoldStyle)
+			}
+		}
+		if col == 1 {
+			style = style.Width(statusWidth + commandTableCellPadding)
+			if row != table.HeaderRow {
+				if strings.HasPrefix(rows[row][col], "✓") {
+					style = style.Inherit(repltheme.HighlightStyle)
+				} else {
+					style = style.Inherit(disabledStatusStyle)
+				}
+			}
+		}
+		if col == 2 && row != table.HeaderRow {
+			style = style.Inherit(repltheme.HelpDescStyle)
+		}
+		return style
+	})
+}
+
+const (
+	commandTableLeftPadding  = "    "
+	commandTableRightPadding = 2
+	commandTableCellPadding  = 2
+)
+
+func (m *replModel) addCommandTable(headers []string, rows [][]string, styleFunc func(row, col int, style lipgloss.Style) lipgloss.Style) {
+	tableWidth := m.width - lipgloss.Width(commandTableLeftPadding) - commandTableRightPadding
+	if tableWidth < 1 {
+		tableWidth = m.viewport.Width() - lipgloss.Width(commandTableLeftPadding) - commandTableRightPadding
+	}
+	tableWidth = max(1, tableWidth)
+
 	rendered := table.New().
-		Headers("Skill", "Status", "Description").
+		Headers(headers...).
 		Rows(rows...).
 		Width(tableWidth).
 		Wrap(true).
@@ -430,35 +610,18 @@ func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
 		BorderHeader(true).
 		BorderStyle(repltheme.RuleStyle).
 		StyleFunc(func(row, col int) lipgloss.Style {
-			style := lipgloss.NewStyle().PaddingRight(cellPadding)
+			style := lipgloss.NewStyle().PaddingRight(commandTableCellPadding)
 			if row == table.HeaderRow {
-				style = style.Inherit(headerStyle)
+				style = style.Inherit(repltheme.MutedStyle.Bold(true))
 			}
-			if col == 0 {
-				style = style.Width(nameWidth + cellPadding)
-				if row != table.HeaderRow {
-					style = style.Inherit(nameStyle)
-				}
-			}
-			if col == 1 {
-				style = style.Width(statusWidth + cellPadding)
-				if row != table.HeaderRow {
-					if strings.HasPrefix(rows[row][col], "✓") {
-						style = style.Inherit(repltheme.HighlightStyle)
-					} else {
-						style = style.Inherit(disabledStatusStyle)
-					}
-				}
-			}
-			if col == 2 && row != table.HeaderRow {
-				style = style.Inherit(repltheme.HelpDescStyle)
+			if styleFunc != nil {
+				style = styleFunc(row, col, style)
 			}
 			return style
 		}).
 		Render()
-
-	for _, line := range strings.Split(rendered, "\n") {
-		m.output.AddLine(leftPadding + line)
+	for line := range strings.SplitSeq(rendered, "\n") {
+		m.output.AddLine(commandTableLeftPadding + line)
 	}
 }
 
@@ -466,6 +629,16 @@ func maxSkillNameWidth(skillList []skills.Skill) int {
 	width := 0
 	for _, skill := range skillList {
 		width = max(width, lipgloss.Width(skill.Name))
+	}
+	return width
+}
+
+func maxColumnWidth(header string, rows [][]string, col int) int {
+	width := lipgloss.Width(header)
+	for _, row := range rows {
+		if col < len(row) {
+			width = max(width, lipgloss.Width(row[col]))
+		}
 	}
 	return width
 }
