@@ -4,6 +4,7 @@ import (
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	"github.com/user/keen-code/internal/llm"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 )
 
 type llmChunkMsg string
@@ -40,6 +41,14 @@ type compactionErrMsg struct {
 }
 type updateCheckMsg struct {
 	latest string
+}
+type mcpStartupStatusMsg struct {
+	Statuses []keenmcp.ServerStatus
+}
+type mcpRefreshDoneMsg struct {
+	Server string
+	Status keenmcp.ServerStatus
+	Err    error
 }
 
 type btwChunkMsg string

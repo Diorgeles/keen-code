@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
@@ -44,6 +45,16 @@ func (s *Store) Get(provider string) (OAuthCredential, bool, error) {
 	}
 	cred, ok := data[provider]
 	return cred, ok, nil
+}
+
+func (s *Store) All() (map[string]OAuthCredential, error) {
+	data, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]OAuthCredential, len(data))
+	maps.Copy(result, data)
+	return result, nil
 }
 
 func (s *Store) Set(provider string, cred OAuthCredential) error {

@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/user/keen-code/internal/config"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 )
 
 func TestNewRootCommand(t *testing.T) {
@@ -61,6 +64,72 @@ func TestNewRootCommand_RunCommandHasModelProviderFlags(t *testing.T) {
 	}
 }
 
+func TestStartMCPRuntimeStartsWithE2EConfigAndCloses(t *testing.T) {
+	previous := newMCPManager
+	defer func() { newMCPManager = previous }()
+
+	fake := &fakeMCPRuntime{}
+	var gotOptions int
+	newMCPManager = func(opts ...keenmcp.Option) (keenmcp.Runtime, error) {
+		gotOptions = len(opts)
+		return fake, nil
+	}
+
+	manager, closeMCP := startMCPRuntime(context.Background())
+	closeMCP()
+
+	if manager != fake {
+		t.Fatalf("manager = %#v, want fake", manager)
+	}
+	if gotOptions != 0 {
+		t.Fatalf("options length = %d, want 0", gotOptions)
+	}
+	if fake.starts != 1 {
+		t.Fatalf("starts = %d, want 1", fake.starts)
+	}
+	if fake.closes != 1 {
+		t.Fatalf("closes = %d, want 1", fake.closes)
+	}
+}
+
+func TestStartMCPRuntimeIsBestEffortOnCreateError(t *testing.T) {
+	previous := newMCPManager
+	defer func() { newMCPManager = previous }()
+
+	newMCPManager = func(opts ...keenmcp.Option) (keenmcp.Runtime, error) {
+		return nil, errors.New("boom")
+	}
+
+	manager, closeMCP := startMCPRuntime(context.Background())
+	closeMCP()
+	if manager != nil {
+		t.Fatalf("manager = %#v, want nil", manager)
+	}
+}
+
+func TestStartMCPRuntimeClosesAfterStartError(t *testing.T) {
+	previous := newMCPManager
+	defer func() { newMCPManager = previous }()
+
+	fake := &fakeMCPRuntime{startErr: errors.New("boom")}
+	newMCPManager = func(opts ...keenmcp.Option) (keenmcp.Runtime, error) {
+		return fake, nil
+	}
+
+	manager, closeMCP := startMCPRuntime(context.Background())
+	closeMCP()
+	if manager != nil {
+		t.Fatalf("manager = %#v, want nil", manager)
+	}
+
+	if fake.starts != 1 {
+		t.Fatalf("starts = %d, want 1", fake.starts)
+	}
+	if fake.closes != 1 {
+		t.Fatalf("closes = %d, want 1", fake.closes)
+	}
+}
+
 func TestApplyRunOverrides(t *testing.T) {
 	globalCfg := &config.GlobalConfig{
 		Providers: map[string]config.ProviderConfig{
@@ -101,6 +170,43 @@ func TestApplyRunOverrides(t *testing.T) {
 	if resolvedCfg.Model != "qwen3.6-plus" {
 		t.Fatalf("Model = %q, want qwen3.6-plus", resolvedCfg.Model)
 	}
+}
+
+type fakeMCPRuntime struct {
+	startErr error
+	closeErr error
+	starts   int
+	closes   int
+}
+
+func (f *fakeMCPRuntime) Start(context.Context) error {
+	f.starts++
+	return f.startErr
+}
+
+func (f *fakeMCPRuntime) Close() error {
+	f.closes++
+	return f.closeErr
+}
+
+func (f *fakeMCPRuntime) Servers() []keenmcp.ServerStatus {
+	return nil
+}
+
+func (f *fakeMCPRuntime) Status(server string) keenmcp.ServerStatus {
+	return keenmcp.ServerStatus{Name: server}
+}
+
+func (f *fakeMCPRuntime) WaitInitialScan(context.Context) error {
+	return nil
+}
+
+func (f *fakeMCPRuntime) ListTools(context.Context, string) ([]keenmcp.Tool, error) {
+	return nil, nil
+}
+
+func (f *fakeMCPRuntime) Refresh(context.Context, string, ...keenmcp.RefreshOption) error {
+	return nil
 }
 
 func TestApplyRunOverrides_ProviderUsesFirstConfiguredModel(t *testing.T) {

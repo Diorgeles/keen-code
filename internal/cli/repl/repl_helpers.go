@@ -16,6 +16,7 @@ import (
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/llm"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/updater"
 )
 
@@ -111,6 +112,74 @@ func (m *replModel) startLoading(text string) {
 func (m *replModel) stopLoading() {
 	m.showSpinner = false
 	m.loadingStartedAt = time.Time{}
+}
+
+func waitForMCPStartup(runtime keenmcp.Runtime) tea.Cmd {
+	if runtime == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = runtime.WaitInitialScan(ctx)
+		return mcpStartupStatusMsg{Statuses: runtime.Servers()}
+	}
+}
+
+func (m *replModel) handleMCPStartupStatus(statuses []keenmcp.ServerStatus) {
+	var failed []keenmcp.ServerStatus
+	for _, status := range statuses {
+		if isMCPFailureState(status.State) {
+			failed = append(failed, status)
+		}
+	}
+	if len(failed) == 0 {
+		return
+	}
+	for _, status := range failed {
+		msg := "  MCP connection failed for " + status.Name + ". Try `/mcp refresh " + status.Name + "` to connect."
+		if status.LastError != "" {
+			msg += " (" + status.LastError + ")"
+		}
+		m.output.AddLine(wrapTextWithStyle(msg, repltheme.ErrorStyle, m.messageWidth()))
+	}
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+}
+
+func (m *replModel) messageWidth() int {
+	width := m.width
+	if width <= 0 && m.viewport.Width() > 0 {
+		width = m.viewport.Width()
+	}
+	if width <= 0 {
+		width = defaultWidth
+	}
+	return max(width-4, 1)
+}
+
+func wrapTextWithStyle(text string, style lipgloss.Style, width int) string {
+	if width < 1 {
+		width = 1
+	}
+	return lipgloss.NewStyle().Width(width).Render(style.Render(text))
+}
+
+func isMCPFailureState(state keenmcp.ServerState) bool {
+	return state == keenmcp.StateDisconnected || state == keenmcp.StateAuthRequired || state == keenmcp.StateAuthFailed
+}
+
+func (m *replModel) handleMCPRefreshDone(msg mcpRefreshDoneMsg) {
+	m.stopLoading()
+	if msg.Err != nil {
+		m.output.AddError("MCP refresh failed for "+msg.Server+": "+msg.Err.Error(), repltheme.ErrorStyle)
+	} else {
+		m.output.AddStyledLine("  ✓ MCP server connected: "+msg.Server, repltheme.HighlightStyle)
+	}
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
 }
 
 func (m replModel) loadingElapsedText() string {
@@ -243,7 +312,7 @@ func formatModelSelectionCard(ms *replwidgets.Model, width int) string {
 	sb.WriteString("\n")
 	sb.WriteString(rule + "\n\n")
 	for _, l := range lines {
-		wrapped := lipgloss.NewStyle().Width(contentWidth).Render(l)
+		wrapped := wrapTextWithStyle(l, lipgloss.NewStyle(), contentWidth)
 		for _, wrappedLine := range strings.Split(wrapped, "\n") {
 			sb.WriteString("  " + wrappedLine + "\n")
 		}
