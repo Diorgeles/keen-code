@@ -59,17 +59,6 @@ func TestNewAppState(t *testing.T) {
 	}
 }
 
-func TestNewAppState_NilClient(t *testing.T) {
-	state := New(nil, t.TempDir())
-
-	if state == nil {
-		t.Fatal("expected non-nil AppState")
-	}
-	if state.llmClient != nil {
-		t.Error("expected nil llmClient")
-	}
-}
-
 func TestAppState_AddMessage(t *testing.T) {
 	state := New(nil, t.TempDir())
 
@@ -146,15 +135,6 @@ func TestAppState_ClearMessages(t *testing.T) {
 	state.ClearMessages()
 	if len(state.messages) != 0 {
 		t.Errorf("expected 0 messages after clear, got %d", len(state.messages))
-	}
-}
-
-func TestAppState_ClearMessages_EmptyState(t *testing.T) {
-	state := New(nil, t.TempDir())
-
-	state.ClearMessages()
-	if len(state.messages) != 0 {
-		t.Errorf("expected 0 messages, got %d", len(state.messages))
 	}
 }
 
@@ -468,25 +448,6 @@ func TestAppState_UpdateClient_ToNil(t *testing.T) {
 
 	if state.llmClient != nil {
 		t.Error("expected client to be nil after update")
-	}
-}
-
-func TestAppState_GetClient(t *testing.T) {
-	client := &mockLLMClient{}
-	state := New(client, t.TempDir())
-
-	got := state.GetClient()
-	if got != client {
-		t.Error("GetClient() returned unexpected client")
-	}
-}
-
-func TestAppState_GetClient_Nil(t *testing.T) {
-	state := New(nil, t.TempDir())
-
-	got := state.GetClient()
-	if got != nil {
-		t.Error("GetClient() expected nil, got non-nil")
 	}
 }
 

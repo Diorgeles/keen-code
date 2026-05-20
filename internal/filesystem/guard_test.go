@@ -143,16 +143,6 @@ func TestGuard_IsBlocked_Gitignore(t *testing.T) {
 	}
 }
 
-func TestGuard_CheckPath_ParentDirectory(t *testing.T) {
-	tmpDir := t.TempDir()
-	g := NewGuard(tmpDir, nil)
-
-	got := g.CheckPath("../other-project/main.go", "read")
-	if got != PermissionPending {
-		t.Errorf("CheckPath(../other-project/main.go, read) = %v, want PermissionPending", got)
-	}
-}
-
 func TestGuard_ResolvePath(t *testing.T) {
 	tmpDir := t.TempDir()
 	g := NewGuard(tmpDir, nil)

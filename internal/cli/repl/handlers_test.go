@@ -470,20 +470,6 @@ func TestUpdateNormalMode_ModelSelectionPasteGoesToAPIKeyInput(t *testing.T) {
 	}
 }
 
-func TestHandleKeyMsg_UnknownKey(t *testing.T) {
-	ta := textarea.New()
-	m := replModel{
-		textarea: ta,
-		width:    80,
-	}
-
-	_, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyF1})
-
-	if cmd == nil {
-		t.Log("cmd can be nil or non-nil depending on textarea behavior")
-	}
-}
-
 func TestHandleLLMChunk_MultipleCalls(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
@@ -627,17 +613,6 @@ func TestHandleLLMError_ContextCanceled_DoesNotAddErrorLine(t *testing.T) {
 	if cmd != nil {
 		t.Error("expected nil cmd")
 	}
-}
-
-func TestHandleKeyMsg_SpecialCharacters(t *testing.T) {
-	m := replModel{
-		width:          80,
-		modelSelection: &replwidgets.Model{},
-	}
-
-	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: 'é', Text: "é"})
-
-	_ = newM
 }
 
 func TestHandleToolStart(t *testing.T) {

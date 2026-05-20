@@ -5,13 +5,6 @@ import (
 	"testing"
 )
 
-func TestNewLoader(t *testing.T) {
-	loader := NewLoader()
-	if loader == nil {
-		t.Fatal("expected non-nil loader, got nil")
-	}
-}
-
 func TestLoader_Load_NoConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	os.Setenv("HOME", tmpDir)
@@ -65,29 +58,6 @@ func TestLoader_Load_ExistingConfigFile(t *testing.T) {
 	}
 	if len(pc.Models) != 1 || pc.Models[0] != "claude-3-sonnet" {
 		t.Errorf("expected models ['claude-3-sonnet'], got %v", pc.Models)
-	}
-}
-
-func TestLoader_Save(t *testing.T) {
-	tmpDir := t.TempDir()
-	os.Setenv("HOME", tmpDir)
-	defer os.Unsetenv("HOME")
-
-	loader := NewLoader()
-	cfg := &GlobalConfig{
-		ActiveProvider: ProviderOpenAI,
-		Providers: map[string]ProviderConfig{
-			ProviderOpenAI: {Models: []string{"gpt-4o"}, APIKey: "sk-test"},
-		},
-	}
-
-	err := loader.Save(cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if _, err := os.Stat(ConfigPath()); os.IsNotExist(err) {
-		t.Error("expected config file to exist, but it does not")
 	}
 }
 

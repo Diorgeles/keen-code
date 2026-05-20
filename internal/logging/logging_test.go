@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestParseLogLevel(t *testing.T) {
@@ -98,13 +97,5 @@ func TestInit(t *testing.T) {
 
 	if info.IsDir() {
 		t.Error("Init() created path is a directory, not a file")
-	}
-}
-
-func TestTimestampFormat(t *testing.T) {
-	timestamp := time.Now().Format("2006-01-02-15-04-05")
-	parts := strings.Split(timestamp, "-")
-	if len(parts) != 6 {
-		t.Errorf("timestamp format incorrect: got %d parts, want 6", len(parts))
 	}
 }

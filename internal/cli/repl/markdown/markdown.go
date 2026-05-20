@@ -131,9 +131,16 @@ func renderTableBlockWithOuterBorders(lines []string) []string {
 			continue
 		}
 		framed = append(framed, indent+"│"+padTableBody(body, width)+"│")
+		if nextTableLineIsBody(lines[i+1:]) {
+			framed = append(framed, indent+"├"+separator+"┤")
+		}
 	}
 	framed = append(framed, indent+"└"+strings.ReplaceAll(separator, "┼", "┴")+"┘")
 	return framed
+}
+
+func nextTableLineIsBody(lines []string) bool {
+	return len(lines) > 0 && isTableLine(lines[0]) && !isTableSeparatorLine(lines[0])
 }
 
 func isTableLine(line string) bool {

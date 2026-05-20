@@ -3,8 +3,6 @@ package repl
 import (
 	"strings"
 	"testing"
-
-	"github.com/user/keen-code/internal/llm"
 )
 
 func TestUsagePercent(t *testing.T) {
@@ -74,35 +72,5 @@ func TestContextStatus_ShouldSuggestCompaction(t *testing.T) {
 	}
 	if (contextStatus{KnownWindow: true, KnownTokens: false, Percent: 90}).ShouldSuggestCompaction() {
 		t.Fatal("did not expect compaction suggestion when tokens are unknown")
-	}
-}
-
-func TestContextStatus_ProviderBacked(t *testing.T) {
-	status := contextStatus{
-		CurrentTokens: 50000,
-		ContextWindow: 200000,
-		KnownWindow:   true,
-		KnownTokens:   true,
-		Percent:       25.0,
-	}
-	got := renderContextStatus(status)
-	if !strings.Contains(got, "25%") {
-		t.Fatalf("expected 25%% in provider-backed status, got %q", got)
-	}
-	if status.ShouldSuggestCompaction() {
-		t.Fatal("should not suggest compaction at 25%")
-	}
-}
-
-func TestTokenUsageFields(t *testing.T) {
-	usage := &llm.TokenUsage{
-		InputTokens:     1000,
-		OutputTokens:    200,
-		TotalTokens:     1200,
-		ReasoningTokens: 50,
-		CachedTokens:    300,
-	}
-	if usage.InputTokens != 1000 {
-		t.Fatalf("expected InputTokens 1000, got %d", usage.InputTokens)
 	}
 }

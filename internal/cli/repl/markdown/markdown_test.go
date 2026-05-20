@@ -106,6 +106,25 @@ func TestRendererRenderTableUsesRulesAndColumns(t *testing.T) {
 	}
 }
 
+func TestRendererRenderTableAddsRulesBetweenBodyRows(t *testing.T) {
+	renderer, err := New(80)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	rendered := stripANSI(renderer.Render("| Name | Status |\n| --- | --- |\n| Build | Passing |\n| Test | Passing |\n| Race | Passing |"))
+	lines := strings.Split(rendered, "\n")
+	for _, row := range []string{"Build", "Test"} {
+		index := findLineIndexContaining(lines, row)
+		if index == -1 {
+			t.Fatalf("expected row %q in %q", row, rendered)
+		}
+		if index+1 >= len(lines) || !isFramedTableSeparatorLine(lines[index+1]) {
+			t.Fatalf("expected table rule after row %q, got %q in %q", row, lines[index+1], rendered)
+		}
+	}
+}
+
 func TestRendererRenderTableStaysWithinWidth(t *testing.T) {
 	width := 40
 	renderer, err := New(width)
@@ -152,6 +171,22 @@ func findLineContaining(value, needle string) string {
 		}
 	}
 	return ""
+}
+
+func findLineIndexContaining(lines []string, needle string) int {
+	for i, line := range lines {
+		if strings.Contains(line, needle) {
+			return i
+		}
+	}
+	return -1
+}
+
+func isFramedTableSeparatorLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "├") &&
+		strings.Contains(trimmed, "┼") &&
+		strings.HasSuffix(trimmed, "┤")
 }
 
 func hasForegroundColorEscape(value string) bool {

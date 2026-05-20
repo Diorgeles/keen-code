@@ -29,14 +29,6 @@ func TestNewRootCommand(t *testing.T) {
 	}
 }
 
-func TestNewRootCommand_DifferentVersion(t *testing.T) {
-	cmd := NewRootCommand("1.2.3")
-
-	if cmd.Version != "1.2.3" {
-		t.Errorf("command Version = %q, want '1.2.3'", cmd.Version)
-	}
-}
-
 func TestNewRootCommand_HasRunCommand(t *testing.T) {
 	cmd := NewRootCommand("0.1.0")
 

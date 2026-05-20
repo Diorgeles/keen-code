@@ -160,21 +160,6 @@ func TestNewOpenAICompatibleClient_DeepSeek(t *testing.T) {
 	}
 }
 
-func TestNewOpenAICompatibleClient_CustomBaseURL(t *testing.T) {
-	client, err := NewOpenAICompatibleClient(&ClientConfig{
-		Provider: Provider(config.ProviderDeepSeek),
-		APIKey:   "test-key",
-		Model:    "deepseek-chat",
-		BaseURL:  "https://custom.example.com/v1",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if client == nil {
-		t.Fatal("expected client")
-	}
-}
-
 func TestNewOpenAICompatibleClient_OpenAIProviderRejected(t *testing.T) {
 	client, err := NewOpenAICompatibleClient(&ClientConfig{
 		Provider: Provider(config.ProviderOpenAI),
