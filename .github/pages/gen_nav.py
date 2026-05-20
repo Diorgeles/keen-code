@@ -141,7 +141,7 @@ def build_nav(base: str) -> list:
         ("Roadmap", "ROADMAP.md"),
         ("Changelog", "CHANGELOG.md"),
         ("Contributing", "CONTRIBUTING.md"),
-        ("Agents", "AGENTS.md"),
+        ("AGENTS.md", "AGENTS.md"),
     ]:
         if os.path.isfile(os.path.join(base, path)):
             nav.append({title: path})
