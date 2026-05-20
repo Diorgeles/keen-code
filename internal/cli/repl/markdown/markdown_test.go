@@ -140,6 +140,33 @@ func TestRendererRenderTableStaysWithinWidth(t *testing.T) {
 	}
 }
 
+func TestRendererRenderTableDoesNotAddRulesWithinWrappedBodyRows(t *testing.T) {
+	renderer, err := New(40)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	rendered := stripANSI(renderer.Render("| Name | Description |\n| --- | --- |\n| Alpha | First segment continuation marker that wraps. |\n| Beta | Done |"))
+	lines := strings.Split(rendered, "\n")
+	alphaIndex := findLineIndexContaining(lines, "Alpha")
+	continuationIndex := findLineIndexContaining(lines, "continuation")
+	betaIndex := findLineIndexContaining(lines, "Beta")
+	if alphaIndex == -1 || continuationIndex == -1 || betaIndex == -1 {
+		t.Fatalf("expected wrapped rows in %q", rendered)
+	}
+	if alphaIndex >= continuationIndex || continuationIndex >= betaIndex {
+		t.Fatalf("expected Alpha row to wrap before Beta row in %q", rendered)
+	}
+	for _, line := range lines[alphaIndex+1 : continuationIndex] {
+		if isFramedTableSeparatorLine(line) {
+			t.Fatalf("expected no table rule inside wrapped Alpha row, got %q in %q", line, rendered)
+		}
+	}
+	if !isFramedTableSeparatorLine(lines[betaIndex-1]) {
+		t.Fatalf("expected table rule before Beta row, got %q in %q", lines[betaIndex-1], rendered)
+	}
+}
+
 func TestRendererRenderTableOuterBordersDoNotLeaveRightGap(t *testing.T) {
 	renderer, err := New(80)
 	if err != nil {
