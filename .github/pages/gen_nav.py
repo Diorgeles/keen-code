@@ -53,11 +53,9 @@ BASE_CONFIG = {
             "search.suggest",
             "content.code.copy",
         ],
-        "font": {
-            "text": "Inter",
-            "code": "JetBrains Mono",
-        },
+        "font": {"code": "Cascadia Code"},
     },
+    "extra_css": ["extra.css"],
     "markdown_extensions": [
         "pymdownx.highlight",
         "pymdownx.superfences",

@@ -1,0 +1,10 @@
+@import url('https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700&display=swap');
+
+:root {
+  --md-text-font: "Satoshi", sans-serif;
+}
+
+body,
+.md-typeset {
+  font-family: "Satoshi", sans-serif;
+}

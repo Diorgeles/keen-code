@@ -27,6 +27,7 @@ jobs:
           cp -r docs _docs/
           cp -r .ai-interactions _docs/ai-interactions
           cp -r assets _docs/
+          cp .github/pages/extra.css _docs/
 
       - name: Patch README for MkDocs markdown-in-html
         run: sed -i 's/<div align="center">/<div align="center" markdown="1">/g' _docs/README.md
