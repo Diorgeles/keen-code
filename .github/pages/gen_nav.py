@@ -63,6 +63,7 @@ BASE_CONFIG = {
         "pymdownx.superfences",
         "tables",
         "admonition",
+        "md_in_html",
         {"toc": {"permalink": True}},
     ],
 }

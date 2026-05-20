@@ -28,6 +28,9 @@ jobs:
           cp -r .ai-interactions _docs/ai-interactions
           cp -r assets _docs/
 
+      - name: Patch README for MkDocs markdown-in-html
+        run: sed -i 's/<div align="center">/<div align="center" markdown="1">/g' _docs/README.md
+
       - name: Generate mkdocs.yml
         run: python3 .github/pages/gen_nav.py _docs > mkdocs.yml
 
