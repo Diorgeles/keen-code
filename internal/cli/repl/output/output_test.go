@@ -256,4 +256,3 @@ func TestOutputBuilder_AddStyledLine(t *testing.T) {
 		t.Errorf("lines[0] should contain 'styled content', got %q", lines[0])
 	}
 }
-

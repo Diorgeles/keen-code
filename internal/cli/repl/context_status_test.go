@@ -74,4 +74,3 @@ func TestContextStatus_ShouldSuggestCompaction(t *testing.T) {
 		t.Fatal("did not expect compaction suggestion when tokens are unknown")
 	}
 }
-

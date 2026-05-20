@@ -99,4 +99,3 @@ func TestInit(t *testing.T) {
 		t.Error("Init() created path is a directory, not a file")
 	}
 }
-
