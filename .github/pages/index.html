@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Keen Code</title>
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <style>
+    /* ── Light theme (default) ── */
+    :root {
+      --kc-bg: #ffffff;
+      --kc-sidebar-bg: #f5f7f9;
+      --kc-text: #2c3e50;
+      --kc-muted: #7f8c8d;
+      --kc-link: #42b983;
+      --kc-link-hover: #2e8b5d;
+      --kc-code-bg: #f8f8f8;
+      --kc-code-text: #476582;
+      --kc-border: #eaecef;
+      --kc-toggle-bg: #e8edf2;
+      --kc-toggle-text: #2c3e50;
+      --kc-toggle-active-bg: #42b983;
+      --kc-toggle-active-text: #ffffff;
+    }
+
+    /* ── Dark theme ── */
+    [data-theme="dark"] {
+      --kc-bg: #1e1e2e;
+      --kc-sidebar-bg: #181825;
+      --kc-text: #cdd6f4;
+      --kc-muted: #6c7086;
+      --kc-link: #89b4fa;
+      --kc-link-hover: #b4d0fb;
+      --kc-code-bg: #181825;
+      --kc-code-text: #a6e3a1;
+      --kc-border: #313244;
+      --kc-toggle-bg: #313244;
+      --kc-toggle-text: #cdd6f4;
+      --kc-toggle-active-bg: #89b4fa;
+      --kc-toggle-active-text: #1e1e2e;
+    }
+
+    /* ── Apply variables to Docsify elements ── */
+    body {
+      background: var(--kc-bg);
+      color: var(--kc-text);
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .sidebar {
+      background: var(--kc-sidebar-bg) !important;
+      border-right: 1px solid var(--kc-border) !important;
+    }
+
+    .sidebar a,
+    .sidebar-nav a {
+      color: var(--kc-text) !important;
+    }
+
+    .sidebar a:hover,
+    .sidebar-nav a:hover {
+      color: var(--kc-link) !important;
+    }
+
+    .sidebar-nav .active > a {
+      color: var(--kc-link) !important;
+      border-right: 2px solid var(--kc-link);
+    }
+
+    .content {
+      background: var(--kc-bg) !important;
+    }
+
+    .markdown-section {
+      color: var(--kc-text) !important;
+    }
+
+    .markdown-section h1,
+    .markdown-section h2,
+    .markdown-section h3,
+    .markdown-section h4,
+    .markdown-section h5 {
+      color: var(--kc-text) !important;
+    }
+
+    .markdown-section a {
+      color: var(--kc-link) !important;
+    }
+
+    .markdown-section a:hover {
+      color: var(--kc-link-hover) !important;
+    }
+
+    .markdown-section code {
+      background: var(--kc-code-bg) !important;
+      color: var(--kc-code-text) !important;
+      border: 1px solid var(--kc-border) !important;
+    }
+
+    .markdown-section pre,
+    .markdown-section pre > code {
+      background: var(--kc-code-bg) !important;
+      color: var(--kc-text) !important;
+      border: 1px solid var(--kc-border) !important;
+    }
+
+    .markdown-section blockquote {
+      border-left: 4px solid var(--kc-link) !important;
+      color: var(--kc-muted) !important;
+      background: var(--kc-code-bg) !important;
+    }
+
+    .markdown-section table th,
+    .markdown-section table td {
+      border: 1px solid var(--kc-border) !important;
+    }
+
+    .markdown-section table tr:nth-child(2n) {
+      background: var(--kc-code-bg) !important;
+    }
+
+    .markdown-section hr {
+      border-color: var(--kc-border) !important;
+    }
+
+    nav.app-nav {
+      background: var(--kc-bg) !important;
+    }
+
+    .app-nav a {
+      color: var(--kc-text) !important;
+    }
+
+    .search input {
+      background: var(--kc-code-bg) !important;
+      color: var(--kc-text) !important;
+      border: 1px solid var(--kc-border) !important;
+    }
+
+    .search .clear-button {
+      color: var(--kc-muted) !important;
+    }
+
+    .results-panel {
+      background: var(--kc-sidebar-bg) !important;
+      border: 1px solid var(--kc-border) !important;
+    }
+
+    .results-panel .matching-post {
+      border-bottom: 1px solid var(--kc-border) !important;
+    }
+
+    .results-panel .matching-post a {
+      color: var(--kc-link) !important;
+    }
+
+    .results-panel p {
+      color: var(--kc-muted) !important;
+    }
+
+    /* ── Theme toggle widget ── */
+    #kc-theme-toggle {
+      display: inline-flex;
+      gap: 2px;
+      background: var(--kc-toggle-bg);
+      border-radius: 6px;
+      padding: 2px;
+      margin: 6px 12px 0 0;
+      vertical-align: middle;
+    }
+
+    #kc-theme-toggle button {
+      border: none;
+      background: transparent;
+      color: var(--kc-toggle-text);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      line-height: 1.4;
+    }
+
+    #kc-theme-toggle button.active {
+      background: var(--kc-toggle-active-bg);
+      color: var(--kc-toggle-active-text);
+    }
+
+    #kc-theme-toggle button:hover:not(.active) {
+      background: var(--kc-border);
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script>
+    const KC_THEME_KEY = 'kc-theme';
+
+    function systemPrefersDark() {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+
+    function applyTheme(pref) {
+      const isDark = pref === 'dark' || (pref === 'system' && systemPrefersDark());
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    }
+
+    const savedTheme = localStorage.getItem(KC_THEME_KEY) || 'system';
+    applyTheme(savedTheme);
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+      const pref = localStorage.getItem(KC_THEME_KEY) || 'system';
+      if (pref === 'system') applyTheme('system');
+    });
+
+    function buildToggle() {
+      const nav = document.querySelector('nav.app-nav');
+      if (!nav || document.getElementById('kc-theme-toggle')) return;
+
+      const widget = document.createElement('span');
+      widget.id = 'kc-theme-toggle';
+
+      const options = [
+        { value: 'light', label: '☀ Light' },
+        { value: 'dark',  label: '☾ Dark' },
+        { value: 'system', label: '⬡ System' },
+      ];
+
+      const current = localStorage.getItem(KC_THEME_KEY) || 'system';
+
+      options.forEach(({ value, label }) => {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.dataset.theme = value;
+        if (value === current) btn.classList.add('active');
+        btn.addEventListener('click', () => {
+          localStorage.setItem(KC_THEME_KEY, value);
+          applyTheme(value);
+          widget.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+        widget.appendChild(btn);
+      });
+
+      nav.prepend(widget);
+    }
+
+    window.$docsify = {
+      name: 'Keen Code',
+      repo: 'mochow13/keen-code',
+      loadSidebar: '_sidebar.md',
+      homepage: 'README.md',
+      auto2top: true,
+      subMaxLevel: 2,
+      search: {
+        placeholder: 'Search docs...',
+        noData: 'No results.',
+        depth: 4,
+      },
+      plugins: [
+        function(hook) {
+          hook.doneEach(buildToggle);
+          hook.ready(buildToggle);
+        }
+      ],
+    };
+  </script>
+
+  <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/docsify.min.js"></script>
+  <script src="//cdn.jsdelivr.net/npm/docsify@4/lib/plugins/search.min.js"></script>
+</body>
+</html>

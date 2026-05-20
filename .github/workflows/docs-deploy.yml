@@ -1,0 +1,49 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Stage site files
+        run: |
+          mkdir -p site
+
+          # Top-level docs
+          cp README.md TOUR.md ROADMAP.md CHANGELOG.md CONTRIBUTING.md AGENTS.md site/
+
+          # Docs directory
+          cp -r docs site/
+
+          # Full AI interactions history
+          cp -r .ai-interactions site/
+
+          # Assets (images referenced from docs)
+          cp -r assets site/
+
+          # Docsify entry point
+          cp .github/pages/index.html site/index.html
+
+      - name: Generate sidebar
+        run: python3 .github/pages/gen_sidebar.py site > site/_sidebar.md
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+          force_orphan: true
