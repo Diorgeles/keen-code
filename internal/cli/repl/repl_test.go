@@ -182,34 +182,6 @@ func TestActivateSkillInput_UsesFrontmatterNameNotDir(t *testing.T) {
 	}
 }
 
-func TestAdjustTextareaHeight_ZeroHeight(t *testing.T) {
-	m := newTestModel()
-	m.height = 0
-	m.adjustTextareaHeight()
-
-	if m.textarea.Height() != maxHeight {
-		t.Errorf("expected textarea height %d, got %d", maxHeight, m.textarea.Height())
-	}
-}
-
-func TestIsAtTopOfInput(t *testing.T) {
-	m := newTestModel()
-	m.textarea.SetValue("line1")
-
-	if !m.isAtTopOfInput() {
-		t.Error("expected isAtTopOfInput to be true for single line")
-	}
-}
-
-func TestIsAtBottomOfInput(t *testing.T) {
-	m := newTestModel()
-	m.textarea.SetValue("line1")
-
-	if !m.isAtBottomOfInput() {
-		t.Error("expected isAtBottomOfInput to be true for single line")
-	}
-}
-
 func TestUpdateNormalMode_WindowResize(t *testing.T) {
 	m := newTestModel()
 

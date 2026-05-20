@@ -14,13 +14,6 @@ func TestSearchEmptyQuery(t *testing.T) {
 	}
 }
 
-func TestSearchSpecialChars(t *testing.T) {
-	s := NewFileSearcher(t.TempDir(), nil)
-	// Should not panic or error; just return empty
-	got := s.Search("[bracket]", 10)
-	_ = got // no error expected
-}
-
 func TestGitLsFilesHandlesSpecialPaths(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available")

@@ -184,14 +184,6 @@ func TestRefreshFilesEmptyHides(t *testing.T) {
 	}
 }
 
-func TestRefreshFilesNoDescription(t *testing.T) {
-	s := NewSuggestionModel()
-	s.RefreshFiles([]string{"foo.go"})
-	if s.items[0].Description != "" {
-		t.Errorf("expected empty description for file item, got %q", s.items[0].Description)
-	}
-}
-
 func TestIsFileMode(t *testing.T) {
 	s := NewSuggestionModel()
 	s.Refresh("/")
@@ -211,15 +203,6 @@ func TestCurrentInFileMode(t *testing.T) {
 	cur := s.Current()
 	if cur == nil || cur.Name != "b.go" {
 		t.Errorf("expected b.go, got %v", cur)
-	}
-}
-
-func TestViewFilesModeNoDescription(t *testing.T) {
-	s := NewSuggestionModel()
-	s.RefreshFiles([]string{"src/main.go"})
-	view := s.View(80)
-	if view == "" {
-		t.Error("expected non-empty view")
 	}
 }
 

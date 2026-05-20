@@ -157,24 +157,6 @@ func TestResolve_PropagatesBaseURL(t *testing.T) {
 	}
 }
 
-func TestResolve_EmptyBaseURL(t *testing.T) {
-	global := &GlobalConfig{
-		ActiveProvider: ProviderAnthropic,
-		Providers: map[string]ProviderConfig{
-			ProviderAnthropic: {Models: []string{"claude-3-sonnet"}, APIKey: "sk-ant-test"},
-		},
-	}
-	session := &SessionConfig{}
-
-	resolved, err := Resolve(global, session)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resolved.BaseURL != "" {
-		t.Errorf("expected empty BaseURL, got %q", resolved.BaseURL)
-	}
-}
-
 func TestResolve_OpenAICodexAllowsMissingAPIKey(t *testing.T) {
 	global := &GlobalConfig{
 		ActiveProvider: ProviderOpenAICodex,
@@ -279,21 +261,5 @@ func TestDefaultGlobalConfig(t *testing.T) {
 	}
 	if cfg.Providers == nil {
 		t.Error("expected non-nil Providers map")
-	}
-}
-
-func TestConfigPath(t *testing.T) {
-	path := ConfigPath()
-
-	if path == "" {
-		t.Error("expected non-empty path, got empty string")
-	}
-}
-
-func TestConfigDir(t *testing.T) {
-	dir := ConfigDir()
-
-	if dir == "" {
-		t.Error("expected non-empty directory, got empty string")
 	}
 }

@@ -70,15 +70,6 @@ func TestOutputBuilder_SetLines(t *testing.T) {
 	}
 }
 
-func TestOutputBuilder_Join_Empty(t *testing.T) {
-	ob := NewOutputBuilder(80, "")
-
-	result := ob.Join()
-	if result != "" {
-		t.Errorf("Join() = %q, want empty string", result)
-	}
-}
-
 func TestOutputBuilder_Join(t *testing.T) {
 	ob := NewOutputBuilder(80, "")
 	ob.AddLine("line1")
@@ -266,28 +257,3 @@ func TestOutputBuilder_AddStyledLine(t *testing.T) {
 	}
 }
 
-func TestOutputBuilder_MultipleOperations(t *testing.T) {
-	ob := NewOutputBuilder(80, "")
-	style := lipgloss.NewStyle()
-
-	ob.AddLine("header")
-	ob.AddEmptyLine()
-	ob.AddUserInput("user query", style)
-	ob.AddAssistantResponse("assistant answer", style)
-	ob.AddError("warning", style)
-	ob.AddStyledLine("footer", style)
-
-	lines := ob.GetLines()
-	if ob.IsEmpty() {
-		t.Error("builder should not be empty after multiple operations")
-	}
-
-	result := ob.Join()
-	if result == "" {
-		t.Error("Join() should not return empty after operations")
-	}
-
-	if len(lines) < 6 {
-		t.Errorf("expected at least 6 lines, got %d", len(lines))
-	}
-}

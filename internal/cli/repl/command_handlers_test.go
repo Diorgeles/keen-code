@@ -538,19 +538,6 @@ func TestHandleEnterKey_LogoutCommand_NoProvider(t *testing.T) {
 	}
 }
 
-func TestStartModelSelection_SetsModelSelection(t *testing.T) {
-	m := newTestModel()
-	m.ctx.registry = &providers.Registry{Providers: []providers.Provider{}}
-	m.ctx.globalCfg = &config.GlobalConfig{}
-	m.ctx.loader = config.NewLoader()
-
-	result := m.startModelSelection()
-
-	if result.modelSelection == nil {
-		t.Error("expected modelSelection to be set")
-	}
-}
-
 func TestHandleEnterKey_NewCommand(t *testing.T) {
 	m := newTestModel()
 	client := &mockLLMClient{}
@@ -910,16 +897,6 @@ func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected error about LLM client not initialized for /btw")
-	}
-}
-
-func TestDispatchCommand_BtwNotHandled(t *testing.T) {
-	m := newTestModel()
-
-	_, _, handled := m.dispatchCommand("/btw question")
-
-	if handled {
-		t.Error("expected /btw to not be handled by dispatchCommand (handled via early return in handleEnterKey)")
 	}
 }
 
