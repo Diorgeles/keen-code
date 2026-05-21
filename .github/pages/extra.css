@@ -8,3 +8,7 @@ body,
 .md-typeset {
   font-family: "Satoshi", sans-serif;
 }
+
+.md-header__button.md-logo {
+  display: none;
+}

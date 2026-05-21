@@ -29,8 +29,10 @@ jobs:
           cp -r assets _docs/
           cp .github/pages/extra.css _docs/
 
-      - name: Patch README for MkDocs markdown-in-html
-        run: sed -i 's/<div align="center">/<div align="center" markdown="1">/g' _docs/README.md
+      - name: Patch staged docs
+        run: |
+          sed -i 's/<div align="center">/<div align="center" markdown="1">/g' _docs/README.md
+          sed -i 's/\.ai-interactions\//ai-interactions\//g' _docs/README.md _docs/TOUR.md
 
       - name: Generate mkdocs.yml
         run: python3 .github/pages/gen_nav.py _docs > mkdocs.yml
