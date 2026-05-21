@@ -7,3 +7,5 @@ bench/bench-*
 bench/swebench/
 bench/tasks.json
 bench/usage.csv
+_docs/
+mkdocs.yml

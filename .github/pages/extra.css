@@ -13,6 +13,13 @@ body,
   display: none;
 }
 
+.md-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background-color: rgba(15, 10, 30, 0.5) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .md-typeset h1 {
   background: linear-gradient(135deg, #818cf8, #a78bfa, #e879f9, #818cf8);
   background-size: 300% auto;
