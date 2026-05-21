@@ -15,7 +15,6 @@ BASE_CONFIG = {
     "repo_name": "mochow13/keen-code",
     "theme": {
         "name": "material",
-        "logo": "assets/keen-code.png",
         "favicon": "assets/keen-code.png",
         "palette": [
             {
