@@ -16,6 +16,7 @@ type managerOptions struct {
 	authStore                *keenauth.Store
 	oauthRedirectURL         string
 	oauthCodeFetcher         mcpauth.AuthorizationCodeFetcher
+	oauthForceReauth         bool
 	connectTimeout           time.Duration
 	listToolsTimeout         time.Duration
 	callToolTimeout          time.Duration
@@ -133,6 +134,12 @@ func WithRefreshOAuthAuthorizationCodeFetcher(fetcher mcpauth.AuthorizationCodeF
 func WithRefreshOAuthRedirectURL(redirectURL string) RefreshOption {
 	return func(o *managerOptions) {
 		o.oauthRedirectURL = redirectURL
+	}
+}
+
+func WithRefreshOAuthForceReauth(force bool) RefreshOption {
+	return func(o *managerOptions) {
+		o.oauthForceReauth = force
 	}
 }
 

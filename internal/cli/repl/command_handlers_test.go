@@ -271,6 +271,21 @@ func TestHandleMCPCommandConnectUnknown(t *testing.T) {
 	}
 }
 
+func TestConnectMCPCmdPassesOAuthReauthOption(t *testing.T) {
+	m := newTestModel()
+	fake := &fakeMCPRuntime{statuses: []keenmcp.ServerStatus{{Name: "posthog", State: keenmcp.StateAuthRequired}}}
+	m.ctx.mcp = fake
+
+	msg := m.connectMCPCmd("posthog")().(mcpConnectDoneMsg)
+
+	if msg.Server != "posthog" || fake.connected != "posthog" {
+		t.Fatalf("connected = %q, msg server = %q; want posthog", fake.connected, msg.Server)
+	}
+	if fake.refreshOptCount != 4 {
+		t.Fatalf("Refresh option count = %d, want 4", fake.refreshOptCount)
+	}
+}
+
 func TestHandleMCPConnectDone(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -560,7 +575,7 @@ func TestHandleSkillsCommandDisable(t *testing.T) {
 	m := newTestModel()
 	m.ctx.workingDir = work
 	m.appState = replappstate.New(nil, work)
-	m.textarea.SetValue("/skills demo disable")
+	m.textarea.SetValue("/skills disable demo")
 	newM, _ := m.handleEnterKey()
 
 	if !strings.Contains(newM.output.Join(), "Skill \"demo\" disabled") {
@@ -568,6 +583,85 @@ func TestHandleSkillsCommandDisable(t *testing.T) {
 	}
 	if newM.appState.GetSkillsConfig().Enabled("demo") {
 		t.Fatal("expected appstate config to disable skill")
+	}
+}
+
+func TestParseSkillArgs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{name: "root", input: "/skills", want: nil},
+		{name: "list", input: "/skills list", want: []string{"list"}},
+		{name: "status", input: "/skills status", want: []string{"status"}},
+		{name: "reload", input: "/skills reload", want: []string{"reload"}},
+		{name: "enable", input: "/skills enable demo", want: []string{"enable", "demo"}},
+		{name: "disable", input: "/skills disable demo", want: []string{"disable", "demo"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseSkillArgs(tt.input)
+			if strings.Join(got, " ") != strings.Join(tt.want, " ") {
+				t.Fatalf("parseSkillArgs(%q) = %#v, want %#v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandleSkillsCommandStatus(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/skills status")
+	newM, _ := m.handleEnterKey()
+
+	output := ansi.Strip(newM.output.Join())
+	for _, expected := range []string{"Available Skills", "Skill", "Status", "Description", "demo", "✓ enabled", "Demo skill"} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected %q in skills status output, got %q", expected, output)
+		}
+	}
+}
+
+func TestHandleSkillsCommandRejectsNameFirstStatus(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: Demo skill\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/skills demo enable")
+	newM, _ := m.handleEnterKey()
+
+	output := ansi.Strip(newM.output.Join())
+	for _, expected := range []string{"Usage:", "/skills list|status", "/skills reload", "enable|disable", "<name>"} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected usage error containing %q, got %q", expected, output)
+		}
+	}
+	if strings.Contains(output, "Skill \"demo\" enabled") {
+		t.Fatalf("expected name-first status command to be rejected, got %q", output)
 	}
 }
 
@@ -947,10 +1041,11 @@ func TestHandleEnterKey_BtwCommandNoQuestionWithHistory(t *testing.T) {
 }
 
 type fakeMCPRuntime struct {
-	statuses   []keenmcp.ServerStatus
-	tools      map[string][]keenmcp.Tool
-	connectErr error
-	connected  string
+	statuses        []keenmcp.ServerStatus
+	tools           map[string][]keenmcp.Tool
+	connectErr      error
+	connected       string
+	refreshOptCount int
 }
 
 func (f *fakeMCPRuntime) Start(context.Context) error {
@@ -985,8 +1080,9 @@ func (f *fakeMCPRuntime) ListTools(_ context.Context, server string) ([]keenmcp.
 	return f.tools[server], nil
 }
 
-func (f *fakeMCPRuntime) Refresh(_ context.Context, server string, _ ...keenmcp.RefreshOption) error {
+func (f *fakeMCPRuntime) Refresh(_ context.Context, server string, opts ...keenmcp.RefreshOption) error {
 	f.connected = server
+	f.refreshOptCount = len(opts)
 	return f.connectErr
 }
 

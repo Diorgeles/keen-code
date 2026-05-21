@@ -13,6 +13,8 @@ import (
 	"github.com/user/keen-code/internal/llm"
 )
 
+const maxMCPToolValueLength = 140
+
 type OutputBuilder struct {
 	lines      []string
 	width      int
@@ -140,7 +142,7 @@ func FormatToolInput(toolName string, input map[string]any, workingDir string) s
 	}
 
 	if toolName == "call_mcp_tool" {
-		return jsonMarshalJSON(input)
+		return formatMCPToolInput(input)
 	}
 
 	displayInput := make(map[string]any, len(input))
@@ -183,15 +185,59 @@ func jsonMarshalCompact(v map[string]any) string {
 	return strings.Join(parts, " · ")
 }
 
-func jsonMarshalJSON(v map[string]any) string {
-	if v == nil {
-		return ""
+func formatMCPToolInput(input map[string]any) string {
+	server, _ := input["server"].(string)
+	tool, _ := input["tool"].(string)
+
+	var b strings.Builder
+	if server != "" && tool != "" {
+		b.WriteString(server)
+		b.WriteString("/")
+		b.WriteString(tool)
 	}
-	jsonBytes, err := json.Marshal(v)
-	if err != nil {
-		return jsonMarshalCompact(v)
+
+	args, ok := input["arguments"].(map[string]any)
+	if !ok || len(args) == 0 {
+		return b.String()
 	}
-	return string(jsonBytes)
+
+	keys := make([]string, 0, len(args))
+	for k := range args {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		b.WriteString("\n    ")
+		b.WriteString(k)
+		b.WriteString(": ")
+		b.WriteString(formatMCPToolArgument(args[k]))
+	}
+
+	return b.String()
+}
+
+func formatMCPToolArgument(value any) string {
+	switch v := value.(type) {
+	case string:
+		return truncateToolValue(v, maxMCPToolValueLength)
+	default:
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return truncateToolValue(fmt.Sprintf("%v", v), maxMCPToolValueLength)
+		}
+		return truncateToolValue(string(jsonBytes), maxMCPToolValueLength)
+	}
+}
+
+func truncateToolValue(value string, max int) string {
+	if len(value) <= max {
+		return value
+	}
+	if max <= 3 {
+		return value[:max]
+	}
+	return value[:max-3] + "..."
 }
 
 func formatToolPathForUI(path, workingDir string) string {

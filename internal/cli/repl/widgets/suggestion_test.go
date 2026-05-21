@@ -14,12 +14,12 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := replcommands.Filter("/")
-	if len(got) != 22 {
-		t.Fatalf("expected 22 commands, got %d", len(got))
+	if len(got) != 24 {
+		t.Fatalf("expected 24 commands, got %d", len(got))
 	}
 	want := []string{
 		"/allow-permission", "/btw", "/clear", "/compact", "/exit", "/help", "/logout", "/mcp", "/mcp connect", "/mcp status", "/model", "/mode", "/new",
-		"/reset-permission", "/resume", "/sessions", "/show-thinking", "/skills", "/skills disable", "/skills enable", "/skills list", "/thinking",
+		"/reset-permission", "/resume", "/sessions", "/show-thinking", "/skills", "/skills disable", "/skills enable", "/skills list", "/skills reload", "/skills status", "/thinking",
 	}
 	for i, name := range want {
 		if got[i].Name != name {
@@ -85,6 +85,16 @@ func TestFilterCommandsSkillsSubcommands(t *testing.T) {
 	got = replcommands.Filter("/skills d")
 	if len(got) != 1 || got[0].Name != "/skills disable" {
 		t.Errorf("expected /skills disable, got %v", got)
+	}
+
+	got = replcommands.Filter("/skills r")
+	if len(got) != 1 || got[0].Name != "/skills reload" {
+		t.Errorf("expected /skills reload, got %v", got)
+	}
+
+	got = replcommands.Filter("/skills s")
+	if len(got) != 1 || got[0].Name != "/skills status" {
+		t.Errorf("expected /skills status, got %v", got)
 	}
 }
 

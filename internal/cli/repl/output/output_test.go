@@ -142,17 +142,22 @@ func TestFormatToolInput_SeparatesArgumentsWithDots(t *testing.T) {
 	}
 }
 
-func TestFormatToolInput_CallMCPToolFormatsArgumentsAsJSON(t *testing.T) {
+func TestFormatToolInput_CallMCPToolFormatsArgumentsPrettily(t *testing.T) {
 	got := FormatToolInput("call_mcp_tool", map[string]any{
-		"server":     "context7",
-		"tool":       "get-library-docs",
-		"arguments":  map[string]any{"topic": "useEffect"},
+		"server": "context7",
+		"tool":   "query-docs",
+		"arguments": map[string]any{
+			"query":     "React useEffect API reference: when useEffect runs, dependency array behavior, cleanup function timing, common mistakes to avoid",
+			"libraryId": "/reactjs/react.dev",
+		},
 		"checkCache": false,
 	}, "/tmp/project")
 
-	expected := `{"arguments":{"topic":"useEffect"},"checkCache":false,"server":"context7","tool":"get-library-docs"}`
+	expected := "context7/query-docs\n" +
+		"    libraryId: /reactjs/react.dev\n" +
+		"    query: React useEffect API reference: when useEffect runs, dependency array behavior, cleanup function timing, common mistakes to avoid"
 	if got != expected {
-		t.Fatalf("expected call_mcp_tool input as JSON, got %q", got)
+		t.Fatalf("expected pretty call_mcp_tool input, got %q", got)
 	}
 }
 

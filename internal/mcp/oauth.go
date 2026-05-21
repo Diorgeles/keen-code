@@ -30,13 +30,20 @@ func NewBrowserOAuthCodeFetcher(redirectURL string) mcpauth.AuthorizationCodeFet
 	}
 }
 
-func (m *Manager) oauthToken(server string) *oauth2.Token {
+func (m *Manager) oauthToken(server string, forceReauth bool) *oauth2.Token {
+	if forceReauth {
+		return nil
+	}
 	token := m.oauthTokens[server]
 	if token == nil {
 		return nil
 	}
 	copy := *token
 	return &copy
+}
+
+func (m *Manager) clearOAuthToken(server string) error {
+	return m.saveOAuthToken(context.Background(), server, nil)
 }
 
 func (m *Manager) saveOAuthToken(_ context.Context, server string, token *oauth2.Token) error {

@@ -381,7 +381,12 @@ func (m *Manager) transportFor(name string, server ServerConfig, opts managerOpt
 		client = newAPIKeyClient(client, server.Auth)
 	}
 	if server.Auth.Type == AuthOAuth {
-		handler, err := newOAuthHandler(name, server, opts, m.oauthToken(name), m.saveOAuthToken)
+		if opts.oauthForceReauth {
+			if err := m.clearOAuthToken(name); err != nil {
+				return nil, err
+			}
+		}
+		handler, err := newOAuthHandler(name, server, opts, m.oauthToken(name, opts.oauthForceReauth), m.saveOAuthToken)
 		if err != nil {
 			return nil, err
 		}

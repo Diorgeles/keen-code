@@ -224,6 +224,47 @@ func TestManagerOAuthStoredTokenConnectsWithoutFetcher(t *testing.T) {
 	startAndWait(t, manager, "posthog", StateConnected)
 }
 
+func TestManagerRefreshOAuthForceReauthClearsStoredToken(t *testing.T) {
+	const token = "stored-token"
+	server := newTestMCPServer()
+	handler := mcpsdk.NewStreamableHTTPHandler(func(*http.Request) *mcpsdk.Server {
+		return server
+	}, nil)
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+token {
+			w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+r.Host+`"`)
+			http.Error(w, "missing token", http.StatusUnauthorized)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(httpServer.Close)
+
+	authStore := keenauth.NewStoreAt(filepath.Join(t.TempDir(), "auth.json"))
+	if err := saveOAuthToken(authStore, "posthog", &oauth2.Token{
+		AccessToken: token,
+		TokenType:   "Bearer",
+		Expiry:      time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manager := newTestManagerWithOptions(t, map[string]ServerConfig{
+		"posthog": {URL: httpServer.URL, Auth: AuthConfig{Type: AuthOAuth}},
+	}, WithAuthStore(authStore))
+	startAndWait(t, manager, "posthog", StateConnected)
+
+	err := manager.Refresh(context.Background(), "posthog", WithRefreshOAuthForceReauth(true))
+	if !errors.Is(err, ErrAuthRequired) {
+		t.Fatalf("Refresh() error = %v, want ErrAuthRequired", err)
+	}
+	if status := manager.Status("posthog"); status.State != StateAuthRequired {
+		t.Fatalf("status = %s, want %s", status.State, StateAuthRequired)
+	}
+	if _, ok, err := authStore.Get(mcpAuthProvider("posthog")); err != nil || ok {
+		t.Fatalf("auth store credential after refresh ok=%v err=%v, want missing", ok, err)
+	}
+}
+
 func TestManagerCloseSkipsStreamableHTTPDelete(t *testing.T) {
 	var sawDelete bool
 	server := newTestMCPServer()
@@ -274,12 +315,15 @@ func TestManagerOAuthTokenCachePersistsMCPToken(t *testing.T) {
 	if err := manager.saveOAuthToken(context.Background(), "posthog", token); err != nil {
 		t.Fatalf("saveOAuthToken() error = %v", err)
 	}
-	got := manager.oauthToken("posthog")
+	got := manager.oauthToken("posthog", false)
 	if got == nil {
 		t.Fatal("oauthToken() = nil")
 	}
 	if got.AccessToken != token.AccessToken || got.RefreshToken != token.RefreshToken || !got.Expiry.Equal(token.Expiry) {
 		t.Fatalf("oauthToken() = %#v, want %#v", got, token)
+	}
+	if got := manager.oauthToken("posthog", true); got != nil {
+		t.Fatalf("oauthToken(forceReauth) = %#v, want nil", got)
 	}
 	cred, ok, err := authStore.Get(mcpAuthProvider("posthog"))
 	if err != nil || !ok {
@@ -287,6 +331,15 @@ func TestManagerOAuthTokenCachePersistsMCPToken(t *testing.T) {
 	}
 	if cred.AccessToken != token.AccessToken || cred.RefreshToken != token.RefreshToken || !cred.ExpiresAt.Equal(token.Expiry) {
 		t.Fatalf("stored credential = %#v, want token %#v", cred, token)
+	}
+	if err := manager.clearOAuthToken("posthog"); err != nil {
+		t.Fatalf("clearOAuthToken() error = %v", err)
+	}
+	if got := manager.oauthToken("posthog", false); got != nil {
+		t.Fatalf("oauthToken() after clear = %#v, want nil", got)
+	}
+	if _, ok, err := authStore.Get(mcpAuthProvider("posthog")); err != nil || ok {
+		t.Fatalf("auth store credential after clear ok=%v err=%v, want missing", ok, err)
 	}
 }
 

@@ -29,6 +29,14 @@ func wrapAndIndent(styled string, wrapWidth int) []string {
 	return out
 }
 
+func renderToolStatusLines(line string, width int) []string {
+	if width <= 0 {
+		width = defaultWidth
+	}
+	line = strings.TrimPrefix(line, "  ")
+	return wrapAndIndent(line, width-4)
+}
+
 func (sh *StreamHandler) renderViewLines(width int) []string {
 	lines := make([]string, 0)
 
@@ -51,14 +59,14 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
 					continue
 				}
-				lines = append(lines, reploutput.FormatToolStart(seg.toolCall, sh.workingDir))
+				lines = append(lines, renderToolStatusLines(reploutput.FormatToolStart(seg.toolCall, sh.workingDir), width)...)
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
-					lines = append(lines, reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
+					lines = append(lines, renderToolStatusLines(reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir), width)...)
 				} else {
-					lines = append(lines, reploutput.FormatToolEnd(seg.toolCall))
+					lines = append(lines, renderToolStatusLines(reploutput.FormatToolEnd(seg.toolCall), width)...)
 				}
 			}
 		case segmentBash:
@@ -99,14 +107,14 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
 					continue
 				}
-				lines = append(lines, reploutput.FormatToolStart(seg.toolCall, sh.workingDir))
+				lines = append(lines, renderToolStatusLines(reploutput.FormatToolStart(seg.toolCall, sh.workingDir), sh.lastWidth)...)
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
-					lines = append(lines, reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir))
+					lines = append(lines, renderToolStatusLines(reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir), sh.lastWidth)...)
 				} else {
-					lines = append(lines, reploutput.FormatToolEnd(seg.toolCall))
+					lines = append(lines, renderToolStatusLines(reploutput.FormatToolEnd(seg.toolCall), sh.lastWidth)...)
 				}
 			}
 		case segmentBash:

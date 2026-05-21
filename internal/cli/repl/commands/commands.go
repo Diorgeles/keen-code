@@ -24,6 +24,8 @@ const (
 	SkillsDisable   = "/skills disable"
 	SkillsEnable    = "/skills enable"
 	SkillsList      = "/skills list"
+	SkillsReload    = "/skills reload"
+	SkillsStatus    = "/skills status"
 	Thinking        = "/thinking"
 )
 
@@ -48,7 +50,7 @@ var All = []SlashCommand{
 	{Resume, "Open the session picker"},
 	{Sessions, "List saved sessions for this directory"},
 	{ShowThinking, "Toggle thinking token display (on|off)"},
-	{Skills, "List, reload, enable, or disable skills"},
+	{Skills, "List, show status, reload, enable, or disable skills"},
 	{Thinking, "Change thinking effort for the current model"},
 }
 
@@ -74,6 +76,8 @@ var Suggestions = []SlashCommand{
 	{SkillsDisable, "Disable a skill"},
 	{SkillsEnable, "Enable a skill"},
 	{SkillsList, "List available skills"},
+	{SkillsReload, "Reload available skills"},
+	{SkillsStatus, "Show skills status"},
 	{Thinking, "Change thinking effort for the current model"},
 }
 

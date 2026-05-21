@@ -22,7 +22,10 @@ import (
 	"github.com/user/keen-code/internal/skills"
 )
 
-const mcpConnectTimeout = 5 * time.Minute
+const (
+	mcpConnectTimeout = 5 * time.Minute
+	skillsUsage       = "Usage: /skills list|status | /skills reload | /skills enable|disable <name>"
+)
 
 func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	switch {
@@ -412,6 +415,7 @@ func (m replModel) connectMCPCmd(server string) tea.Cmd {
 			keenmcp.WithRefreshConnectTimeout(mcpConnectTimeout),
 			keenmcp.WithRefreshOAuthRedirectURL(redirectURL),
 			keenmcp.WithRefreshOAuthAuthorizationCodeFetcher(fetcher),
+			keenmcp.WithRefreshOAuthForceReauth(true),
 		)
 		return mcpConnectDoneMsg{Server: server, Status: m.ctx.mcp.Status(server), Err: err}
 	}
@@ -476,7 +480,7 @@ func (m *replModel) registeredToolNames() []string {
 }
 
 func (m *replModel) handleSkillsCommand(input string) replModel {
-	args := strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, replcommands.Skills)))
+	args := parseSkillArgs(input)
 	discovery := m.appState.GetSkills()
 	cfg := m.appState.GetSkillsConfig()
 
@@ -484,7 +488,7 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 		m.output.AddError(warning, repltheme.ErrorStyle)
 	}
 
-	if len(args) == 0 || (len(args) == 1 && args[0] == "list") {
+	if len(args) == 0 || (len(args) == 1 && (args[0] == "list" || args[0] == "status")) {
 		m.output.AddStyledLine("  Available Skills\n", repltheme.MutedStyle.Bold(true))
 		if len(discovery.Skills) == 0 {
 			m.output.AddStyledLine("    No skills found.", repltheme.MutedStyle)
@@ -509,14 +513,14 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 		return *m
 	}
 
-	if len(args) != 2 || (args[1] != "enable" && args[1] != "disable") {
-		m.output.AddError("Usage: /skills list | /skills reload | /skills <name> enable|disable", repltheme.ErrorStyle)
+	if len(args) != 2 || (args[0] != "enable" && args[0] != "disable") {
+		m.output.AddError(skillsUsage, repltheme.ErrorStyle)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return *m
 	}
 
-	name := args[0]
+	name := args[1]
 	if _, ok := skills.Find(discovery.Skills, name); !ok {
 		m.output.AddError("Skill not found: "+name, repltheme.ErrorStyle)
 		m.updateViewportContent()
@@ -524,9 +528,8 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 		return *m
 	}
 
-	enabled := args[1] == "enable"
 	status := skills.StatusDisabled
-	if enabled {
+	if args[0] == "enable" {
 		status = skills.StatusEnabled
 	}
 	if err := m.appState.SetSkillStatus(name, status); err != nil {
@@ -536,7 +539,7 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 		return *m
 	}
 
-	if enabled {
+	if status == skills.StatusEnabled {
 		m.output.AddStyledLine("  ✓ Skill \""+name+"\" enabled", repltheme.HighlightStyle)
 	} else {
 		m.output.AddStyledLine("  ✓ Skill \""+name+"\" disabled", repltheme.HighlightStyle)
@@ -545,6 +548,10 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m
+}
+
+func parseSkillArgs(input string) []string {
+	return strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, replcommands.Skills)))
 }
 
 func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {

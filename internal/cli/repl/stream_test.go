@@ -299,6 +299,53 @@ func TestStreamHandler_View_WithRunningBashShowsCommand(t *testing.T) {
 	}
 }
 
+func TestStreamHandler_View_LongToolStatusWrapsWithinWidth(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")
+	longPattern := strings.Repeat("very-long-segment/", 8) + "*.go"
+	sh.HandleToolStart(&llm.ToolCall{Name: "grep", Input: map[string]any{
+		"pattern": longPattern,
+		"path":    "internal/cli/repl",
+	}})
+	sh.HandleToolEnd(&llm.ToolCall{Name: "grep", Duration: 5})
+
+	width := 40
+	view := sh.View(width)
+	lines := strings.Split(strings.TrimPrefix(strings.TrimRight(view, "\n"), "\n"), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected long tool status to wrap, got %v", lines)
+	}
+	for _, line := range lines {
+		if w := lipgloss.Width(line); w > width {
+			t.Fatalf("line exceeds viewport width (%d > %d): %q", w, width, line)
+		}
+		if !strings.HasPrefix(line, "  ") {
+			t.Fatalf("expected wrapped tool status line to stay indented, got %q", line)
+		}
+	}
+}
+
+func TestStreamHandler_HandleDone_LongToolStatusWrapsToLastWidth(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")
+	sh.HandleToolStart(&llm.ToolCall{Name: "grep", Input: map[string]any{
+		"pattern": strings.Repeat("long-pattern-", 12),
+		"path":    "internal/cli/repl",
+	}})
+	sh.HandleToolEnd(&llm.ToolCall{Name: "grep", Duration: 5})
+	sh.View(42)
+
+	lines, _ := sh.HandleDone()
+	if len(lines) < 2 {
+		t.Fatalf("expected long transcript tool status to wrap, got %v", lines)
+	}
+	for _, line := range lines {
+		if w := lipgloss.Width(line); w > 42 {
+			t.Fatalf("line exceeds transcript width (%d > %d): %q", w, 42, line)
+		}
+	}
+}
+
 func TestStreamHandler_View_BashUsesViewportWidthRules(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")
