@@ -96,7 +96,7 @@ Requirements defined upfront: ask permission before reading, respect FileGuard p
 **Plan** — [`outputs/phase-3/output-3_read-file-tool.md`](.ai-interactions/outputs/phase-3/output-3_read-file-tool.md)
 Design doc produced by the agent: how `Guard.CheckPath` maps to the REPL permission prompt, exact struct contracts, permission flow diagram.
 
-**Task** — [`prompts/phase-3/prompt-5_phase-3-tasks.md`](.ai-interactions/prompts/phase-3/prompt-5_phase-3-tasks.md)
+**Task** — [`prompts/phase-3/prompt-2_phase-3-tasks.md`](.ai-interactions/prompts/phase-3/prompt-2_phase-3-tasks.md)
 Implementation broken into steps — tool contract, permission bridge, REPL selector, unit tests — each approved before the next began.
 
 **Review** — (inline feedback during implementation)
