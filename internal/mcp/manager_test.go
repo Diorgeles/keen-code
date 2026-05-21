@@ -37,9 +37,8 @@ func TestManagerStreamableHTTPListAndCallTool(t *testing.T) {
 
 	manager := newTestManager(t, map[string]ServerConfig{
 		"test": {
-			Transport: TransportStreamableHTTP,
-			URL:       httpServer.URL,
-			Auth:      AuthConfig{Type: AuthNone},
+			URL:  httpServer.URL,
+			Auth: AuthConfig{Type: AuthNone},
 		},
 	})
 	startAndWait(t, manager, "test", StateConnected)
@@ -87,8 +86,7 @@ func TestManagerAPIKeyHeaderAndRedaction(t *testing.T) {
 	restoreDefaultLogger(t, logger)
 	manager := newTestManagerWithOptions(t, map[string]ServerConfig{
 		"context7": {
-			Transport: TransportStreamableHTTP,
-			URL:       httpServer.URL,
+			URL: httpServer.URL,
 			Auth: AuthConfig{
 				Type:   AuthAPIKey,
 				Header: "CONTEXT7_API_KEY",
@@ -118,8 +116,7 @@ func TestManagerFailureLogsRedactedState(t *testing.T) {
 	restoreDefaultLogger(t, logger)
 	manager := newTestManagerWithOptions(t, map[string]ServerConfig{
 		"context7": {
-			Transport: TransportStreamableHTTP,
-			URL:       "https://example.com/mcp",
+			URL: "https://example.com/mcp",
 			Auth: AuthConfig{
 				Type:   AuthAPIKey,
 				Header: "CONTEXT7_API_KEY",
@@ -154,7 +151,7 @@ func TestManagerCallToolErrors(t *testing.T) {
 	t.Cleanup(httpServer.Close)
 
 	manager := newTestManager(t, map[string]ServerConfig{
-		"test": {Transport: TransportStreamableHTTP, URL: httpServer.URL, Auth: AuthConfig{Type: AuthNone}},
+		"test": {URL: httpServer.URL, Auth: AuthConfig{Type: AuthNone}},
 	})
 	startAndWait(t, manager, "test", StateConnected)
 
@@ -189,7 +186,7 @@ func TestManagerOAuthWithoutHooksMarksAuthRequired(t *testing.T) {
 	t.Cleanup(httpServer.Close)
 
 	manager := newTestManager(t, map[string]ServerConfig{
-		"posthog": {Transport: TransportStreamableHTTP, URL: httpServer.URL, Auth: AuthConfig{Type: AuthOAuth}},
+		"posthog": {URL: httpServer.URL, Auth: AuthConfig{Type: AuthOAuth}},
 	})
 	startAndWait(t, manager, "posthog", StateAuthRequired)
 	status := manager.Status("posthog")
@@ -222,7 +219,7 @@ func TestManagerOAuthStoredTokenConnectsWithoutFetcher(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := newTestManagerWithOptions(t, map[string]ServerConfig{
-		"posthog": {Transport: TransportStreamableHTTP, URL: httpServer.URL, Auth: AuthConfig{Type: AuthOAuth}},
+		"posthog": {URL: httpServer.URL, Auth: AuthConfig{Type: AuthOAuth}},
 	}, WithAuthStore(authStore))
 	startAndWait(t, manager, "posthog", StateConnected)
 }
@@ -245,9 +242,8 @@ func TestManagerCloseSkipsStreamableHTTPDelete(t *testing.T) {
 
 	manager := newTestManager(t, map[string]ServerConfig{
 		"test": {
-			Transport: TransportStreamableHTTP,
-			URL:       httpServer.URL,
-			Auth:      AuthConfig{Type: AuthNone},
+			URL:  httpServer.URL,
+			Auth: AuthConfig{Type: AuthNone},
 		},
 	})
 	startAndWait(t, manager, "test", StateConnected)
@@ -267,7 +263,7 @@ func TestManagerCloseSkipsStreamableHTTPDelete(t *testing.T) {
 func TestManagerOAuthTokenCachePersistsMCPToken(t *testing.T) {
 	authStore := keenauth.NewStoreAt(filepath.Join(t.TempDir(), "auth.json"))
 	manager := newTestManagerWithOptions(t, map[string]ServerConfig{
-		"posthog": {Transport: TransportStreamableHTTP, URL: "https://example.com/mcp", Auth: AuthConfig{Type: AuthOAuth}},
+		"posthog": {URL: "https://example.com/mcp", Auth: AuthConfig{Type: AuthOAuth}},
 	}, WithAuthStore(authStore))
 	token := &oauth2.Token{
 		AccessToken:  "access",
@@ -331,10 +327,9 @@ func TestManagerStdioListAndCallTool(t *testing.T) {
 
 	manager := newTestManager(t, map[string]ServerConfig{
 		"local": {
-			Transport: TransportStdio,
-			Command:   os.Args[0],
-			Args:      []string{"-test.run=TestManagerStdioListAndCallTool"},
-			Env:       map[string]string{"KEEN_MCP_STDIO_HELPER": "1"},
+			Command: os.Args[0],
+			Args:    []string{"-test.run=TestManagerStdioListAndCallTool"},
+			Env:     map[string]string{"KEEN_MCP_STDIO_HELPER": "1"},
 		},
 	})
 	startAndWait(t, manager, "local", StateConnected)
@@ -350,7 +345,7 @@ func TestManagerStdioListAndCallTool(t *testing.T) {
 
 func TestListToolsDisconnectedServer(t *testing.T) {
 	manager := newTestManager(t, map[string]ServerConfig{
-		"test": {Transport: TransportStreamableHTTP, URL: "https://example.com/mcp", Auth: AuthConfig{Type: AuthNone}},
+		"test": {URL: "https://example.com/mcp", Auth: AuthConfig{Type: AuthNone}},
 	})
 	if _, err := manager.ListTools(context.Background(), "test"); !errors.Is(err, ErrServerDisconnected) {
 		t.Fatalf("ListTools() error = %v, want ErrServerDisconnected", err)
@@ -399,7 +394,7 @@ func newTestManagerWithOptions(t *testing.T, servers map[string]ServerConfig, op
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	data := Config{Version: ConfigVersion, Servers: servers}
+	data := Config{Servers: servers}
 	encoded, err := json.Marshal(data)
 	if err != nil {
 		t.Fatal(err)

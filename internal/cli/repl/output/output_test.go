@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/user/keen-code/internal/llm"
 )
 
 func TestNewOutputBuilder(t *testing.T) {
@@ -138,6 +139,28 @@ func TestFormatToolInput_SeparatesArgumentsWithDots(t *testing.T) {
 	expected := "include=*.go · path=internal/cli/repl · pattern=FormatToolInput"
 	if got != expected {
 		t.Fatalf("expected dot-separated tool arguments, got %q", got)
+	}
+}
+
+func TestFormatToolInput_CallMCPToolFormatsArgumentsAsJSON(t *testing.T) {
+	got := FormatToolInput("call_mcp_tool", map[string]any{
+		"server":     "context7",
+		"tool":       "get-library-docs",
+		"arguments":  map[string]any{"topic": "useEffect"},
+		"checkCache": false,
+	}, "/tmp/project")
+
+	expected := `{"arguments":{"topic":"useEffect"},"checkCache":false,"server":"context7","tool":"get-library-docs"}`
+	if got != expected {
+		t.Fatalf("expected call_mcp_tool input as JSON, got %q", got)
+	}
+}
+
+func TestFormatToolEnd_DoesNotAddTrailingNewline(t *testing.T) {
+	got := FormatToolEnd(&llm.ToolCall{Name: "call_mcp_tool", Duration: 5})
+
+	if strings.HasSuffix(got, "\n") {
+		t.Fatalf("expected no trailing newline in tool end, got %q", got)
 	}
 }
 

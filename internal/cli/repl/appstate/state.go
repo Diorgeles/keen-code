@@ -81,9 +81,9 @@ func (s *AppState) GetSkillsConfig() skills.Config {
 	return cloneSkillsConfig(s.skillsConfig)
 }
 
-func (s *AppState) SetSkillEnabled(name string, enabled bool) error {
+func (s *AppState) SetSkillStatus(name string, status skills.Status) error {
 	cfg := cloneSkillsConfig(s.skillsConfig)
-	cfg.SetEnabled(name, enabled)
+	cfg.SetStatus(name, status)
 	if err := skills.SaveConfig(cfg); err != nil {
 		return err
 	}

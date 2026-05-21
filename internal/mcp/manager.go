@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -68,7 +67,7 @@ func NewManager(opts ...Option) (*Manager, error) {
 			config: server,
 			status: ServerStatus{
 				Name:         name,
-				Transport:    server.Transport,
+				Transport:    inferredTransport(server),
 				AuthType:     server.Auth.withDefaults().Type,
 				State:        StateConfigured,
 				Endpoint:     server.URL,
@@ -92,6 +91,13 @@ func normalizedServerConfig(server ServerConfig) ServerConfig {
 	}
 	server.Args = append([]string(nil), server.Args...)
 	return server
+}
+
+func inferredTransport(server ServerConfig) string {
+	if server.Command != "" {
+		return TransportStdio
+	}
+	return TransportStreamableHTTP
 }
 
 func (m *Manager) Start(ctx context.Context) error {
@@ -143,7 +149,7 @@ func (m *Manager) Close() error {
 		if session == nil {
 			continue
 		}
-		if rt.config.Transport == TransportStreamableHTTP {
+		if inferredTransport(rt.config) == TransportStreamableHTTP {
 			slog.Default().Debug("mcp streamable http close skipped", "server", name)
 			continue
 		}
@@ -362,38 +368,35 @@ func (m *Manager) discoverServer(ctx context.Context, name string, opts managerO
 }
 
 func (m *Manager) transportFor(name string, server ServerConfig, opts managerOptions) (mcpsdk.Transport, error) {
-	switch server.Transport {
-	case TransportStreamableHTTP:
-		client := opts.httpClient
-		var oauthHandler mcpauth.OAuthHandler
-		if server.Auth.Type == AuthAPIKey {
-			client = newAPIKeyClient(client, server.Auth)
-		}
-		if server.Auth.Type == AuthOAuth {
-			handler, err := newOAuthHandler(name, server, opts, m.oauthToken(name), m.saveOAuthToken)
-			if err != nil {
-				return nil, err
-			}
-			oauthHandler = handler
-		}
-		transport := &mcpsdk.StreamableClientTransport{
-			Endpoint:             server.URL,
-			HTTPClient:           client,
-			MaxRetries:           opts.streamableMaxRetries,
-			DisableStandaloneSSE: opts.disableStandaloneSSE,
-		}
-		if oauthHandler != nil {
-			transport.OAuthHandler = oauthHandler
-		}
-		return transport, nil
-	case TransportStdio:
+	if server.Command != "" {
 		cmd := exec.Command(server.Command, server.Args...)
 		cmd.Env = mergeEnv(os.Environ(), server.Env)
 		cmd.Stderr = &stderrLogger{server: name}
 		return &mcpsdk.CommandTransport{Command: cmd, TerminateDuration: opts.stdioTerminateTimeout}, nil
-	default:
-		return nil, fmt.Errorf("unsupported transport %q", server.Transport)
 	}
+
+	client := opts.httpClient
+	var oauthHandler mcpauth.OAuthHandler
+	if server.Auth.Type == AuthAPIKey {
+		client = newAPIKeyClient(client, server.Auth)
+	}
+	if server.Auth.Type == AuthOAuth {
+		handler, err := newOAuthHandler(name, server, opts, m.oauthToken(name), m.saveOAuthToken)
+		if err != nil {
+			return nil, err
+		}
+		oauthHandler = handler
+	}
+	transport := &mcpsdk.StreamableClientTransport{
+		Endpoint:             server.URL,
+		HTTPClient:           client,
+		MaxRetries:           opts.streamableMaxRetries,
+		DisableStandaloneSSE: opts.disableStandaloneSSE,
+	}
+	if oauthHandler != nil {
+		transport.OAuthHandler = oauthHandler
+	}
+	return transport, nil
 }
 
 func (m *Manager) fetchTools(ctx context.Context, server string, session *mcpsdk.ClientSession, opts managerOptions) ([]Tool, error) {

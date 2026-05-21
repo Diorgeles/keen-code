@@ -525,7 +525,11 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 	}
 
 	enabled := args[1] == "enable"
-	if err := m.appState.SetSkillEnabled(name, enabled); err != nil {
+	status := skills.StatusDisabled
+	if enabled {
+		status = skills.StatusEnabled
+	}
+	if err := m.appState.SetSkillStatus(name, status); err != nil {
 		m.output.AddError("Failed to save skills config: "+err.Error(), repltheme.ErrorStyle)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()

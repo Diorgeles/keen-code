@@ -16,9 +16,9 @@ func TestConfigEnabledDefaultsTrue(t *testing.T) {
 	}
 }
 
-func TestConfigSetEnabled(t *testing.T) {
+func TestConfigSetStatus(t *testing.T) {
 	var cfg Config
-	cfg.SetEnabled("demo", false)
+	cfg.SetStatus("demo", StatusDisabled)
 	if cfg.Enabled("demo") {
 		t.Fatal("expected skill disabled")
 	}

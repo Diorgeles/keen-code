@@ -6,6 +6,13 @@ import (
 	"path/filepath"
 )
 
+type Status bool
+
+const (
+	StatusDisabled Status = false
+	StatusEnabled  Status = true
+)
+
 type Config struct {
 	IsEnabled map[string]bool `json:"is_enabled"`
 }
@@ -67,9 +74,9 @@ func (c Config) Enabled(name string) bool {
 	return enabled
 }
 
-func (c *Config) SetEnabled(name string, enabled bool) {
+func (c *Config) SetStatus(name string, status Status) {
 	if c.IsEnabled == nil {
 		c.IsEnabled = map[string]bool{}
 	}
-	c.IsEnabled[name] = enabled
+	c.IsEnabled[name] = bool(status)
 }

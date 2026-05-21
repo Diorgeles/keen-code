@@ -1,6 +1,7 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"path/filepath"
@@ -76,7 +77,7 @@ func (ob *OutputBuilder) AddUserInput(input string, promptStyle lipgloss.Style) 
 	body := strings.Join(bodyLines, "\n")
 
 	rendered := repltheme.UserInputBlockStyle.Width(ob.width).Render(body)
-	for _, line := range strings.Split(rendered, "\n") {
+	for line := range strings.SplitSeq(rendered, "\n") {
 		ob.lines = append(ob.lines, line)
 	}
 	ob.AddEmptyLine()
@@ -84,8 +85,8 @@ func (ob *OutputBuilder) AddUserInput(input string, promptStyle lipgloss.Style) 
 
 func (ob *OutputBuilder) AddAssistantResponse(response string, assistantStyle lipgloss.Style) {
 	wrapStyle := lipgloss.NewStyle().Width(ob.width - 4)
-	responseLines := strings.Split(response, "\n")
-	for _, line := range responseLines {
+	responseLines := strings.SplitSeq(response, "\n")
+	for line := range responseLines {
 		ob.lines = append(ob.lines, "  "+wrapStyle.Render(assistantStyle.Render(line)))
 	}
 	ob.AddEmptyLine()
@@ -138,6 +139,10 @@ func FormatToolInput(toolName string, input map[string]any, workingDir string) s
 		return ""
 	}
 
+	if toolName == "call_mcp_tool" {
+		return jsonMarshalJSON(input)
+	}
+
 	displayInput := make(map[string]any, len(input))
 	maps.Copy(displayInput, input)
 	if path, ok := displayInput["path"].(string); ok {
@@ -159,7 +164,7 @@ func FormatToolEnd(toolCall *llm.ToolCall) string {
 	if toolCall.Error != "" {
 		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s failed: %s", toolCall.Name, toolCall.Error))
 	}
-	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s ➜ [%s]", toolCall.Name, toolCall.Duration)) + "\n"
+	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s ➜ [%s]", toolCall.Name, toolCall.Duration))
 }
 
 func jsonMarshalCompact(v map[string]any) string {
@@ -176,6 +181,17 @@ func jsonMarshalCompact(v map[string]any) string {
 		parts = append(parts, fmt.Sprintf("%s=%v", k, v[k]))
 	}
 	return strings.Join(parts, " · ")
+}
+
+func jsonMarshalJSON(v map[string]any) string {
+	if v == nil {
+		return ""
+	}
+	jsonBytes, err := json.Marshal(v)
+	if err != nil {
+		return jsonMarshalCompact(v)
+	}
+	return string(jsonBytes)
 }
 
 func formatToolPathForUI(path, workingDir string) string {

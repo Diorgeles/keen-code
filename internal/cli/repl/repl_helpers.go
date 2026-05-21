@@ -19,6 +19,7 @@ import (
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/mcpskills"
+	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/internal/updater"
 )
 
@@ -175,24 +176,43 @@ func isMCPFailureState(state keenmcp.ServerState) bool {
 }
 
 func (m *replModel) syncMCPSkills(statuses []keenmcp.ServerStatus) {
-	changed := false
+	configured := map[string]bool{}
+	reloadSkills := false
 	for _, status := range statuses {
+		configured[status.Name] = true
 		if status.State == keenmcp.StateConnected {
-			if m.refreshMCPSkill(status.Name) {
-				changed = true
-			}
-			_ = m.appState.SetSkillEnabled(mcpskills.SkillName(status.Name), true)
-			changed = true
+			_ = m.refreshMCPSkill(status.Name)
+			_ = m.appState.SetSkillStatus(mcpskills.SkillName(status.Name), skills.StatusEnabled)
+			reloadSkills = true
 			continue
 		}
 		if isMCPFailureState(status.State) {
-			_ = m.appState.SetSkillEnabled(mcpskills.SkillName(status.Name), false)
-			changed = true
+			_ = m.appState.SetSkillStatus(mcpskills.SkillName(status.Name), skills.StatusDisabled)
+			reloadSkills = true
 		}
 	}
-	if changed {
+	if m.disableUnconfiguredEnabledMCPSkills(configured) {
+		reloadSkills = true
+	}
+	if reloadSkills {
 		m.appState.ReloadSkills()
 	}
+}
+
+func (m *replModel) disableUnconfiguredEnabledMCPSkills(configured map[string]bool) bool {
+	changed := false
+	for name, enabled := range m.appState.GetSkillsConfig().IsEnabled {
+		if !enabled || !mcpskills.IsSkillName(name) {
+			continue
+		}
+		server := mcpskills.ServerName(name)
+		if configured[server] {
+			continue
+		}
+		_ = m.appState.SetSkillStatus(name, skills.StatusDisabled)
+		changed = true
+	}
+	return changed
 }
 
 func (m *replModel) refreshMCPSkill(server string) bool {
@@ -216,14 +236,14 @@ func (m *replModel) handleMCPConnectDone(msg mcpConnectDoneMsg) {
 	changed := false
 	if msg.Err != nil {
 		m.output.AddError("MCP connect failed for "+msg.Server+": "+msg.Err.Error(), repltheme.ErrorStyle)
-		_ = m.appState.SetSkillEnabled(mcpskills.SkillName(msg.Server), false)
+		_ = m.appState.SetSkillStatus(mcpskills.SkillName(msg.Server), skills.StatusDisabled)
 		changed = true
 	} else {
 		m.output.AddStyledLine("  ✓ MCP server connected: "+msg.Server, repltheme.HighlightStyle)
 		if m.refreshMCPSkill(msg.Server) {
 			changed = true
 		}
-		_ = m.appState.SetSkillEnabled(mcpskills.SkillName(msg.Server), true)
+		_ = m.appState.SetSkillStatus(mcpskills.SkillName(msg.Server), skills.StatusEnabled)
 		changed = true
 	}
 	if changed {

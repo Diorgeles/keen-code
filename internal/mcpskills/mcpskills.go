@@ -31,12 +31,24 @@ func SkillName(server string) string {
 	return "mcp:" + server
 }
 
+func IsSkillName(name string) bool {
+	return strings.HasPrefix(name, "mcp:")
+}
+
+func ServerName(skillName string) string {
+	return strings.TrimPrefix(skillName, "mcp:")
+}
+
 func SkillDir(server string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("mcpskills: home dir: %w", err)
 	}
-	return filepath.Join(home, ".keen", "skills", SkillName(server)), nil
+	return filepath.Join(skillsRoot(home), SkillName(server)), nil
+}
+
+func skillsRoot(home string) string {
+	return filepath.Join(home, ".keen", "skills")
 }
 
 func Generate(server string, tools []keenmcp.Tool) error {
@@ -129,14 +141,12 @@ func buildSkillMD(server string, tools []keenmcp.Tool) string {
 	sb.WriteString("---\n")
 	frontmatterData, err := yaml.Marshal(map[string]string{
 		"name":        SkillName(server),
-		"description": "MCP server: " + server,
+		"description": "Use this skill to interact with the `" + server + "` MCP server.",
 	})
 	if err == nil {
 		sb.Write(frontmatterData)
 	}
 	sb.WriteString("---\n")
-	sb.WriteString("## When to use\n")
-	sb.WriteString("Use this skill to interact with the `" + server + "` MCP server.\n\n")
 	sb.WriteString("## Available tools\n")
 	sb.WriteString("| Tool | Description |\n")
 	sb.WriteString("|------|-------------|\n")

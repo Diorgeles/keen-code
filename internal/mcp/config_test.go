@@ -13,9 +13,6 @@ func TestLoadConfigMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
 	}
-	if cfg.Version != ConfigVersion {
-		t.Fatalf("Version = %d, want %d", cfg.Version, ConfigVersion)
-	}
 	if len(cfg.Servers) != 0 {
 		t.Fatalf("Servers length = %d, want 0", len(cfg.Servers))
 	}
@@ -33,19 +30,10 @@ func TestLoadConfigValidation(t *testing.T) {
 			wantErr: "parse MCP config",
 		},
 		{
-			name: "unsupported version",
-			config: `{
-				"version": 2,
-				"servers": {}
-			}`,
-			wantErr: "unsupported MCP config version",
-		},
-		{
 			name: "invalid server name",
 			config: `{
-				"version": 1,
 				"servers": {
-					"bad name": {"transport": "streamable_http", "url": "https://example.com/mcp", "auth": {"type": "none"}}
+					"bad name": {"url": "https://example.com/mcp", "auth": {"type": "none"}}
 				}
 			}`,
 			wantErr: "bad name",
@@ -53,9 +41,8 @@ func TestLoadConfigValidation(t *testing.T) {
 		{
 			name: "invalid url",
 			config: `{
-				"version": 1,
 				"servers": {
-					"bad": {"transport": "streamable_http", "url": "ftp://example.com/mcp", "auth": {"type": "none"}}
+					"bad": {"url": "ftp://example.com/mcp", "auth": {"type": "none"}}
 				}
 			}`,
 			wantErr: "url must use http or https",
@@ -63,22 +50,20 @@ func TestLoadConfigValidation(t *testing.T) {
 		{
 			name: "missing api key",
 			config: `{
-				"version": 1,
 				"servers": {
-					"bad": {"transport": "streamable_http", "url": "https://example.com/mcp", "auth": {"type": "api_key"}}
+					"bad": {"url": "https://example.com/mcp", "auth": {"type": "api_key"}}
 				}
 			}`,
 			wantErr: "api_key auth requires key",
 		},
 		{
-			name: "missing stdio command",
+			name: "stdio does not support http auth",
 			config: `{
-				"version": 1,
 				"servers": {
-					"bad": {"transport": "stdio"}
+					"bad": {"command": "example-mcp", "auth": {"type": "oauth"}}
 				}
 			}`,
-			wantErr: "stdio transport requires command",
+			wantErr: "stdio transport does not support HTTP auth",
 		},
 	}
 
@@ -101,7 +86,7 @@ func TestLoadConfigValidation(t *testing.T) {
 	}
 }
 
-func TestLoadConfigValidTransports(t *testing.T) {
+func TestLoadConfigInfersTransport(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	path := DefaultConfigPath()
@@ -109,10 +94,9 @@ func TestLoadConfigValidTransports(t *testing.T) {
 		t.Fatal(err)
 	}
 	data := `{
-		"version": 1,
 		"servers": {
-			"http": {"transport": "streamable_http", "url": "https://example.com/mcp", "auth": {"type": "none"}},
-			"stdio": {"transport": "stdio", "command": "example-mcp", "args": ["--flag"], "env": {"TOKEN": "value"}}
+			"http": {"url": "https://example.com/mcp", "auth": {"type": "none"}},
+			"stdio": {"command": "example-mcp", "args": ["--flag"], "env": {"TOKEN": "value"}}
 		}
 	}`
 	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
@@ -124,6 +108,12 @@ func TestLoadConfigValidTransports(t *testing.T) {
 	}
 	if len(cfg.Servers) != 2 {
 		t.Fatalf("Servers length = %d, want 2", len(cfg.Servers))
+	}
+	if got := inferredTransport(cfg.Servers["http"]); got != TransportStreamableHTTP {
+		t.Fatalf("http transport = %q, want %q", got, TransportStreamableHTTP)
+	}
+	if got := inferredTransport(cfg.Servers["stdio"]); got != TransportStdio {
+		t.Fatalf("stdio transport = %q, want %q", got, TransportStdio)
 	}
 }
 

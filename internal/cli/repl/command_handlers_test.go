@@ -314,9 +314,6 @@ func TestHandleMCPConnectDoneFailureDisablesSkill(t *testing.T) {
 	if m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
 		t.Fatalf("expected mcp:deepwiki skill to be disabled")
 	}
-	if _, err := os.Stat(filepath.Join(home, ".keen", "skills", "mcp:deepwiki", "SKILL.md")); err != nil {
-		t.Fatalf("expected mcp:deepwiki files to remain: %v", err)
-	}
 	if m.appState.SkillsCatalog() != "" && strings.Contains(m.appState.SkillsCatalog(), "mcp:deepwiki") {
 		t.Fatalf("expected mcp:deepwiki to be hidden from catalog")
 	}
@@ -363,6 +360,43 @@ func TestHandleMCPStartupStatusDisablesFailedSkills(t *testing.T) {
 	}
 	if m.appState.SkillsCatalog() != "" && strings.Contains(m.appState.SkillsCatalog(), "mcp:posthog") {
 		t.Fatalf("expected mcp:posthog to be hidden from catalog")
+	}
+}
+
+func TestHandleMCPStartupStatusDisablesUnconfiguredEnabledSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+	m := newTestModel()
+	m.appState = replappstate.New(nil, work)
+	m.ctx.mcp = &fakeMCPRuntime{tools: map[string][]keenmcp.Tool{
+		"context7": {{Name: "resolve", Description: "Resolve docs"}},
+	}}
+	if err := m.appState.SetSkillStatus("mcp:deepwiki", skills.StatusEnabled); err != nil {
+		t.Fatalf("enable deepwiki: %v", err)
+	}
+	if err := m.appState.SetSkillStatus("mcp:disabled", skills.StatusDisabled); err != nil {
+		t.Fatalf("disable stale skill: %v", err)
+	}
+	if err := m.appState.SetSkillStatus("debug", skills.StatusEnabled); err != nil {
+		t.Fatalf("enable debug: %v", err)
+	}
+	m.appState.ReloadSkills()
+
+	m.handleMCPStartupStatus([]keenmcp.ServerStatus{{Name: "context7", State: keenmcp.StateConnected}})
+
+	cfg := m.appState.GetSkillsConfig()
+	if cfg.Enabled("mcp:deepwiki") {
+		t.Fatalf("expected unconfigured mcp:deepwiki skill to be disabled")
+	}
+	if cfg.IsEnabled["mcp:disabled"] {
+		t.Fatalf("expected already disabled stale mcp skill to remain disabled")
+	}
+	if !cfg.Enabled("debug") {
+		t.Fatalf("expected non-MCP skill to remain enabled")
+	}
+	if !cfg.Enabled("mcp:context7") {
+		t.Fatalf("expected configured mcp:context7 skill to be enabled")
 	}
 }
 

@@ -31,8 +31,8 @@ func (t *CallMCPTool) Description() string {
 
 Before calling, read the server's skill file to discover available tools, then read
 the tool's schema file to understand the required arguments:
-- Skill file:   ~/.keen/skills/mcp-<server>/SKILL.md
-- Schema file:  ~/.keen/skills/mcp-<server>/schemas/<tool>.json
+- Skill file:   ~/.keen/skills/mcp:<server>/SKILL.md
+- Schema file:  ~/.keen/skills/mcp:<server>/schemas/<tool>.json
 
 IMPORTANT:
 - The server name must match a configured MCP server.

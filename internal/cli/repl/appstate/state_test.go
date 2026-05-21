@@ -194,7 +194,7 @@ func TestAppState_SkillsReloadUpdatesMetadata(t *testing.T) {
 	}
 }
 
-func TestAppState_SetSkillEnabledUpdatesCachedConfig(t *testing.T) {
+func TestAppState_SetSkillStatusUpdatesCachedConfig(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
 	t.Setenv("HOME", home)
@@ -207,8 +207,8 @@ func TestAppState_SetSkillEnabledUpdatesCachedConfig(t *testing.T) {
 	}
 
 	state := New(nil, work)
-	if err := state.SetSkillEnabled("demo", false); err != nil {
-		t.Fatalf("SetSkillEnabled() error = %v", err)
+	if err := state.SetSkillStatus("demo", skills.StatusDisabled); err != nil {
+		t.Fatalf("SetSkillStatus() error = %v", err)
 	}
 	if _, ok := state.FindEnabledSkill("demo"); ok {
 		t.Fatal("expected disabled skill to be hidden")

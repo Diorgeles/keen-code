@@ -11,8 +11,6 @@ import (
 )
 
 const (
-	ConfigVersion = 1
-
 	TransportStreamableHTTP = "streamable_http"
 	TransportStdio          = "stdio"
 
@@ -24,17 +22,15 @@ const (
 var serverNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 
 type Config struct {
-	Version int                     `json:"version"`
 	Servers map[string]ServerConfig `json:"servers"`
 }
 
 type ServerConfig struct {
-	URL       string            `json:"url,omitempty"`
-	Transport string            `json:"transport"`
-	Auth      AuthConfig        `json:"auth,omitempty"`
-	Command   string            `json:"command,omitempty"`
-	Args      []string          `json:"args,omitempty"`
-	Env       map[string]string `json:"env,omitempty"`
+	URL     string            `json:"url,omitempty"`
+	Auth    AuthConfig        `json:"auth,omitempty"`
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
 }
 
 type AuthConfig struct {
@@ -59,7 +55,7 @@ func LoadConfig() (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &Config{Version: ConfigVersion, Servers: map[string]ServerConfig{}}, nil
+			return &Config{Servers: map[string]ServerConfig{}}, nil
 		}
 		return nil, err
 	}
@@ -78,9 +74,6 @@ func LoadConfig() (*Config, error) {
 }
 
 func (c *Config) Validate() error {
-	if c.Version != ConfigVersion {
-		return fmt.Errorf("unsupported MCP config version %d", c.Version)
-	}
 	for name, server := range c.Servers {
 		if err := validateServerName(name); err != nil {
 			return fmt.Errorf("server %q: %w", name, err)
@@ -100,28 +93,21 @@ func validateServerName(name string) error {
 }
 
 func (s ServerConfig) validate() error {
-	switch s.Transport {
-	case TransportStreamableHTTP:
-		if err := validateHTTPURL(s.URL); err != nil {
-			return err
-		}
-		return s.Auth.withDefaults().validateHTTP()
-	case TransportStdio:
-		if s.Command == "" {
-			return errors.New("stdio transport requires command")
-		}
+	if s.Command != "" {
 		if s.Auth.Type != "" && s.Auth.Type != AuthNone {
 			return errors.New("stdio transport does not support HTTP auth")
 		}
 		return nil
-	default:
-		return fmt.Errorf("unsupported transport %q", s.Transport)
 	}
+	if err := validateHTTPURL(s.URL); err != nil {
+		return err
+	}
+	return s.Auth.withDefaults().validateHTTP()
 }
 
 func validateHTTPURL(raw string) error {
 	if raw == "" {
-		return errors.New("streamable HTTP transport requires url")
+		return errors.New("streamable HTTP requires url")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
