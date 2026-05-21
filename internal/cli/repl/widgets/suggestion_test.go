@@ -14,12 +14,12 @@ func TestFilterCommandsEmpty(t *testing.T) {
 
 func TestFilterCommandsSlashOnly(t *testing.T) {
 	got := replcommands.Filter("/")
-	if len(got) != 17 {
-		t.Fatalf("expected 17 commands, got %d", len(got))
+	if len(got) != 22 {
+		t.Fatalf("expected 22 commands, got %d", len(got))
 	}
 	want := []string{
-		"/allow-permission", "/btw", "/clear", "/compact", "/exit", "/help", "/logout", "/mcp", "/model", "/mode", "/new",
-		"/reset-permission", "/resume", "/sessions", "/show-thinking", "/skills", "/thinking",
+		"/allow-permission", "/btw", "/clear", "/compact", "/exit", "/help", "/logout", "/mcp", "/mcp connect", "/mcp status", "/model", "/mode", "/new",
+		"/reset-permission", "/resume", "/sessions", "/show-thinking", "/skills", "/skills disable", "/skills enable", "/skills list", "/thinking",
 	}
 	for i, name := range want {
 		if got[i].Name != name {
@@ -44,8 +44,8 @@ func TestFilterCommandsH(t *testing.T) {
 
 func TestFilterCommandsM(t *testing.T) {
 	got := replcommands.Filter("/m")
-	if len(got) != 3 || got[0].Name != "/mcp" || got[1].Name != "/model" || got[2].Name != "/mode" {
-		t.Errorf("expected /mcp, /model and /mode, got %v", got)
+	if len(got) != 5 || got[0].Name != "/mcp" || got[1].Name != "/mcp connect" || got[2].Name != "/mcp status" || got[3].Name != "/model" || got[4].Name != "/mode" {
+		t.Errorf("expected /mcp, /mcp connect, /mcp status, /model and /mode, got %v", got)
 	}
 }
 
@@ -66,6 +66,25 @@ func TestFilterCommandsCaseInsensitive(t *testing.T) {
 	got := replcommands.Filter("/EXIT")
 	if len(got) != 1 || got[0].Name != "/exit" {
 		t.Errorf("expected /exit, got %v", got)
+	}
+}
+
+func TestFilterCommandsMCPConnect(t *testing.T) {
+	got := replcommands.Filter("/mcp c")
+	if len(got) != 1 || got[0].Name != "/mcp connect" {
+		t.Errorf("expected /mcp connect, got %v", got)
+	}
+}
+
+func TestFilterCommandsSkillsSubcommands(t *testing.T) {
+	got := replcommands.Filter("/skills e")
+	if len(got) != 1 || got[0].Name != "/skills enable" {
+		t.Errorf("expected /skills enable, got %v", got)
+	}
+
+	got = replcommands.Filter("/skills d")
+	if len(got) != 1 || got[0].Name != "/skills disable" {
+		t.Errorf("expected /skills disable, got %v", got)
 	}
 }
 

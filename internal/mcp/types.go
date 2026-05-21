@@ -15,6 +15,7 @@ type Runtime interface {
 	Status(string) ServerStatus
 	WaitInitialScan(context.Context) error
 	ListTools(context.Context, string) ([]Tool, error)
+	CallTool(context.Context, string, string, map[string]any) (*ToolResult, error)
 	Refresh(context.Context, string, ...RefreshOption) error
 }
 

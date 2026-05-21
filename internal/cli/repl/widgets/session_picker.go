@@ -112,7 +112,7 @@ func FormatSessionPickerCard(picker *SessionPicker, width, maxHeight int) string
 
 		body.WriteString(style.Render(prefix + preview))
 		body.WriteString("\n")
-		body.WriteString(repltheme.TimestampStyle.Render(fmt.Sprintf(
+		body.WriteString(repltheme.InputRuleBlurredStyle.Render(fmt.Sprintf(
 			"    Created: %s   Updated: %s",
 			summary.CreatedAt.Local().Format("2006-01-02 15:04"),
 			summary.UpdatedAt.Local().Format("2006-01-02 15:04"),

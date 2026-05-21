@@ -201,6 +201,10 @@ func (f *fakeMCPRuntime) Refresh(context.Context, string, ...keenmcp.RefreshOpti
 	return nil
 }
 
+func (f *fakeMCPRuntime) CallTool(context.Context, string, string, map[string]any) (*keenmcp.ToolResult, error) {
+	return &keenmcp.ToolResult{}, nil
+}
+
 func TestApplyRunOverrides_ProviderUsesFirstConfiguredModel(t *testing.T) {
 	globalCfg := &config.GlobalConfig{
 		Providers: map[string]config.ProviderConfig{

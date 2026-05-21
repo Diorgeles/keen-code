@@ -139,7 +139,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	fileGuard := filesystem.NewGuard(ctx.workingDir, fileGitAwareness)
 	fileSearcher := replfilesearch.NewFileSearcher(ctx.workingDir, fileGuard)
 
-	repltooling.SetupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter)
+	repltooling.SetupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter, ctx.mcp)
 
 	mdRenderer, err := replmarkdown.New(defaultWidth)
 
@@ -429,8 +429,8 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 	case mcpStartupStatusMsg:
 		m.handleMCPStartupStatus(msg.Statuses)
 		return m, nil
-	case mcpRefreshDoneMsg:
-		m.handleMCPRefreshDone(msg)
+	case mcpConnectDoneMsg:
+		m.handleMCPConnectDone(msg)
 		return m, nil
 	case diffReadyMsg:
 		m.streamHandler.HandleDiff(msg.req.Lines)

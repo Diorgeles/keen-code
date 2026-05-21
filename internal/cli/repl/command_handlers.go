@@ -22,7 +22,7 @@ import (
 	"github.com/user/keen-code/internal/skills"
 )
 
-const mcpRefreshTimeout = 5 * time.Minute
+const mcpConnectTimeout = 5 * time.Minute
 
 func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	switch {
@@ -284,8 +284,8 @@ func (m *replModel) handleMCPCommand(input string) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	if args[0] != "refresh" || len(args) != 2 {
-		m.output.AddStyledLine("  Usage: /mcp status | /mcp refresh <server>", repltheme.UsageHintStyle)
+	if args[0] != "connect" || len(args) != 2 {
+		m.output.AddStyledLine("  Usage: /mcp status | /mcp connect <server>", repltheme.UsageHintStyle)
 		m.output.AddEmptyLine()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
@@ -300,10 +300,10 @@ func (m *replModel) handleMCPCommand(input string) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	m.startLoading("Refreshing MCP server " + server + "...")
+	m.startLoading("Connecting to MCP server " + server + "...")
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
-	return *m, tea.Batch(m.spinner.Tick, m.refreshMCPCmd(server))
+	return *m, tea.Batch(m.spinner.Tick, m.connectMCPCmd(server))
 }
 
 func (m *replModel) addMCPStatus(statuses []keenmcp.ServerStatus) {
@@ -400,20 +400,20 @@ func (m *replModel) resolveMCPServer(name string) (string, error) {
 	return "", fmt.Errorf("unknown MCP server or tool: %s", name)
 }
 
-func (m replModel) refreshMCPCmd(server string) tea.Cmd {
+func (m replModel) connectMCPCmd(server string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), mcpRefreshTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), mcpConnectTimeout)
 		defer cancel()
 		redirectURL := keenmcp.DefaultOAuthRedirectURL
 		fetcher := keenmcp.NewBrowserOAuthCodeFetcher(redirectURL)
 		err := m.ctx.mcp.Refresh(
 			ctx,
 			server,
-			keenmcp.WithRefreshConnectTimeout(mcpRefreshTimeout),
+			keenmcp.WithRefreshConnectTimeout(mcpConnectTimeout),
 			keenmcp.WithRefreshOAuthRedirectURL(redirectURL),
 			keenmcp.WithRefreshOAuthAuthorizationCodeFetcher(fetcher),
 		)
-		return mcpRefreshDoneMsg{Server: server, Status: m.ctx.mcp.Status(server), Err: err}
+		return mcpConnectDoneMsg{Server: server, Status: m.ctx.mcp.Status(server), Err: err}
 	}
 }
 
@@ -785,10 +785,7 @@ func getHelpText(width int) string {
 		colGap       = "  "
 	)
 
-	cmdWidth := maxCommandNameWidth(replcommands.All)
-	if cmdWidth < len("Command") {
-		cmdWidth = len("Command")
-	}
+	cmdWidth := max(maxCommandNameWidth(replcommands.All), len("Command"))
 	descWidth := width - lipgloss.Width(leftPadding) - cmdWidth - lipgloss.Width(colGap) - rightPadding
 	if descWidth < 1 {
 		descWidth = 1

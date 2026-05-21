@@ -45,7 +45,7 @@ type updateCheckMsg struct {
 type mcpStartupStatusMsg struct {
 	Statuses []keenmcp.ServerStatus
 }
-type mcpRefreshDoneMsg struct {
+type mcpConnectDoneMsg struct {
 	Server string
 	Status keenmcp.ServerStatus
 	Err    error

@@ -410,13 +410,6 @@ func (m *Manager) fetchTools(ctx context.Context, server string, session *mcpsdk
 		for _, tool := range res.Tools {
 			converted := convertTool(tool)
 			tools = append(tools, converted)
-			slog.Default().Debug(
-				"mcp tool discovered",
-				"server", server,
-				"tool", converted.Name,
-				"description", truncate(converted.Description, 160),
-				"input_schema", schemaSummary(converted.InputSchema),
-			)
 		}
 		if res.NextCursor == "" {
 			break

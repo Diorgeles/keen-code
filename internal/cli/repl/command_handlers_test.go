@@ -17,6 +17,7 @@ import (
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
+	"github.com/user/keen-code/internal/mcpskills"
 	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/providers"
 )
@@ -256,11 +257,11 @@ func TestHandleMCPCommandStatus(t *testing.T) {
 	}
 }
 
-func TestHandleMCPCommandRefreshUnknown(t *testing.T) {
+func TestHandleMCPCommandConnectUnknown(t *testing.T) {
 	m := newTestModel()
 	m.ctx.mcp = &fakeMCPRuntime{statuses: []keenmcp.ServerStatus{{Name: "deepwiki", State: keenmcp.StateConnected}}}
 
-	result, cmd := m.handleMCPCommand("/mcp refresh missing")
+	result, cmd := m.handleMCPCommand("/mcp connect missing")
 
 	if cmd != nil {
 		t.Fatal("expected nil command")
@@ -270,17 +271,98 @@ func TestHandleMCPCommandRefreshUnknown(t *testing.T) {
 	}
 }
 
-func TestHandleMCPRefreshDone(t *testing.T) {
+func TestHandleMCPConnectDone(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
 	m := newTestModel()
+	m.appState = replappstate.New(nil, work)
+	m.ctx.mcp = &fakeMCPRuntime{tools: map[string][]keenmcp.Tool{
+		"deepwiki": {{Name: "ask", Description: "Ask DeepWiki", InputSchema: map[string]any{"type": "object"}}},
+	}}
 	m.showSpinner = true
 
-	m.handleMCPRefreshDone(mcpRefreshDoneMsg{Server: "deepwiki"})
+	m.handleMCPConnectDone(mcpConnectDoneMsg{Server: "deepwiki"})
 
 	if m.showSpinner {
 		t.Fatal("expected spinner to stop")
 	}
 	if !strings.Contains(ansi.Strip(m.output.Join()), "MCP server connected: deepwiki") {
 		t.Fatalf("output = %q, want success", m.output.Join())
+	}
+	if _, ok := skills.Find(m.appState.GetSkills().Skills, "mcp:deepwiki"); !ok {
+		t.Fatalf("expected mcp:deepwiki skill to be reloaded")
+	}
+	if !m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
+		t.Fatalf("expected mcp:deepwiki skill to be enabled")
+	}
+}
+
+func TestHandleMCPConnectDoneFailureDisablesSkill(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+	m := newTestModel()
+	m.appState = replappstate.New(nil, work)
+	if err := mcpskills.Generate("deepwiki", []keenmcp.Tool{{Name: "ask", Description: "Ask DeepWiki"}}); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	m.appState.ReloadSkills()
+
+	m.handleMCPConnectDone(mcpConnectDoneMsg{Server: "deepwiki", Err: errors.New("connection failed")})
+
+	if m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
+		t.Fatalf("expected mcp:deepwiki skill to be disabled")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".keen", "skills", "mcp:deepwiki", "SKILL.md")); err != nil {
+		t.Fatalf("expected mcp:deepwiki files to remain: %v", err)
+	}
+	if m.appState.SkillsCatalog() != "" && strings.Contains(m.appState.SkillsCatalog(), "mcp:deepwiki") {
+		t.Fatalf("expected mcp:deepwiki to be hidden from catalog")
+	}
+}
+
+func TestHandleMCPStartupStatusGeneratesConnectedSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+	m := newTestModel()
+	m.appState = replappstate.New(nil, work)
+	m.ctx.mcp = &fakeMCPRuntime{tools: map[string][]keenmcp.Tool{
+		"deepwiki": {{Name: "ask", Description: "Ask DeepWiki", InputSchema: map[string]any{"type": "object"}}},
+	}}
+
+	m.handleMCPStartupStatus([]keenmcp.ServerStatus{{Name: "deepwiki", State: keenmcp.StateConnected}})
+
+	if _, ok := skills.Find(m.appState.GetSkills().Skills, "mcp:deepwiki"); !ok {
+		t.Fatalf("expected mcp:deepwiki skill to be reloaded")
+	}
+	if !m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
+		t.Fatalf("expected mcp:deepwiki skill to be enabled")
+	}
+}
+
+func TestHandleMCPStartupStatusDisablesFailedSkills(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+	m := newTestModel()
+	m.appState = replappstate.New(nil, work)
+	if err := mcpskills.Generate("posthog", []keenmcp.Tool{{Name: "query", Description: "Query PostHog"}}); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	m.appState.ReloadSkills()
+
+	m.handleMCPStartupStatus([]keenmcp.ServerStatus{{Name: "posthog", State: keenmcp.StateAuthRequired, LastError: "auth required"}})
+
+	if m.appState.GetSkillsConfig().Enabled("mcp:posthog") {
+		t.Fatalf("expected mcp:posthog skill to be disabled")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".keen", "skills", "mcp:posthog", "SKILL.md")); err != nil {
+		t.Fatalf("expected mcp:posthog files to remain: %v", err)
+	}
+	if m.appState.SkillsCatalog() != "" && strings.Contains(m.appState.SkillsCatalog(), "mcp:posthog") {
+		t.Fatalf("expected mcp:posthog to be hidden from catalog")
 	}
 }
 
@@ -300,8 +382,8 @@ func TestHandleMCPStartupStatusShowsFailures(t *testing.T) {
 		t.Fatalf("output = %q, did not expect connected server notice", out)
 	}
 	compactOut := strings.Join(strings.Fields(out), " ")
-	if !strings.Contains(compactOut, "/mcp refresh posthog") {
-		t.Fatalf("output = %q, want refresh hint", out)
+	if !strings.Contains(compactOut, "/mcp connect posthog") {
+		t.Fatalf("output = %q, want connect hint", out)
 	}
 	for _, line := range strings.Split(out, "\n") {
 		if lipgloss.Width(line) > 46 {
@@ -833,8 +915,8 @@ func TestHandleEnterKey_BtwCommandNoQuestionWithHistory(t *testing.T) {
 type fakeMCPRuntime struct {
 	statuses   []keenmcp.ServerStatus
 	tools      map[string][]keenmcp.Tool
-	refreshErr error
-	refreshed  string
+	connectErr error
+	connected  string
 }
 
 func (f *fakeMCPRuntime) Start(context.Context) error {
@@ -870,8 +952,12 @@ func (f *fakeMCPRuntime) ListTools(_ context.Context, server string) ([]keenmcp.
 }
 
 func (f *fakeMCPRuntime) Refresh(_ context.Context, server string, _ ...keenmcp.RefreshOption) error {
-	f.refreshed = server
-	return f.refreshErr
+	f.connected = server
+	return f.connectErr
+}
+
+func (f *fakeMCPRuntime) CallTool(_ context.Context, _, _ string, _ map[string]any) (*keenmcp.ToolResult, error) {
+	return &keenmcp.ToolResult{}, nil
 }
 
 func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {

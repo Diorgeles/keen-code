@@ -11,6 +11,8 @@ const (
 	Logout          = "/logout"
 	Model           = "/model"
 	MCP             = "/mcp"
+	MCPConnect      = "/mcp connect"
+	MCPStatus       = "/mcp status"
 	Mode            = "/mode"
 	New             = "/new"
 	AllowPermission = "/allow-permission"
@@ -19,6 +21,9 @@ const (
 	Sessions        = "/sessions"
 	ShowThinking    = "/show-thinking"
 	Skills          = "/skills"
+	SkillsDisable   = "/skills disable"
+	SkillsEnable    = "/skills enable"
+	SkillsList      = "/skills list"
 	Thinking        = "/thinking"
 )
 
@@ -47,17 +52,59 @@ var All = []SlashCommand{
 	{Thinking, "Change thinking effort for the current model"},
 }
 
+var Suggestions = []SlashCommand{
+	{AllowPermission, "Always allow a tool (bypasses prompts, including dangerous bash)"},
+	{Btw, "Ask a quick side question (not added to conversation)"},
+	{Clear, "Clear the session and create a new one (also /new)"},
+	{Compact, "Compact conversation context"},
+	{Exit, "Quit Keen"},
+	{Help, "Show available commands"},
+	{Logout, "Sign out of the current OAuth provider"},
+	{MCP, "Show MCP commands"},
+	{MCPConnect, "Connect an MCP server"},
+	{MCPStatus, "Show MCP server status"},
+	{Model, "Change provider or model"},
+	{Mode, "Switch agent mode (plan|build)"},
+	{New, "Start a new session (also /clear)"},
+	{ResetPermission, "Reset tool permissions to Keen's default mechanism"},
+	{Resume, "Open the session picker"},
+	{Sessions, "List saved sessions for this directory"},
+	{ShowThinking, "Toggle thinking token display (on|off)"},
+	{Skills, "Show skills commands"},
+	{SkillsDisable, "Disable a skill"},
+	{SkillsEnable, "Enable a skill"},
+	{SkillsList, "List available skills"},
+	{Thinking, "Change thinking effort for the current model"},
+}
+
 func Filter(input string) []SlashCommand {
 	if input == "" || !strings.HasPrefix(input, "/") {
 		return nil
 	}
 	prefix := strings.ToLower(strings.TrimPrefix(input, "/"))
 	var results []SlashCommand
-	for _, cmd := range All {
-		name := strings.TrimPrefix(cmd.Name, "/")
-		if strings.HasPrefix(name, prefix) {
+	for _, cmd := range Suggestions {
+		name := strings.ToLower(strings.TrimPrefix(cmd.Name, "/"))
+		if strings.HasPrefix(name, prefix) || suggestionMatchesWords(name, prefix) {
 			results = append(results, cmd)
 		}
 	}
 	return results
+}
+
+func suggestionMatchesWords(name, prefix string) bool {
+	prefixWords := strings.Fields(prefix)
+	if len(prefixWords) == 0 {
+		return true
+	}
+	nameWords := strings.Fields(name)
+	if len(prefixWords) > len(nameWords) {
+		return false
+	}
+	for i, word := range prefixWords {
+		if !strings.HasPrefix(nameWords[i], word) {
+			return false
+		}
+	}
+	return true
 }

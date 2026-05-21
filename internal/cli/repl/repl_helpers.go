@@ -3,6 +3,7 @@ package repl
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand"
 	"os"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
+	"github.com/user/keen-code/internal/mcpskills"
 	"github.com/user/keen-code/internal/updater"
 )
 
@@ -119,7 +121,7 @@ func waitForMCPStartup(runtime keenmcp.Runtime) tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		_ = runtime.WaitInitialScan(ctx)
 		return mcpStartupStatusMsg{Statuses: runtime.Servers()}
@@ -127,6 +129,8 @@ func waitForMCPStartup(runtime keenmcp.Runtime) tea.Cmd {
 }
 
 func (m *replModel) handleMCPStartupStatus(statuses []keenmcp.ServerStatus) {
+	m.syncMCPSkills(statuses)
+
 	var failed []keenmcp.ServerStatus
 	for _, status := range statuses {
 		if isMCPFailureState(status.State) {
@@ -137,7 +141,7 @@ func (m *replModel) handleMCPStartupStatus(statuses []keenmcp.ServerStatus) {
 		return
 	}
 	for _, status := range failed {
-		msg := "  MCP connection failed for " + status.Name + ". Try `/mcp refresh " + status.Name + "` to connect."
+		msg := "  MCP connection failed for " + status.Name + ". Try `/mcp connect " + status.Name + "` to connect."
 		if status.LastError != "" {
 			msg += " (" + status.LastError + ")"
 		}
@@ -170,12 +174,60 @@ func isMCPFailureState(state keenmcp.ServerState) bool {
 	return state == keenmcp.StateDisconnected || state == keenmcp.StateAuthRequired || state == keenmcp.StateAuthFailed
 }
 
-func (m *replModel) handleMCPRefreshDone(msg mcpRefreshDoneMsg) {
+func (m *replModel) syncMCPSkills(statuses []keenmcp.ServerStatus) {
+	changed := false
+	for _, status := range statuses {
+		if status.State == keenmcp.StateConnected {
+			if m.refreshMCPSkill(status.Name) {
+				changed = true
+			}
+			_ = m.appState.SetSkillEnabled(mcpskills.SkillName(status.Name), true)
+			changed = true
+			continue
+		}
+		if isMCPFailureState(status.State) {
+			_ = m.appState.SetSkillEnabled(mcpskills.SkillName(status.Name), false)
+			changed = true
+		}
+	}
+	if changed {
+		m.appState.ReloadSkills()
+	}
+}
+
+func (m *replModel) refreshMCPSkill(server string) bool {
+	if m.ctx == nil || m.ctx.mcp == nil {
+		return false
+	}
+	tools, err := m.ctx.mcp.ListTools(context.Background(), server)
+	if err != nil {
+		slog.Default().Debug("mcpskills list tools failed", "server", server, "error", err)
+		return false
+	}
+	if err := mcpskills.Generate(server, tools); err != nil {
+		slog.Default().Debug("mcpskills generate failed", "server", server, "error", err)
+		return false
+	}
+	return true
+}
+
+func (m *replModel) handleMCPConnectDone(msg mcpConnectDoneMsg) {
 	m.stopLoading()
+	changed := false
 	if msg.Err != nil {
-		m.output.AddError("MCP refresh failed for "+msg.Server+": "+msg.Err.Error(), repltheme.ErrorStyle)
+		m.output.AddError("MCP connect failed for "+msg.Server+": "+msg.Err.Error(), repltheme.ErrorStyle)
+		_ = m.appState.SetSkillEnabled(mcpskills.SkillName(msg.Server), false)
+		changed = true
 	} else {
 		m.output.AddStyledLine("  ✓ MCP server connected: "+msg.Server, repltheme.HighlightStyle)
+		if m.refreshMCPSkill(msg.Server) {
+			changed = true
+		}
+		_ = m.appState.SetSkillEnabled(mcpskills.SkillName(msg.Server), true)
+		changed = true
+	}
+	if changed {
+		m.appState.ReloadSkills()
 	}
 	m.output.AddEmptyLine()
 	m.updateViewportContent()

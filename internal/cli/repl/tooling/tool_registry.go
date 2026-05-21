@@ -6,6 +6,7 @@ import (
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
 	"github.com/user/keen-code/internal/filesystem"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -14,6 +15,7 @@ func SetupToolRegistry(
 	appState *replappstate.AppState,
 	permissionRequester *replpermissions.Requester,
 	diffEmitter *DiffEmitter,
+	mcpRuntime keenmcp.Runtime,
 ) {
 	gitAwareness := filesystem.NewGitAwareness()
 	_ = gitAwareness.LoadGitignore(filepath.Join(workingDir, ".gitignore"))
@@ -39,4 +41,8 @@ func SetupToolRegistry(
 
 	webFetchTool := tools.NewWebFetchTool()
 	appState.RegisterTool(webFetchTool)
+
+	if mcpRuntime != nil {
+		appState.RegisterTool(tools.NewCallMCPTool(mcpRuntime, permissionRequester))
+	}
 }
