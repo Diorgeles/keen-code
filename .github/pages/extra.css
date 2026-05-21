@@ -12,3 +12,17 @@ body,
 .md-header__button.md-logo {
   display: none;
 }
+
+.md-typeset h1 {
+  background: linear-gradient(135deg, #818cf8, #a78bfa, #e879f9, #818cf8);
+  background-size: 300% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradient-shift 5s linear infinite;
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% center; }
+  100% { background-position: 300% center; }
+}
