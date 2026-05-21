@@ -42,7 +42,7 @@ func getLogDirectory() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("getting home directory: %w", err)
 	}
-	return filepath.Join(homeDir, ".keen-code", "logs"), nil
+	return filepath.Join(homeDir, ".keen", "logs"), nil
 }
 
 func createLogFile() (*os.File, string, error) {

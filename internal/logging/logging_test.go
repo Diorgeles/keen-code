@@ -46,8 +46,8 @@ func TestGetLogDirectory(t *testing.T) {
 		t.Fatalf("getLogDirectory() error = %v", err)
 	}
 
-	if !strings.Contains(dir, ".keen-code") {
-		t.Errorf("getLogDirectory() = %v, want to contain '.keen-code'", dir)
+	if !strings.Contains(dir, ".keen") {
+		t.Errorf("getLogDirectory() = %v, want to contain '.keen'", dir)
 	}
 
 	if !strings.Contains(dir, "logs") {
@@ -68,8 +68,8 @@ func TestCreateLogFile(t *testing.T) {
 		t.Errorf("createLogFile() did not create file: %v", logFile)
 	}
 
-	if !strings.HasPrefix(filepath.Base(logFile), "keen-code-") {
-		t.Errorf("createLogFile() filename = %v, want prefix 'keen-code-'", logFile)
+	if !strings.HasPrefix(filepath.Base(logFile), "keen-") {
+		t.Errorf("createLogFile() filename = %v, want prefix 'keen-'", logFile)
 	}
 
 	if !strings.HasSuffix(logFile, ".log") {
