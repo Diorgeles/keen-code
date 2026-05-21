@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `web_fetch` tool to fetch URL content and convert HTML pages to Markdown for LLM consumption.
+- MCP tool-calling support through generated MCP skills and the `call_mcp_tool` tool.
+- Suggested subcommands for `/mcp connect`, `/mcp status`, `/skills list`, `/skills enable`, and `/skills disable`.
 
 ### Changed
 - Streamlined README intro section.
 - Updated REPL mode glyphs and removed mode-change confirmation messages.
+- MCP skills now enable or disable based on connection status while preserving generated skill files.
 
 ## [0.18.0] - 2026-05-16
 
