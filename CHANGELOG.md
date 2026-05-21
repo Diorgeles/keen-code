@@ -7,15 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-05-21
+
 ### Added
 - `web_fetch` tool to fetch URL content and convert HTML pages to Markdown for LLM consumption.
+- MCP server support with configurable transports, authentication, connection management, and tool discovery.
 - MCP tool-calling support through generated MCP skills and the `call_mcp_tool` tool.
+- Documentation for MCP servers, skill-driven MCP integration, and OAuth-authenticated MCP servers.
+- GitHub Pages documentation site powered by MkDocs Material.
 - Suggested subcommands for `/mcp connect`, `/mcp status`, `/skills list`, `/skills enable`, and `/skills disable`.
 
 ### Changed
 - Streamlined README intro section.
 - Updated REPL mode glyphs and removed mode-change confirmation messages.
 - MCP skills now enable or disable based on connection status while preserving generated skill files.
+- Improved docs site styling, navigation, badges, fonts, and local preview support.
+
+### Fixed
+- Render markdown table row rules safely.
+- Fixed broken or misleading documentation links and labels.
 
 ## [0.18.0] - 2026-05-16
 
@@ -346,7 +356,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/mochow13/keen-code/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/mochow13/keen-code/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/mochow13/keen-code/compare/v0.16.3...v0.17.0
 [0.16.3]: https://github.com/mochow13/keen-code/compare/v0.16.2...v0.16.3
