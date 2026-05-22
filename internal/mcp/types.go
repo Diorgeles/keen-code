@@ -44,6 +44,7 @@ type ServerStatus struct {
 	NegotiatedProtocol      string
 	NegotiatedServerName    string
 	NegotiatedServerVersion string
+	Description             string
 }
 
 type Tool struct {

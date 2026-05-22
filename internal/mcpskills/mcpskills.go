@@ -51,7 +51,7 @@ func skillsRoot(home string) string {
 	return filepath.Join(home, ".keen", "skills")
 }
 
-func Generate(server string, tools []keenmcp.Tool) error {
+func Generate(server, description string, tools []keenmcp.Tool) error {
 	dir, err := SkillDir(server)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func Generate(server string, tools []keenmcp.Tool) error {
 		}
 	}
 
-	if err := os.WriteFile(filepath.Join(tmpDir, "SKILL.md"), []byte(buildSkillMD(server, tools)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "SKILL.md"), []byte(buildSkillMD(server, description, tools)), 0o644); err != nil {
 		return fmt.Errorf("mcpskills: write SKILL.md: %w", err)
 	}
 
@@ -136,12 +136,20 @@ func schemaFilePath(schemasDir, toolName string) (string, error) {
 	return filepath.Join(schemasDir, clean+".json"), nil
 }
 
-func buildSkillMD(server string, tools []keenmcp.Tool) string {
+func skillDescription(server, description string) string {
+	description = strings.TrimSpace(strings.ReplaceAll(description, "\n", " "))
+	if description != "" {
+		return description
+	}
+	return "Use this skill to interact with the `" + server + "` MCP server."
+}
+
+func buildSkillMD(server, description string, tools []keenmcp.Tool) string {
 	var sb strings.Builder
 	sb.WriteString("---\n")
 	frontmatterData, err := yaml.Marshal(map[string]string{
 		"name":        SkillName(server),
-		"description": "Use this skill to interact with the `" + server + "` MCP server.",
+		"description": skillDescription(server, description),
 	})
 	if err == nil {
 		sb.Write(frontmatterData)

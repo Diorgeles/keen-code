@@ -24,6 +24,7 @@ import (
 
 const (
 	mcpConnectTimeout = 5 * time.Minute
+	mcpUsage          = "Usage: /mcp status | /mcp connect <server>"
 	skillsUsage       = "Usage: /skills list|status | /skills reload | /skills enable|disable <name>"
 )
 
@@ -288,7 +289,7 @@ func (m *replModel) handleMCPCommand(input string) (replModel, tea.Cmd) {
 	}
 
 	if args[0] != "connect" || len(args) != 2 {
-		m.output.AddStyledLine("  Usage: /mcp status | /mcp connect <server>", repltheme.UsageHintStyle)
+		m.output.AddStyledLine("  "+mcpUsage, repltheme.UsageHintStyle)
 		m.output.AddEmptyLine()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()

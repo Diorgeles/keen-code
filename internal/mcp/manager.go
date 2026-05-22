@@ -349,6 +349,7 @@ func (m *Manager) discoverServer(ctx context.Context, name string, opts managerO
 	status.ToolCount = len(tools)
 	if init := session.InitializeResult(); init != nil {
 		status.NegotiatedProtocol = init.ProtocolVersion
+		status.Description = strings.TrimSpace(init.Instructions)
 		if init.ServerInfo != nil {
 			status.NegotiatedServerName = init.ServerInfo.Name
 			status.NegotiatedServerVersion = init.ServerInfo.Version

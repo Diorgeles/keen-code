@@ -50,6 +50,9 @@ func TestManagerStreamableHTTPListAndCallTool(t *testing.T) {
 	if len(tools) != 2 {
 		t.Fatalf("ListTools() length = %d, want 2", len(tools))
 	}
+	if status := manager.Status("test"); status.Description != testServerInstructions {
+		t.Fatalf("Status().Description = %q, want %q", status.Description, testServerInstructions)
+	}
 
 	result, err := manager.CallTool(context.Background(), "test", "echo", map[string]any{"message": "hello"})
 	if err != nil {
@@ -405,8 +408,10 @@ func TestListToolsDisconnectedServer(t *testing.T) {
 	}
 }
 
+const testServerInstructions = "Use fake to echo messages and test errors."
+
 func newTestMCPServer() *mcpsdk.Server {
-	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "fake", Version: "1.0.0"}, nil)
+	server := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "fake", Version: "1.0.0"}, &mcpsdk.ServerOptions{Instructions: testServerInstructions})
 	mcpsdk.AddTool(server, &mcpsdk.Tool{Name: "echo", Description: "echo a message"}, func(_ context.Context, _ *mcpsdk.CallToolRequest, input echoInput) (*mcpsdk.CallToolResult, echoOutput, error) {
 		return nil, echoOutput{Message: input.Message}, nil
 	})

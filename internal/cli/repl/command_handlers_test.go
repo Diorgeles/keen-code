@@ -292,9 +292,12 @@ func TestHandleMCPConnectDone(t *testing.T) {
 	work := t.TempDir()
 	m := newTestModel()
 	m.appState = replappstate.New(nil, work)
-	m.ctx.mcp = &fakeMCPRuntime{tools: map[string][]keenmcp.Tool{
-		"deepwiki": {{Name: "ask", Description: "Ask DeepWiki", InputSchema: map[string]any{"type": "object"}}},
-	}}
+	m.ctx.mcp = &fakeMCPRuntime{
+		statuses: []keenmcp.ServerStatus{{Name: "deepwiki", Description: "Ask questions about DeepWiki."}},
+		tools: map[string][]keenmcp.Tool{
+			"deepwiki": {{Name: "ask", Description: "Ask DeepWiki", InputSchema: map[string]any{"type": "object"}}},
+		},
+	}
 	m.showSpinner = true
 
 	m.handleMCPConnectDone(mcpConnectDoneMsg{Server: "deepwiki"})
@@ -311,6 +314,13 @@ func TestHandleMCPConnectDone(t *testing.T) {
 	if !m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
 		t.Fatalf("expected mcp:deepwiki skill to be enabled")
 	}
+	data, err := os.ReadFile(filepath.Join(home, ".keen", "skills", "mcp:deepwiki", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read SKILL.md: %v", err)
+	}
+	if !strings.Contains(string(data), "description: Ask questions about DeepWiki.") {
+		t.Fatalf("SKILL.md missing MCP server description: %s", string(data))
+	}
 }
 
 func TestHandleMCPConnectDoneFailureDisablesSkill(t *testing.T) {
@@ -319,7 +329,7 @@ func TestHandleMCPConnectDoneFailureDisablesSkill(t *testing.T) {
 	work := t.TempDir()
 	m := newTestModel()
 	m.appState = replappstate.New(nil, work)
-	if err := mcpskills.Generate("deepwiki", []keenmcp.Tool{{Name: "ask", Description: "Ask DeepWiki"}}); err != nil {
+	if err := mcpskills.Generate("deepwiki", "", []keenmcp.Tool{{Name: "ask", Description: "Ask DeepWiki"}}); err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 	m.appState.ReloadSkills()
@@ -344,13 +354,20 @@ func TestHandleMCPStartupStatusGeneratesConnectedSkills(t *testing.T) {
 		"deepwiki": {{Name: "ask", Description: "Ask DeepWiki", InputSchema: map[string]any{"type": "object"}}},
 	}}
 
-	m.handleMCPStartupStatus([]keenmcp.ServerStatus{{Name: "deepwiki", State: keenmcp.StateConnected}})
+	m.handleMCPStartupStatus([]keenmcp.ServerStatus{{Name: "deepwiki", State: keenmcp.StateConnected, Description: "Ask questions about DeepWiki."}})
 
 	if _, ok := skills.Find(m.appState.GetSkills().Skills, "mcp:deepwiki"); !ok {
 		t.Fatalf("expected mcp:deepwiki skill to be reloaded")
 	}
 	if !m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
 		t.Fatalf("expected mcp:deepwiki skill to be enabled")
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".keen", "skills", "mcp:deepwiki", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read SKILL.md: %v", err)
+	}
+	if !strings.Contains(string(data), "description: Ask questions about DeepWiki.") {
+		t.Fatalf("SKILL.md missing MCP server description: %s", string(data))
 	}
 }
 
@@ -360,7 +377,7 @@ func TestHandleMCPStartupStatusDisablesFailedSkills(t *testing.T) {
 	work := t.TempDir()
 	m := newTestModel()
 	m.appState = replappstate.New(nil, work)
-	if err := mcpskills.Generate("posthog", []keenmcp.Tool{{Name: "query", Description: "Query PostHog"}}); err != nil {
+	if err := mcpskills.Generate("posthog", "", []keenmcp.Tool{{Name: "query", Description: "Query PostHog"}}); err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 	m.appState.ReloadSkills()

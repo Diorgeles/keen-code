@@ -19,7 +19,7 @@ func TestGenerate_CreatesSkillDir(t *testing.T) {
 		{Name: "list_issues", Description: "List issues", InputSchema: map[string]any{"type": "object"}},
 	}
 
-	if err := Generate("github", tools); err != nil {
+	if err := Generate("github", "Manage GitHub issues and pull requests.", tools); err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
@@ -35,6 +35,9 @@ func TestGenerate_CreatesSkillDir(t *testing.T) {
 	content := string(skillMD)
 	if !strings.Contains(content, "name: mcp:github") {
 		t.Errorf("SKILL.md missing name frontmatter")
+	}
+	if !strings.Contains(content, "description: Manage GitHub issues and pull requests.") {
+		t.Errorf("SKILL.md missing server description")
 	}
 	if !strings.Contains(content, "create_issue") {
 		t.Errorf("SKILL.md missing tool create_issue")
@@ -78,10 +81,10 @@ func TestGenerate_Idempotent(t *testing.T) {
 
 	tools := []keenmcp.Tool{{Name: "ping", Description: "Ping", InputSchema: nil}}
 
-	if err := Generate("myserver", tools); err != nil {
+	if err := Generate("myserver", "", tools); err != nil {
 		t.Fatalf("first Generate() error = %v", err)
 	}
-	if err := Generate("myserver", tools); err != nil {
+	if err := Generate("myserver", "", tools); err != nil {
 		t.Fatalf("second Generate() error = %v", err)
 	}
 
@@ -95,7 +98,7 @@ func TestGenerate_QuotesFrontmatter(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	if err := Generate("git:hub", nil); err != nil {
+	if err := Generate("git:hub", "", nil); err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
@@ -112,9 +115,26 @@ func TestGenerate_RejectsPathTraversalToolName(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	err := Generate("srv", []keenmcp.Tool{{Name: "../escape", Description: "bad"}})
+	err := Generate("srv", "", []keenmcp.Tool{{Name: "../escape", Description: "bad"}})
 	if err == nil {
 		t.Fatal("expected invalid tool name error")
+	}
+}
+
+func TestGenerate_FallsBackToStaticDescription(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	if err := Generate("github", " \n\t ", nil); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	skillMD, err := os.ReadFile(filepath.Join(home, ".keen", "skills", "mcp:github", "SKILL.md"))
+	if err != nil {
+		t.Fatalf("read SKILL.md: %v", err)
+	}
+	if !strings.Contains(string(skillMD), "description: Use this skill to interact with the `github` MCP server.") {
+		t.Fatalf("SKILL.md missing fallback description: %s", string(skillMD))
 	}
 }
 
@@ -123,7 +143,7 @@ func TestBuildSkillMD_CapsAt1000Tools(t *testing.T) {
 	for i := range tools {
 		tools[i] = keenmcp.Tool{Name: "tool", Description: "desc"}
 	}
-	md := buildSkillMD("srv", tools)
+	md := buildSkillMD("srv", "", tools)
 	if !strings.Contains(md, "20 more tools") {
 		t.Errorf("expected overflow notice, got:\n%s", md)
 	}
@@ -132,7 +152,7 @@ func TestBuildSkillMD_CapsAt1000Tools(t *testing.T) {
 func TestBuildSkillMD_TruncatesLongDescription(t *testing.T) {
 	long := strings.Repeat("a", 1200)
 	tools := []keenmcp.Tool{{Name: "t", Description: long}}
-	md := buildSkillMD("srv", tools)
+	md := buildSkillMD("srv", "", tools)
 	if strings.Contains(md, strings.Repeat("a", 1200)) {
 		t.Errorf("expected description to be truncated")
 	}

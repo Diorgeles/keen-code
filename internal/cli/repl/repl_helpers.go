@@ -181,7 +181,7 @@ func (m *replModel) syncMCPSkills(statuses []keenmcp.ServerStatus) {
 	for _, status := range statuses {
 		configured[status.Name] = true
 		if status.State == keenmcp.StateConnected {
-			_ = m.refreshMCPSkill(status.Name)
+			_ = m.refreshMCPSkill(status.Name, status.Description)
 			_ = m.appState.SetSkillStatus(mcpskills.SkillName(status.Name), skills.StatusEnabled)
 			reloadSkills = true
 			continue
@@ -215,7 +215,7 @@ func (m *replModel) disableUnconfiguredEnabledMCPSkills(configured map[string]bo
 	return changed
 }
 
-func (m *replModel) refreshMCPSkill(server string) bool {
+func (m *replModel) refreshMCPSkill(server, description string) bool {
 	if m.ctx == nil || m.ctx.mcp == nil {
 		return false
 	}
@@ -224,7 +224,7 @@ func (m *replModel) refreshMCPSkill(server string) bool {
 		slog.Default().Debug("mcpskills list tools failed", "server", server, "error", err)
 		return false
 	}
-	if err := mcpskills.Generate(server, tools); err != nil {
+	if err := mcpskills.Generate(server, description, tools); err != nil {
 		slog.Default().Debug("mcpskills generate failed", "server", server, "error", err)
 		return false
 	}
@@ -240,7 +240,11 @@ func (m *replModel) handleMCPConnectDone(msg mcpConnectDoneMsg) {
 		changed = true
 	} else {
 		m.output.AddStyledLine("  ✓ MCP server connected: "+msg.Server, repltheme.HighlightStyle)
-		if m.refreshMCPSkill(msg.Server) {
+		description := ""
+		if m.ctx != nil && m.ctx.mcp != nil {
+			description = m.ctx.mcp.Status(msg.Server).Description
+		}
+		if m.refreshMCPSkill(msg.Server, description) {
 			changed = true
 		}
 		_ = m.appState.SetSkillStatus(mcpskills.SkillName(msg.Server), skills.StatusEnabled)
