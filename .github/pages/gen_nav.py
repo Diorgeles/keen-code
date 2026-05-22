@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import yaml
+from material.extensions.emoji import twemoji, to_svg as emoji_to_svg
 
 ACRONYMS = {"rfc", "prd", "ui", "repl", "llm", "cli", "mcp", "btw", "api", "oauth", "ai"}
 
@@ -13,6 +14,7 @@ BASE_CONFIG = {
     "site_url": "https://mochow13.github.io/keen-code",
     "repo_url": "https://github.com/mochow13/keen-code",
     "repo_name": "mochow13/keen-code",
+    "use_directory_urls": False,
     "theme": {
         "name": "material",
         "favicon": "assets/keen-code.png",
@@ -56,12 +58,19 @@ BASE_CONFIG = {
     },
     "extra_css": ["extra.css"],
     "markdown_extensions": [
+        "attr_list",
         "pymdownx.highlight",
         "pymdownx.superfences",
         "tables",
         "admonition",
         "md_in_html",
         {"toc": {"permalink": True}},
+        {
+            "pymdownx.emoji": {
+                "emoji_index": twemoji,
+                "emoji_generator": emoji_to_svg,
+            }
+        },
     ],
 }
 
@@ -134,14 +143,18 @@ def build_ai_interactions_nav(base: str) -> list:
 
 
 def build_nav(base: str) -> list:
-    nav = [{"Home": "README.md"}]
+    has_index = os.path.isfile(os.path.join(base, "index.md"))
+    nav = [{"Home": "index.md" if has_index else "README.md"}]
     for title, path in [
+        ("About", "about.md"),
         ("Tour", "TOUR.md"),
         ("Roadmap", "ROADMAP.md"),
         ("Changelog", "CHANGELOG.md"),
         ("Contributing", "CONTRIBUTING.md"),
         ("AGENTS.md", "AGENTS.md"),
     ]:
+        if path == "about.md" and not has_index:
+            continue
         if os.path.isfile(os.path.join(base, path)):
             nav.append({title: path})
 
