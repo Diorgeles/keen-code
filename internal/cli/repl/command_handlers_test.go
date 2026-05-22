@@ -3,6 +3,7 @@ package repl
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -574,6 +575,38 @@ func TestHandleSkillsCommandListWrapsLongDescriptions(t *testing.T) {
 		if lipgloss.Width(line) > 48 {
 			t.Fatalf("skill line exceeds padded width (%d > %d): %q", lipgloss.Width(line), 48, line)
 		}
+	}
+}
+
+func TestHandleSkillsCommandListTruncatesLongDescriptions(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	skillDir := filepath.Join(work, ".agents", "skills", "demo")
+	if err := os.MkdirAll(skillDir, 0755); err != nil {
+		t.Fatalf("mkdir skill: %v", err)
+	}
+	words := make([]string, 0, 55)
+	for i := range 55 {
+		words = append(words, fmt.Sprintf("word%d", i+1))
+	}
+	description := strings.Join(words, " ")
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: demo\ndescription: "+description+"\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write skill: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/skills list")
+	newM, _ := m.handleEnterKey()
+
+	stripped := ansi.Strip(newM.output.Join())
+	if !strings.Contains(stripped, "word50...") {
+		t.Fatalf("expected truncated description with ellipsis, got %q", stripped)
+	}
+	if strings.Contains(stripped, "word51") {
+		t.Fatalf("expected description to be truncated before word51, got %q", stripped)
 	}
 }
 

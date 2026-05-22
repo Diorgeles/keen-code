@@ -565,7 +565,7 @@ func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
 		if !cfg.Enabled(skill.Name) {
 			status = "✗ disabled"
 		}
-		rows = append(rows, []string{skill.Name, status, skill.Description})
+		rows = append(rows, []string{skill.Name, status, truncateSkillDescription(skill.Description)})
 	}
 
 	disabledStatusStyle := repltheme.AccentStyle
@@ -595,9 +595,10 @@ func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
 }
 
 const (
-	commandTableLeftPadding  = "    "
-	commandTableRightPadding = 2
-	commandTableCellPadding  = 2
+	commandTableLeftPadding   = "    "
+	commandTableRightPadding  = 2
+	commandTableCellPadding   = 2
+	skillDescriptionWordLimit = 50
 )
 
 func (m *replModel) addCommandTable(headers []string, rows [][]string, styleFunc func(row, col int, style lipgloss.Style) lipgloss.Style) {
@@ -643,6 +644,14 @@ func maxSkillNameWidth(skillList []skills.Skill) int {
 		width = max(width, lipgloss.Width(skill.Name))
 	}
 	return width
+}
+
+func truncateSkillDescription(description string) string {
+	words := strings.Fields(description)
+	if len(words) <= skillDescriptionWordLimit {
+		return description
+	}
+	return strings.Join(words[:skillDescriptionWordLimit], " ") + "..."
 }
 
 func maxColumnWidth(header string, rows [][]string, col int) int {
