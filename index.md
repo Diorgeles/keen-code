@@ -6,6 +6,8 @@ hide:
 
 <div class="hero-section" markdown="1">
 
+<span class="hero-tagline">Open Source · CLI Agent</span>
+
 # Keen Code
 
 A CLI coding agent powered by AI — reads your code, writes changes, and runs commands, all from your terminal.
@@ -18,6 +20,8 @@ A CLI coding agent powered by AI — reads your code, writes changes, and runs c
 
 </div>
 
+<div class="section-divider"></div>
+
 <div class="terminal-window">
   <div class="terminal-header">
     <span class="terminal-dot terminal-dot--red"></span>
@@ -27,6 +31,8 @@ A CLI coding agent powered by AI — reads your code, writes changes, and runs c
   </div>
   <img class="terminal-body" src="assets/keen-demo-2x.gif" alt="Keen Code demo" />
 </div>
+
+<div class="section-divider"></div>
 
 <div class="feature-grid">
 
@@ -78,4 +84,14 @@ A CLI coding agent powered by AI — reads your code, writes changes, and runs c
 <p>Lean cross-turn context — compact summaries instead of raw tool traces.</p>
 </a>
 
+</div>
+
+<div class="section-divider"></div>
+
+<div class="cta-section">
+<p>Ready to let AI handle the boring parts?</p>
+<div class="cta-links">
+<a href="CONTRIBUTING.html">Contribute</a>
+<a href="CHANGELOG.html">Changelog</a>
+</div>
 </div>
