@@ -28,7 +28,7 @@ A CLI-based minimal coding agent with lean context management and skill-driven M
     <span class="terminal-dot terminal-dot--green"></span>
     <span class="terminal-title">keen-code — ~/my-project</span>
   </div>
-  <img class="terminal-body" src="assets/keen-demo-2x.gif" alt="Keen Code demo" />
+  <img class="terminal-body" src="assets/keen-demo-2x-0-19-1.gif" alt="Keen Code demo" />
 </div>
 
 <div class="section-divider"></div>
