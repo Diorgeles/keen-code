@@ -1,7 +1,6 @@
 package output
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"path/filepath"
@@ -12,8 +11,6 @@ import (
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/llm"
 )
-
-const maxMCPToolValueLength = 140
 
 type OutputBuilder struct {
 	lines      []string
@@ -188,56 +185,10 @@ func jsonMarshalCompact(v map[string]any) string {
 func formatMCPToolInput(input map[string]any) string {
 	server, _ := input["server"].(string)
 	tool, _ := input["tool"].(string)
-
-	var b strings.Builder
-	if server != "" && tool != "" {
-		b.WriteString(server)
-		b.WriteString("/")
-		b.WriteString(tool)
+	if server == "" || tool == "" {
+		return ""
 	}
-
-	args, ok := input["arguments"].(map[string]any)
-	if !ok || len(args) == 0 {
-		return b.String()
-	}
-
-	keys := make([]string, 0, len(args))
-	for k := range args {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		b.WriteString("\n    ")
-		b.WriteString(k)
-		b.WriteString(": ")
-		b.WriteString(formatMCPToolArgument(args[k]))
-	}
-
-	return b.String()
-}
-
-func formatMCPToolArgument(value any) string {
-	switch v := value.(type) {
-	case string:
-		return truncateToolValue(v, maxMCPToolValueLength)
-	default:
-		jsonBytes, err := json.Marshal(v)
-		if err != nil {
-			return truncateToolValue(fmt.Sprintf("%v", v), maxMCPToolValueLength)
-		}
-		return truncateToolValue(string(jsonBytes), maxMCPToolValueLength)
-	}
-}
-
-func truncateToolValue(value string, max int) string {
-	if len(value) <= max {
-		return value
-	}
-	if max <= 3 {
-		return value[:max]
-	}
-	return value[:max-3] + "..."
+	return server + "/" + tool
 }
 
 func formatToolPathForUI(path, workingDir string) string {

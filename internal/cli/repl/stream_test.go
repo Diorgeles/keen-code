@@ -273,6 +273,53 @@ func TestStreamHandler_HandleDone_AdjacentToolStartEnd_CollapsedToOneLine(t *tes
 	}
 }
 
+func TestStreamHandler_CallMCPToolNeverShowsArguments(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")
+	sh.HandleToolStart(&llm.ToolCall{Name: "call_mcp_tool", Input: map[string]any{
+		"server": "context7",
+		"tool":   "query-docs",
+		"arguments": map[string]any{
+			"query":     "React useEffect API reference",
+			"libraryId": "/reactjs/react.dev",
+		},
+	}})
+
+	view := sh.View(80)
+	if !strings.Contains(view, "call_mcp_tool") || !strings.Contains(view, "context7/query-docs") {
+		t.Fatalf("expected MCP tool summary, got %q", view)
+	}
+	if strings.Contains(view, "libraryId") || strings.Contains(view, "query:") || strings.Contains(view, "React useEffect") {
+		t.Fatalf("expected MCP arguments to be hidden, got %q", view)
+	}
+
+	sh.HandleToolEnd(&llm.ToolCall{Name: "call_mcp_tool", Input: map[string]any{
+		"server": "context7",
+		"tool":   "query-docs",
+		"arguments": map[string]any{
+			"query":     "React useEffect API reference",
+			"libraryId": "/reactjs/react.dev",
+		},
+	}, Duration: 5})
+
+	view = sh.View(80)
+	if !strings.Contains(view, "call_mcp_tool") || !strings.Contains(view, "context7/query-docs") {
+		t.Fatalf("expected completed MCP tool summary, got %q", view)
+	}
+	if strings.Contains(view, "libraryId") || strings.Contains(view, "query:") || strings.Contains(view, "React useEffect") {
+		t.Fatalf("expected completed MCP arguments to be hidden, got %q", view)
+	}
+
+	lines, _ := sh.HandleDone()
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "call_mcp_tool") || !strings.Contains(joined, "context7/query-docs") {
+		t.Fatalf("expected transcript MCP tool summary, got %q", joined)
+	}
+	if strings.Contains(joined, "libraryId") || strings.Contains(joined, "query:") || strings.Contains(joined, "React useEffect") {
+		t.Fatalf("expected transcript MCP arguments to be hidden, got %q", joined)
+	}
+}
+
 func TestStreamHandler_View_NoSpinnerInView(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")

@@ -142,22 +142,19 @@ func TestFormatToolInput_SeparatesArgumentsWithDots(t *testing.T) {
 	}
 }
 
-func TestFormatToolInput_CallMCPToolFormatsArgumentsPrettily(t *testing.T) {
+func TestFormatToolInput_CallMCPToolShowsOnlyServerAndTool(t *testing.T) {
 	got := FormatToolInput("call_mcp_tool", map[string]any{
 		"server": "context7",
 		"tool":   "query-docs",
 		"arguments": map[string]any{
-			"query":     "React useEffect API reference: when useEffect runs, dependency array behavior, cleanup function timing, common mistakes to avoid",
+			"query":     "React useEffect API reference",
 			"libraryId": "/reactjs/react.dev",
 		},
 		"checkCache": false,
 	}, "/tmp/project")
 
-	expected := "context7/query-docs\n" +
-		"    libraryId: /reactjs/react.dev\n" +
-		"    query: React useEffect API reference: when useEffect runs, dependency array behavior, cleanup function timing, common mistakes to avoid"
-	if got != expected {
-		t.Fatalf("expected pretty call_mcp_tool input, got %q", got)
+	if got != "context7/query-docs" {
+		t.Fatalf("expected call_mcp_tool input to show only server/tool, got %q", got)
 	}
 }
 
