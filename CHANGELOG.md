@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-05-23
+
+### Changed
+- Preserved MCP skill enablement preferences during server sync while removing stale generated skills for deleted servers.
+- Simplified MCP tool display and capped skill descriptions in REPL list output.
+- Used MCP server instructions for generated skill descriptions.
+- Store logs in `~/.keen/logs` instead of `~/.keen-code/logs`.
+- Refreshed documentation landing page styling and clarified skill activation persistence.
+
 ## [0.19.0] - 2026-05-21
 
 ### Added
@@ -356,7 +365,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.1...HEAD
+[0.19.1]: https://github.com/mochow13/keen-code/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/mochow13/keen-code/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/mochow13/keen-code/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/mochow13/keen-code/compare/v0.16.3...v0.17.0
