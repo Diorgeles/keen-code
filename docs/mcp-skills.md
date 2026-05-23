@@ -117,6 +117,12 @@ When the user asks for something that needs the MCP server, the LLM follows the 
 3. Read that tool's schema file.
 4. Call `call_mcp_tool`.
 
+> ⚠️ There is a persistence difference between explicit slash activation and LLM-driven skill reading:
+>
+> - **Slash activation** (`/mcp:<server> ...`) is handled before the LLM turn. Keen reads `SKILL.md`, applies slash-command argument substitution, and injects the processed skill body as an `[Activate skill: ...]` conversation message. Because it is a message, it remains in retained conversation history after the turn finishes.
+> - **LLM-driven activation** happens when the model reads `~/.keen/skills/mcp:<server>/SKILL.md` itself after seeing the skill catalog entry. No slash-command argument substitution is applied. The skill body arrives as a tool result for the active turn, and raw tool traffic is compacted when the turn finishes, so a later turn may need to read the skill file again.
+> - **For context management**, prefer letting the LLM read `SKILL.md` on demand instead of explicitly injecting MCP skills with a slash command. This keeps detailed skill instructions out of retained conversation history unless they are needed again.
+
 Example `call_mcp_tool` input:
 
 ```json

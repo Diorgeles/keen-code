@@ -182,7 +182,11 @@ Enabled skills can be activated like slash commands:
 /review docs/cli-usage.md
 ```
 
-When a skill is activated, Keen injects that skill's `SKILL.md` body into the conversation as an activation message. Arguments are substituted into the skill body using `$ARGUMENTS`, `$1`, `$2`, etc. See [`docs/skills-system.md`](skills-system.md) for the skill file format.
+When a skill is activated with a slash command, Keen reads that skill's `SKILL.md`, substitutes arguments into the skill body using `$ARGUMENTS`, `$1`, `$2`, etc., and injects the processed body into the conversation as an activation message. See [`docs/skills-system.md`](skills-system.md) for the skill file format.
+
+This is different from model-driven skill use. Enabled skills are also listed in the system prompt with their descriptions and `SKILL.md` paths, so the LLM may decide a skill is relevant and read that file itself with the `read_file` tool. In that case, the slash command was not used, no slash-command argument substitution occurs, and the skill instructions arrive through the tool result instead of a pre-injected activation message.
+
+The persistence is also different across turns. A slash-activated skill is injected as a conversation message, so its processed instructions remain in retained conversation history. A model-read `SKILL.md` is just a tool result for the active assistant turn; after a normal turn finish, Keen replaces raw tool traffic with compact turn memory, so the next turn may need to read the skill file again if those instructions are still needed.
 
 Skill names participate in slash-command autocomplete alongside built-in commands.
 
