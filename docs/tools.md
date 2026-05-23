@@ -24,12 +24,14 @@ The registry manages all available tools and converts them to provider-specific 
 
 | Tool | Purpose | Key Parameters |
 |------|---------|----------------|
-| `read_file` | Read file contents | `path` |
+| `read_file` | Read file contents | `path`, `offset`, `limit` |
 | `write_file` | Create/overwrite files | `path`, `content` |
 | `edit_file` | Targeted string replacement | `path`, `oldString`, `newString` |
 | `glob` | Find files by pattern | `pattern`, `path` |
 | `grep` | Search file contents | `pattern`, `path`, `include` |
 | `bash` | Execute shell commands | `command`, `isDangerous`, `summary` |
+| `web_fetch` | Fetch content from a URL | `url` |
+| `call_mcp_tool` | Call a tool on an MCP server | `server`, `tool`, `arguments` |
 
 ## read_file
 
@@ -44,6 +46,8 @@ type ReadFileTool struct {
 
 **Parameters:**
 - `path` (string, required): Absolute or relative path to the file
+- `offset` (integer, optional): 1-based line number to start reading from (defaults to 1)
+- `limit` (integer, optional): Maximum number of lines to return (defaults to 2000)
 
 **Validation:**
 - File must be valid UTF-8 text
@@ -218,6 +222,68 @@ type BashTool struct {
   "stdout": "PASS\nok      github.com/user/keen-code    0.015s",
   "stderr": "",
   "summary": "Run Go tests"
+}
+```
+
+## web_fetch
+
+Fetches content from a URL and returns it as text.
+
+```go
+type WebFetchTool struct{}
+```
+
+**Parameters:**
+- `url` (string, required): The URL to fetch
+
+**Behavior:**
+- HTML pages are automatically converted to Markdown for readability
+- Other content types (JSON, plain text, XML) are returned as-is
+- JavaScript-rendered pages (SPAs) return the pre-JS skeleton only
+
+**Limits:**
+- Timeout: 30 seconds
+- Maximum response size: 128KB (truncated if exceeded)
+
+**Returns:**
+```json
+{
+  "url": "https://example.com",
+  "status_code": 200,
+  "content": "markdown or raw content..."
+}
+```
+
+## call_mcp_tool
+
+Calls a tool on a connected MCP (Model Context Protocol) server.
+
+```go
+type CallMCPTool struct {
+    manager             keenmcp.Runtime
+    permissionRequester PermissionRequester
+}
+```
+
+**Parameters:**
+- `server` (string, required): The MCP server name as configured
+- `tool` (string, required): The exact tool name to call on the server
+- `arguments` (object, optional): Key-value arguments matching the tool's input schema
+- `checkCache` (boolean, optional): Reserved for future caching; set to false or omit
+
+**Behavior:**
+- Requires user permission before execution
+- Server name must match a configured MCP server
+- Arguments must match the tool's input schema exactly
+- Skill file at `~/.keen/skills/mcp:<server>/SKILL.md` describes available tools
+- Schema file at `~/.keen/skills/mcp:<server>/schemas/<tool>.json` describes required arguments
+
+**Returns:**
+```json
+{
+  "server": "server-name",
+  "tool": "tool-name",
+  "content": "tool output text"
 }
 ```
 

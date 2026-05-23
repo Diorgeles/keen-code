@@ -7,7 +7,8 @@ import sys
 import yaml
 from material.extensions.emoji import twemoji, to_svg as emoji_to_svg
 
-ACRONYMS = {"rfc", "prd", "ui", "repl", "llm", "cli", "mcp", "btw", "api", "oauth", "ai"}
+ACRONYMS = {"rfc", "prd", "ui", "repl", "llm", "cli", "mcp", "btw", "api", "ai"}
+TITLE_CASE = {"oauth": "OAuth"}
 
 BASE_CONFIG = {
     "site_name": "Keen Code",
@@ -79,7 +80,7 @@ def format_name(raw: str) -> str:
     name = re.sub(r"\.md$", "", raw)
     name = re.sub(r"^(?:output|prompt)-\d+[_-]", "", name)
     name = name.replace("-", " ").replace("_", " ")
-    words = [w.upper() if w.lower() in ACRONYMS else w.capitalize() for w in name.split()]
+    words = [w.upper() if w.lower() in ACRONYMS else TITLE_CASE.get(w.lower(), w.capitalize()) for w in name.split()]
     return " ".join(words)
 
 
