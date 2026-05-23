@@ -80,3 +80,10 @@ func (c *Config) SetStatus(name string, status Status) {
 	}
 	c.IsEnabled[name] = bool(status)
 }
+
+func (c *Config) RemoveStatus(name string) {
+	if c.IsEnabled == nil {
+		return
+	}
+	delete(c.IsEnabled, name)
+}

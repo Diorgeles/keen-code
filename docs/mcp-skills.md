@@ -225,9 +225,10 @@ You can manage them with normal skill commands:
 Important behavior:
 
 - Skills default to enabled if they are not present in `config.json`.
-- A connected MCP server is automatically enabled during MCP sync.
+- A connected MCP server refreshes its generated skill files during startup MCP sync, but it does not override an explicitly disabled skill.
+- Running `/mcp connect <server>` successfully refreshes the generated skill files and enables the skill.
 - A failed MCP server is automatically disabled during MCP sync.
-- A stale enabled MCP skill whose server was removed from MCP config is automatically disabled during MCP sync.
+- A stale MCP skill whose server was removed from MCP config is removed from skills config and its generated skill directory is deleted during MCP sync.
 - Disabling a generated MCP skill hides it from the skills catalog, but it does not remove the MCP server from `~/.keen/mcp/configs.json` and does not stop an already-running MCP session.
 
 To fully remove a server from Keen's MCP runtime, remove it from `~/.keen/mcp/configs.json` and restart Keen.
@@ -236,12 +237,13 @@ To fully remove a server from Keen's MCP runtime, remove it from `~/.keen/mcp/co
 
 | Scenario | Skill outcome | LLM outcome |
 | --- | --- | --- |
-| Server connects and tools list succeeds | Skill is generated/enabled. | LLM can discover and call tools through `call_mcp_tool`. |
+| Server connects and tools list succeeds on startup | Skill files are generated or refreshed; existing enabled/disabled preference is preserved. | LLM can discover the skill only when it is enabled, but connected MCP tools remain callable through `call_mcp_tool`. |
 | Server fails to connect | Skill is disabled. | LLM does not see the skill in the enabled catalog. |
 | OAuth is required | Skill is disabled and Keen suggests `/mcp connect <server>`. | LLM does not see the skill until auth succeeds. |
 | OAuth/API key auth fails | Skill is disabled. | LLM does not see the skill until the server reconnects. |
 | Tool listing fails | Skill generation is skipped; server state becomes failed. | Existing generated files may remain, but sync disables the skill for failure states. |
-| Server is removed from config | Previously enabled generated skill is disabled on next startup sync. | LLM no longer sees the skill in the enabled catalog. |
+| `/mcp connect <server>` succeeds | Skill files are generated or refreshed, and the skill is enabled. | LLM can discover the skill in future turns. |
+| Server is removed from config | Any explicit skill status is removed from skills config and generated skill files are deleted on next startup sync. | LLM no longer sees the generated skill. |
 | MCP manager cannot start due invalid config | No MCP runtime is registered and `call_mcp_tool` is unavailable. | LLM cannot call MCP tools. Previously generated skills may still exist on disk, but they are only useful if enabled and the tool exists; fix config and restart. |
 
 ## Security and permissions

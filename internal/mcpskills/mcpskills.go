@@ -47,6 +47,14 @@ func SkillDir(server string) (string, error) {
 	return filepath.Join(skillsRoot(home), SkillName(server)), nil
 }
 
+func Remove(server string) error {
+	dir, err := SkillDir(server)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
+}
+
 func skillsRoot(home string) string {
 	return filepath.Join(home, ".keen", "skills")
 }

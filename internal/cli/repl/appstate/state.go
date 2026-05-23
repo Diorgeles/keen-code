@@ -91,6 +91,16 @@ func (s *AppState) SetSkillStatus(name string, status skills.Status) error {
 	return nil
 }
 
+func (s *AppState) RemoveSkillStatus(name string) error {
+	cfg := cloneSkillsConfig(s.skillsConfig)
+	cfg.RemoveStatus(name)
+	if err := skills.SaveConfig(cfg); err != nil {
+		return err
+	}
+	s.skillsConfig = cfg
+	return nil
+}
+
 func (s *AppState) FindEnabledSkill(name string) (skills.Skill, bool) {
 	skill, ok := skills.Find(s.skills.Skills, name)
 	if !ok || !s.skillsConfig.Enabled(skill.Name) {

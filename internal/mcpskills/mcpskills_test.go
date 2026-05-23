@@ -10,6 +10,22 @@ import (
 	keenmcp "github.com/user/keen-code/internal/mcp"
 )
 
+func TestRemoveDeletesGeneratedSkill(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := Generate("github", "", []keenmcp.Tool{{Name: "search"}}); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	dir := filepath.Join(home, ".keen", "skills", "mcp:github")
+
+	if err := Remove("github"); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("expected generated skill dir removed, err = %v", err)
+	}
+}
+
 func TestGenerate_CreatesSkillDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -181,9 +181,9 @@ func (m *replModel) syncMCPSkills(statuses []keenmcp.ServerStatus) {
 	for _, status := range statuses {
 		configured[status.Name] = true
 		if status.State == keenmcp.StateConnected {
-			_ = m.refreshMCPSkill(status.Name, status.Description)
-			_ = m.appState.SetSkillStatus(mcpskills.SkillName(status.Name), skills.StatusEnabled)
-			reloadSkills = true
+			if m.refreshMCPSkill(status.Name, status.Description) {
+				reloadSkills = true
+			}
 			continue
 		}
 		if isMCPFailureState(status.State) {
@@ -191,7 +191,7 @@ func (m *replModel) syncMCPSkills(statuses []keenmcp.ServerStatus) {
 			reloadSkills = true
 		}
 	}
-	if m.disableUnconfiguredEnabledMCPSkills(configured) {
+	if m.removeUnconfiguredMCPSkillStatuses(configured) {
 		reloadSkills = true
 	}
 	if reloadSkills {
@@ -199,17 +199,18 @@ func (m *replModel) syncMCPSkills(statuses []keenmcp.ServerStatus) {
 	}
 }
 
-func (m *replModel) disableUnconfiguredEnabledMCPSkills(configured map[string]bool) bool {
+func (m *replModel) removeUnconfiguredMCPSkillStatuses(configured map[string]bool) bool {
 	changed := false
-	for name, enabled := range m.appState.GetSkillsConfig().IsEnabled {
-		if !enabled || !mcpskills.IsSkillName(name) {
+	for name := range m.appState.GetSkillsConfig().IsEnabled {
+		if !mcpskills.IsSkillName(name) {
 			continue
 		}
 		server := mcpskills.ServerName(name)
 		if configured[server] {
 			continue
 		}
-		_ = m.appState.SetSkillStatus(name, skills.StatusDisabled)
+		_ = m.appState.RemoveSkillStatus(name)
+		_ = mcpskills.Remove(server)
 		changed = true
 	}
 	return changed

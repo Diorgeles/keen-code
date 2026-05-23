@@ -287,12 +287,15 @@ func TestConnectMCPCmdPassesOAuthReauthOption(t *testing.T) {
 	}
 }
 
-func TestHandleMCPConnectDone(t *testing.T) {
+func TestHandleMCPConnectDoneGeneratesAndEnablesSkill(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	work := t.TempDir()
 	m := newTestModel()
 	m.appState = replappstate.New(nil, work)
+	if err := m.appState.SetSkillStatus("mcp:deepwiki", skills.StatusDisabled); err != nil {
+		t.Fatalf("disable deepwiki: %v", err)
+	}
 	m.ctx.mcp = &fakeMCPRuntime{
 		statuses: []keenmcp.ServerStatus{{Name: "deepwiki", Description: "Ask questions about DeepWiki."}},
 		tools: map[string][]keenmcp.Tool{
@@ -345,12 +348,15 @@ func TestHandleMCPConnectDoneFailureDisablesSkill(t *testing.T) {
 	}
 }
 
-func TestHandleMCPStartupStatusGeneratesConnectedSkills(t *testing.T) {
+func TestHandleMCPStartupStatusGeneratesConnectedSkillsWithoutChangingStatus(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	work := t.TempDir()
 	m := newTestModel()
 	m.appState = replappstate.New(nil, work)
+	if err := m.appState.SetSkillStatus("mcp:deepwiki", skills.StatusDisabled); err != nil {
+		t.Fatalf("disable deepwiki: %v", err)
+	}
 	m.ctx.mcp = &fakeMCPRuntime{tools: map[string][]keenmcp.Tool{
 		"deepwiki": {{Name: "ask", Description: "Ask DeepWiki", InputSchema: map[string]any{"type": "object"}}},
 	}}
@@ -360,8 +366,8 @@ func TestHandleMCPStartupStatusGeneratesConnectedSkills(t *testing.T) {
 	if _, ok := skills.Find(m.appState.GetSkills().Skills, "mcp:deepwiki"); !ok {
 		t.Fatalf("expected mcp:deepwiki skill to be reloaded")
 	}
-	if !m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
-		t.Fatalf("expected mcp:deepwiki skill to be enabled")
+	if m.appState.GetSkillsConfig().Enabled("mcp:deepwiki") {
+		t.Fatalf("expected mcp:deepwiki skill to remain disabled")
 	}
 	data, err := os.ReadFile(filepath.Join(home, ".keen", "skills", "mcp:deepwiki", "SKILL.md"))
 	if err != nil {
@@ -396,7 +402,7 @@ func TestHandleMCPStartupStatusDisablesFailedSkills(t *testing.T) {
 	}
 }
 
-func TestHandleMCPStartupStatusDisablesUnconfiguredEnabledSkills(t *testing.T) {
+func TestHandleMCPStartupStatusRemovesUnconfiguredSkillStatuses(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	work := t.TempDir()
@@ -405,6 +411,9 @@ func TestHandleMCPStartupStatusDisablesUnconfiguredEnabledSkills(t *testing.T) {
 	m.ctx.mcp = &fakeMCPRuntime{tools: map[string][]keenmcp.Tool{
 		"context7": {{Name: "resolve", Description: "Resolve docs"}},
 	}}
+	if err := mcpskills.Generate("deepwiki", "", []keenmcp.Tool{{Name: "ask", Description: "Ask DeepWiki"}}); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
 	if err := m.appState.SetSkillStatus("mcp:deepwiki", skills.StatusEnabled); err != nil {
 		t.Fatalf("enable deepwiki: %v", err)
 	}
@@ -419,17 +428,20 @@ func TestHandleMCPStartupStatusDisablesUnconfiguredEnabledSkills(t *testing.T) {
 	m.handleMCPStartupStatus([]keenmcp.ServerStatus{{Name: "context7", State: keenmcp.StateConnected}})
 
 	cfg := m.appState.GetSkillsConfig()
-	if cfg.Enabled("mcp:deepwiki") {
-		t.Fatalf("expected unconfigured mcp:deepwiki skill to be disabled")
+	if _, ok := cfg.IsEnabled["mcp:deepwiki"]; ok {
+		t.Fatalf("expected unconfigured mcp:deepwiki status to be removed")
 	}
-	if cfg.IsEnabled["mcp:disabled"] {
-		t.Fatalf("expected already disabled stale mcp skill to remain disabled")
+	if _, ok := cfg.IsEnabled["mcp:disabled"]; ok {
+		t.Fatalf("expected unconfigured mcp:disabled status to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".keen", "skills", "mcp:deepwiki")); !os.IsNotExist(err) {
+		t.Fatalf("expected unconfigured mcp:deepwiki skill files to be removed, err = %v", err)
 	}
 	if !cfg.Enabled("debug") {
 		t.Fatalf("expected non-MCP skill to remain enabled")
 	}
-	if !cfg.Enabled("mcp:context7") {
-		t.Fatalf("expected configured mcp:context7 skill to be enabled")
+	if _, ok := skills.Find(m.appState.GetSkills().Skills, "mcp:context7"); !ok {
+		t.Fatalf("expected configured mcp:context7 skill to be generated")
 	}
 }
 

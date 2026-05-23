@@ -24,6 +24,17 @@ func TestConfigSetStatus(t *testing.T) {
 	}
 }
 
+func TestConfigRemoveStatus(t *testing.T) {
+	cfg := Config{IsEnabled: map[string]bool{"demo": false}}
+	cfg.RemoveStatus("demo")
+	if _, ok := cfg.IsEnabled["demo"]; ok {
+		t.Fatal("expected skill status removed")
+	}
+	if !cfg.Enabled("demo") {
+		t.Fatal("expected removed skill status to default enabled")
+	}
+}
+
 func TestLoadSaveConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
