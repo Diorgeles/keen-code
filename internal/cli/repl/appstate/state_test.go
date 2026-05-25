@@ -565,15 +565,15 @@ func TestAppState_StreamBtwBuildsCorrectMessages(t *testing.T) {
 		t.Fatal("expected btw stream")
 	}
 
-	// Drain events
 	for range eventCh {
 	}
 
 	if capturedRegistry != nil {
 		t.Fatal("expected btw to pass nil tool registry")
 	}
+	// system + 2 history + user question
 	if len(capturedMessages) != 4 {
-		t.Fatalf("expected 4 messages (system + 2 context + user question), got %d", len(capturedMessages))
+		t.Fatalf("expected 4 messages (system + 2 history + question), got %d", len(capturedMessages))
 	}
 	if capturedMessages[0].Role != llm.RoleSystem {
 		t.Fatalf("expected first message to be system, got %s", capturedMessages[0].Role)
@@ -582,13 +582,91 @@ func TestAppState_StreamBtwBuildsCorrectMessages(t *testing.T) {
 		t.Fatalf("expected btw system prompt, got %q", capturedMessages[0].Content)
 	}
 	if capturedMessages[1].Role != llm.RoleUser || capturedMessages[1].Content != "fix the bug" {
-		t.Fatalf("expected appstate messages to be included, got %#v", capturedMessages[1])
+		t.Fatalf("expected first history message to be user, got %#v", capturedMessages[1])
 	}
 	if capturedMessages[2].Role != llm.RoleAssistant || capturedMessages[2].Content != "done" {
-		t.Fatalf("expected appstate messages to be included, got %#v", capturedMessages[2])
+		t.Fatalf("expected second history message to be assistant, got %#v", capturedMessages[2])
 	}
-	if capturedMessages[3].Role != llm.RoleUser || capturedMessages[3].Content != "what is the bug about?" {
-		t.Fatalf("expected user question as last message, got %#v", capturedMessages[3])
+	last := capturedMessages[len(capturedMessages)-1]
+	if last.Role != llm.RoleUser || last.Content != "what is the bug about?" {
+		t.Fatalf("expected user question as last message, got %#v", last)
+	}
+}
+
+func TestBtwContext(t *testing.T) {
+	makeMsg := func(role llm.Role, content string) llm.Message {
+		return llm.Message{Role: role, Content: content}
+	}
+
+	tests := []struct {
+		name     string
+		messages []llm.Message
+		max      int
+		wantLen  int
+		wantLast llm.Role
+	}{
+		{
+			name:     "empty history",
+			messages: nil,
+			max:      10,
+			wantLen:  0,
+		},
+		{
+			name:     "only unanswered user message",
+			messages: []llm.Message{makeMsg(llm.RoleUser, "hi")},
+			max:      10,
+			wantLen:  0,
+		},
+		{
+			name: "trailing unanswered user message excluded",
+			messages: []llm.Message{
+				makeMsg(llm.RoleUser, "q1"),
+				makeMsg(llm.RoleAssistant, "a1"),
+				makeMsg(llm.RoleUser, "unanswered"),
+			},
+			max:      10,
+			wantLen:  2,
+			wantLast: llm.RoleAssistant,
+		},
+		{
+			name: "capped at max",
+			messages: func() []llm.Message {
+				msgs := make([]llm.Message, 14)
+				for i := range msgs {
+					if i%2 == 0 {
+						msgs[i] = makeMsg(llm.RoleUser, "u")
+					} else {
+						msgs[i] = makeMsg(llm.RoleAssistant, "a")
+					}
+				}
+				return msgs
+			}(),
+			max:      10,
+			wantLen:  10,
+			wantLast: llm.RoleAssistant,
+		},
+		{
+			name: "fewer messages than max returned as-is",
+			messages: []llm.Message{
+				makeMsg(llm.RoleUser, "q"),
+				makeMsg(llm.RoleAssistant, "a"),
+			},
+			max:      10,
+			wantLen:  2,
+			wantLast: llm.RoleAssistant,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := btwContext(tt.messages, tt.max)
+			if len(got) != tt.wantLen {
+				t.Fatalf("btwContext() len = %d, want %d", len(got), tt.wantLen)
+			}
+			if tt.wantLen > 0 && got[len(got)-1].Role != tt.wantLast {
+				t.Fatalf("btwContext() last role = %s, want %s", got[len(got)-1].Role, tt.wantLast)
+			}
+		})
 	}
 }
 

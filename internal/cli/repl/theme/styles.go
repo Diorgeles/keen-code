@@ -157,6 +157,6 @@ var (
 	UpdateCommandStyle   = lipgloss.NewStyle().Foreground(TextDimColor)
 
 	BtwBorderStyle = lipgloss.NewStyle().Foreground(AccentColor)
-	BtwLabelStyle  = lipgloss.NewStyle().Foreground(AccentColor).Bold(true)
-	BtwHintStyle   = lipgloss.NewStyle().Foreground(MutedColor).Faint(true)
+	BtwLabelStyle  = lipgloss.NewStyle().Foreground(TextPrimaryColor)
+	BtwChipStyle   = lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
 )

@@ -543,7 +543,7 @@ func (m *replModel) clearStreamCancel() {
 	m.streamCancel = nil
 }
 
-func (m *replModel) dismissBtw() {
+func (m *replModel) cancelBtwStream() {
 	if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
 		m.btwStreamHandler.HandleInterrupt()
 	}
@@ -551,40 +551,27 @@ func (m *replModel) dismissBtw() {
 		m.btwStreamCancel()
 		m.btwStreamCancel = nil
 	}
-	m.isBtw = false
 	m.btwLines = nil
 	m.btwShowSpinner = false
-	m.userScrolled = !m.viewport.AtBottom()
 }
 
-func (m *replModel) appendBtwHistory() {
-	if m.btwQuestion == "" || m.btwLines == nil {
+func (m *replModel) flushBtwToOutput() {
+	if m.btwLines == nil {
 		return
 	}
-	var entry strings.Builder
-	entry.WriteString(renderBtwQuestionHeader(m.btwQuestion))
-	entry.WriteString("\n")
-	entry.WriteString(strings.Join(m.btwLines, "\n"))
-	m.btwHistory = append(m.btwHistory, entry.String())
+	m.output.AddLine(renderBtwLeftBorder(renderBtwQuestionHeader(m.btwQuestion)))
+	for _, line := range m.btwLines {
+		m.output.AddLine(renderBtwLeftBorder(line))
+	}
+	m.output.AddEmptyLine()
+	m.btwLines = nil
+	m.btwQuestion = ""
 }
 
 func (m *replModel) scrollToBottomIfFollowing() {
 	if !m.userScrolled {
 		m.viewport.GotoBottom()
 	}
-}
-
-func (m *replModel) scrollBtwToBottomIfFollowing() {
-	if !m.userScrolled {
-		m.btwViewport.GotoBottom()
-	}
-}
-
-func (m *replModel) activeViewportAtBottom() bool {
-	if m.isBtw {
-		return m.btwViewport.AtBottom()
-	}
-	return m.viewport.AtBottom()
 }
 
 func waitForBtwEvent(llmCh <-chan llm.StreamEvent) tea.Cmd {
@@ -627,9 +614,6 @@ func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
 	}
 	m.viewport.SetWidth(msg.Width)
 	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())
-	m.btwViewport.SetWidth(msg.Width - 6)     // account for side borders "│ " and "   │"
-	btwContentHeight := max(msg.Height-4, 10) // top border + empty bottom padding line + bottom border + hint/spinner line
-	m.btwViewport.SetHeight(btwContentHeight)
 }
 
 func (m *replModel) updateLLMClient() error {

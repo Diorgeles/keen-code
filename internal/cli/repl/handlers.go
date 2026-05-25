@@ -399,8 +399,8 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		_ = m.history.Flush()
 		return *m, tea.Quit
 	case keyEsc:
-		if m.isBtw {
-			m.dismissBtw()
+		if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
+			m.cancelBtwStream()
 			m.updateViewportContent()
 			m.scrollToBottomIfFollowing()
 			return *m, nil
@@ -678,16 +678,14 @@ func (m replModel) handleBtwStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 	case btwChunkMsg:
 		m.btwStreamHandler.HandleChunk(string(msg))
 		m.updateViewportContent()
-		m.scrollBtwToBottomIfFollowing()
+		m.scrollToBottomIfFollowing()
 		return m, waitForBtwEvent(m.btwStreamHandler.eventCh), true
 	case btwDoneMsg:
 		responseLines, _ := m.btwStreamHandler.HandleDone()
 		m.btwShowSpinner = false
 		m.btwLines = responseLines
-		m.appendBtwHistory()
-		m.btwLines = nil
 		m.updateViewportContent()
-		m.scrollBtwToBottomIfFollowing()
+		m.scrollToBottomIfFollowing()
 		return m, nil, true
 	case btwErrorMsg:
 		pendingLines, errMsg := m.btwStreamHandler.HandleError(msg.err)
@@ -697,10 +695,8 @@ func (m replModel) handleBtwStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 			lines = append(lines, "  "+repltheme.ErrorStyle.Render(errMsg))
 		}
 		m.btwLines = lines
-		m.appendBtwHistory()
-		m.btwLines = nil
 		m.updateViewportContent()
-		m.scrollBtwToBottomIfFollowing()
+		m.scrollToBottomIfFollowing()
 		return m, nil, true
 	default:
 		return m, nil, false

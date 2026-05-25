@@ -89,7 +89,7 @@ All tools use `filesystem.Guard` for permission checks and `PermissionRequester`
 
 ### Side Questions (`/btw`)
 
-The `/btw <question>` command starts a one-shot helper stream for quick side questions. It builds a request from the current conversation plus `llm.BuildBtwPrompt()`, disables tool access, and renders the answer in a separate overlay. The side-question exchange is kept out of the main conversation and session transcript, but overlay history can be reopened with `/btw` during the current REPL session.
+The `/btw <question>` command starts a one-shot helper stream for quick side questions. It builds a request from up to the last 10 messages of the current conversation (5 user + 5 agent) plus `llm.BuildBtwPrompt()`, disables tool access, and renders the answer inline below the current conversation. The side-question exchange is kept out of the main conversation and session transcript. Running `/btw` with no question shows usage help.
 
 ### Session (`internal/session/`)
 

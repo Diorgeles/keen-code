@@ -799,7 +799,6 @@ func TestHandleBtwStreamMsg_Chunk(t *testing.T) {
 
 	m := newTestModel()
 	m.btwStreamHandler = btwSh
-	m.isBtw = true
 
 	updated, cmd, handled := m.handleBtwStreamMsg(btwChunkMsg("hello"))
 
@@ -823,7 +822,6 @@ func TestHandleBtwStreamMsg_Done(t *testing.T) {
 
 	m := newTestModel()
 	m.btwStreamHandler = btwSh
-	m.isBtw = true
 	m.btwShowSpinner = true
 	m.btwQuestion = "what?"
 
@@ -835,11 +833,8 @@ func TestHandleBtwStreamMsg_Done(t *testing.T) {
 	if updated.btwShowSpinner {
 		t.Fatal("expected btw spinner to stop after done")
 	}
-	if len(updated.btwHistory) != 1 {
-		t.Fatalf("expected 1 btw history entry, got %d", len(updated.btwHistory))
-	}
-	if !strings.Contains(updated.btwHistory[0], "what?") {
-		t.Fatalf("expected btw history to contain question, got %q", updated.btwHistory[0])
+	if updated.btwLines == nil {
+		t.Fatal("expected btwLines to be set after done")
 	}
 	if cmd != nil {
 		t.Fatal("expected nil cmd after btw done")
@@ -853,7 +848,6 @@ func TestHandleBtwStreamMsg_Error(t *testing.T) {
 
 	m := newTestModel()
 	m.btwStreamHandler = btwSh
-	m.isBtw = true
 	m.btwShowSpinner = true
 	m.btwQuestion = "question"
 
@@ -865,8 +859,8 @@ func TestHandleBtwStreamMsg_Error(t *testing.T) {
 	if updated.btwShowSpinner {
 		t.Fatal("expected btw spinner to stop after error")
 	}
-	if len(updated.btwHistory) != 1 {
-		t.Fatalf("expected 1 btw history entry (with error), got %d", len(updated.btwHistory))
+	if updated.btwLines == nil {
+		t.Fatal("expected btwLines to be set after error")
 	}
 	if cmd != nil {
 		t.Fatal("expected nil cmd after btw error")

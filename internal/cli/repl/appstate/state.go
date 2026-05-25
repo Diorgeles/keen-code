@@ -194,15 +194,33 @@ func (s *AppState) StreamBtw(ctx context.Context, question string, opts ...llm.S
 	if s.llmClient == nil {
 		return nil, nil
 	}
-	messages := make([]llm.Message, 0, len(s.messages)+2)
+	history := btwContext(s.messages, 10)
+	messages := make([]llm.Message, 0, 2+len(history))
 	messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: llm.BuildBtwPrompt(s.workingDir)})
-	messages = append(messages, s.GetMessages()...)
+	messages = append(messages, history...)
 	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: question})
 	streamOpts := llm.StreamOptions{OneShot: true}
 	if len(opts) > 0 {
 		streamOpts.SessionID = opts[0].SessionID
 	}
 	return s.llmClient.StreamChat(ctx, messages, nil, streamOpts)
+}
+
+func btwContext(messages []llm.Message, max int) []llm.Message {
+	end := len(messages)
+	if end > 0 && messages[end-1].Role == llm.RoleUser {
+		end--
+	}
+	if end == 0 {
+		return nil
+	}
+	start := end - max
+	if start < 0 {
+		start = 0
+	}
+	result := make([]llm.Message, end-start)
+	copy(result, messages[start:end])
+	return result
 }
 
 func (s *AppState) ApplyCompaction(summary string) error {

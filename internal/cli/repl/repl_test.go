@@ -46,6 +46,7 @@ func newTestModel() replModel {
 		diffEmitter:         repltooling.NewDiffEmitter(),
 		sessions:            newReplSessionState(""),
 		spinner:             spinner.New(),
+		btwSpinner:          spinner.New(),
 		width:               80,
 		height:              30,
 		showThinking:        true,

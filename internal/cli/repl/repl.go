@@ -81,14 +81,12 @@ type replModel struct {
 	history             replhistory.InputHistory
 	selection           viewportSelection
 	inputSelection      viewportSelection
-	isBtw               bool
-	btwViewport         viewport.Model
 	btwLines            []string
-	btwHistory          []string
 	btwQuestion         string
 	btwStreamHandler    *StreamHandler
 	btwStreamCancel     context.CancelFunc
 	btwShowSpinner      bool
+	btwSpinner          spinner.Model
 }
 
 func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) replModel {
@@ -122,6 +120,10 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	s := spinner.New()
 	s.Spinner = spinner.Pulse
 	s.Style = lipgloss.NewStyle().Foreground(repltheme.PrimaryColor)
+
+	bs := spinner.New()
+	bs.Spinner = spinner.MiniDot
+	bs.Style = lipgloss.NewStyle().Foreground(repltheme.AccentColor)
 
 	appState := replappstate.New(llmClient, ctx.workingDir)
 
@@ -159,8 +161,6 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 
 	vp := viewport.New(viewport.WithWidth(defaultWidth), viewport.WithHeight(24))
 
-	btwVp := viewport.New(viewport.WithWidth(defaultWidth), viewport.WithHeight(24))
-
 	model := replModel{
 		textarea:            ta,
 		viewport:            vp,
@@ -169,6 +169,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		appState:            appState,
 		output:              output,
 		spinner:             s,
+		btwSpinner:          bs,
 		streamHandler:       NewStreamHandler(mdRenderer),
 		mdRenderer:          mdRenderer,
 		permissionRequester: permissionRequester,
@@ -178,7 +179,6 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		suggestion:          replwidgets.NewSuggestionModel(),
 		fileSearcher:        fileSearcher,
 		showThinking:        true,
-		btwViewport:         btwVp,
 		btwStreamHandler:    NewStreamHandler(mdRenderer),
 	}
 	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
@@ -222,7 +222,6 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	if input == replcommands.Btw || strings.HasPrefix(input, replcommands.Btw+" ") {
-		m.output.AddUserInput(input, repltheme.PromptStyle)
 		m.history.Push(input)
 		m.textarea.Reset()
 		result, cmd := m.handleBtwCommand(input)
@@ -237,6 +236,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
+	m.flushBtwToOutput()
 	m.output.AddUserInput(input, repltheme.PromptStyle)
 	m.history.Push(input)
 
@@ -314,10 +314,6 @@ func (m *replModel) updateViewportContent() {
 		return
 	}
 
-	if m.isBtw {
-		m.updateBtwViewportContent()
-	}
-
 	contentWidth := m.width
 	if contentWidth <= 0 {
 		contentWidth = m.viewport.Width()
@@ -333,6 +329,12 @@ func (m *replModel) updateViewportContent() {
 		content.WriteString(m.streamHandler.View(contentWidth))
 	}
 
+	if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
+		content.WriteString(m.renderBtwInline(contentWidth))
+	} else if m.btwLines != nil {
+		content.WriteString(m.renderBtwInlineFinished(contentWidth))
+	}
+
 	if m.modelSelection != nil {
 		content.WriteString(formatModelSelectionCard(m.modelSelection, m.viewport.Width()))
 	}
@@ -344,33 +346,6 @@ func (m *replModel) updateViewportContent() {
 	viewportContent := content.String()
 	m.viewport.SetContent(viewportContent)
 	m.selection.setContent(viewportContent)
-}
-
-func (m *replModel) updateBtwViewportContent() {
-	contentWidth := m.btwViewport.Width()
-	if contentWidth <= 0 {
-		contentWidth = defaultWidth
-	}
-
-	var content strings.Builder
-
-	for i, entry := range m.btwHistory {
-		content.WriteString(entry)
-		if i < len(m.btwHistory)-1 || m.btwLines != nil || (m.btwStreamHandler != nil && m.btwStreamHandler.IsActive()) {
-			content.WriteString("\n\n")
-		}
-	}
-
-	if m.btwLines != nil {
-		content.WriteString(renderBtwQuestionHeader(m.btwQuestion))
-		content.WriteString("\n")
-		content.WriteString(strings.Join(m.btwLines, "\n"))
-	} else if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
-		content.WriteString(renderBtwQuestionHeader(m.btwQuestion))
-		content.WriteString(m.btwStreamHandler.View(contentWidth))
-	}
-
-	m.btwViewport.SetContent(content.String())
 }
 
 func (m replModel) waitForAsyncEvent() tea.Cmd {
@@ -494,19 +469,11 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		switch msg.Button {
 		case tea.MouseWheelUp:
-			if m.isBtw {
-				m.btwViewport.ScrollUp(3)
-			} else {
-				m.viewport.ScrollUp(3)
-			}
-			m.userScrolled = !m.activeViewportAtBottom()
+			m.viewport.ScrollUp(3)
+			m.userScrolled = !m.viewport.AtBottom()
 		case tea.MouseWheelDown:
-			if m.isBtw {
-				m.btwViewport.ScrollDown(3)
-			} else {
-				m.viewport.ScrollDown(3)
-			}
-			m.userScrolled = !m.activeViewportAtBottom()
+			m.viewport.ScrollDown(3)
+			m.userScrolled = !m.viewport.AtBottom()
 		}
 		return m, nil
 	}
@@ -551,10 +518,18 @@ func (m replModel) handleSpinnerTick(msg spinner.TickMsg) (replModel, tea.Cmd, b
 		return m, nil, false
 	}
 
+	var cmds []tea.Cmd
 	var cmd tea.Cmd
-	m.spinner, cmd = m.spinner.Update(msg)
+	if m.showSpinner {
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+	if m.btwShowSpinner {
+		m.btwSpinner, cmd = m.btwSpinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 	m.updateViewportContent()
-	return m, cmd, true
+	return m, tea.Batch(cmds...), true
 }
 
 func (m replModel) View() tea.View {
@@ -562,8 +537,6 @@ func (m replModel) View() tea.View {
 
 	if m.quitting {
 		content = lipgloss.NewStyle().Foreground(repltheme.MutedColor).Render("\n  Goodbye!\n")
-	} else if m.isBtw {
-		content = m.btwOverlayView()
 	} else {
 		var view strings.Builder
 
@@ -594,39 +567,6 @@ func (m replModel) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
-}
-
-func (m replModel) btwOverlayView() string {
-	fullWidth := m.width
-	if fullWidth <= 0 {
-		fullWidth = defaultWidth
-	}
-
-	var view strings.Builder
-	view.WriteString(renderBtwTopBorder(fullWidth))
-	view.WriteString("\n")
-	view.WriteString(renderBtwSideBorders(m.btwViewport.View(), fullWidth))
-	view.WriteString("\n")
-	view.WriteString(renderBtwEmptyBorderLine(fullWidth))
-	view.WriteString("\n")
-	view.WriteString(renderBtwBottomBorder(fullWidth))
-	view.WriteString("\n")
-
-	hint := repltheme.BtwHintStyle.Render("ESC to return")
-	if m.btwShowSpinner {
-		btwSpinner := m.spinner
-		btwSpinner.Style = lipgloss.NewStyle().Foreground(repltheme.AccentColor)
-		spinnerText := " " + btwSpinner.View() + " " + repltheme.BtwLabelStyle.Render(m.btwStreamHandler.GetLoadingText())
-		hintWidth := lipgloss.Width(hint)
-		spinnerWidth := lipgloss.Width(spinnerText)
-		gap := max(fullWidth-spinnerWidth-hintWidth-1, 1)
-		view.WriteString(spinnerText + strings.Repeat(" ", gap) + hint)
-	} else {
-		padding := max(fullWidth-lipgloss.Width(hint)-1, 1)
-		view.WriteString(strings.Repeat(" ", padding) + hint)
-	}
-
-	return view.String()
 }
 
 func (m replModel) inputMetaView() string {

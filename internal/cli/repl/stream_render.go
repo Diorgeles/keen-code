@@ -348,67 +348,54 @@ func renderDiffSegment(seg *streamSegment, width int) []string {
 }
 
 func renderBtwQuestionHeader(question string) string {
-	return repltheme.BtwLabelStyle.Render("▶ " + question)
+	chip := repltheme.BtwChipStyle.Render("btw")
+	return chip + " " + repltheme.BtwLabelStyle.Render(question)
 }
 
-func renderBtwTopBorder(width int) string {
-	if width <= 0 {
-		width = defaultWidth
-	}
-	label := " btw "
-	labelLen := lipgloss.Width(label)
-	// ╭── btw ─────────────────────────────╮
-	leftRuleLen := 2
-	rightRuleLen := width - 2 - leftRuleLen - labelLen // 2 for ╭ and ╮
-	if rightRuleLen < 1 {
-		rightRuleLen = 1
-	}
-	left := repltheme.BtwBorderStyle.Render("╭" + strings.Repeat("─", leftRuleLen))
-	right := repltheme.BtwBorderStyle.Render(strings.Repeat("─", rightRuleLen) + "╮")
-	return left + repltheme.BtwLabelStyle.Render(label) + right
+func renderBtwLeftBorder(line string) string {
+	border := repltheme.BtwBorderStyle.Render("▌")
+	return border + " " + line
 }
 
-func renderBtwBottomBorder(width int) string {
-	if width <= 0 {
-		width = defaultWidth
+func (m *replModel) renderBtwInline(width int) string {
+	contentWidth := width - 4
+	if contentWidth < 1 {
+		contentWidth = 1
 	}
-	innerWidth := width - 2 // 2 for ╰ and ╯
-	if innerWidth < 1 {
-		innerWidth = 1
+
+	var view strings.Builder
+	view.WriteString("\n\n")
+
+	header := renderBtwQuestionHeader(m.btwQuestion)
+	view.WriteString(renderBtwLeftBorder(header))
+	view.WriteString("\n")
+
+	streamView := strings.TrimLeft(m.btwStreamHandler.View(contentWidth), "\n")
+	for _, line := range strings.Split(streamView, "\n") {
+		view.WriteString(renderBtwLeftBorder(line))
+		view.WriteString("\n")
 	}
-	return repltheme.BtwBorderStyle.Render("╰" + strings.Repeat("─", innerWidth) + "╯")
+
+	if m.btwShowSpinner {
+		view.WriteString(renderBtwLeftBorder(m.btwSpinner.View()))
+		view.WriteString("\n")
+	}
+
+	return view.String()
 }
 
-func renderBtwEmptyBorderLine(width int) string {
-	if width <= 0 {
-		width = defaultWidth
-	}
-	innerWidth := width - 6 // "│ " (2) + content + "   │" (4)
-	if innerWidth < 1 {
-		innerWidth = 1
-	}
-	border := repltheme.BtwBorderStyle.Render("│")
-	return border + " " + strings.Repeat(" ", innerWidth) + "   " + border
-}
+func (m *replModel) renderBtwInlineFinished(width int) string {
+	var view strings.Builder
+	view.WriteString("\n")
 
-func renderBtwSideBorders(content string, width int) string {
-	if width <= 0 {
-		width = defaultWidth
+	header := renderBtwQuestionHeader(m.btwQuestion)
+	view.WriteString(renderBtwLeftBorder(header))
+	view.WriteString("\n")
+
+	for _, line := range m.btwLines {
+		view.WriteString(renderBtwLeftBorder(line))
+		view.WriteString("\n")
 	}
-	lines := strings.Split(content, "\n")
-	innerWidth := max(width-6, 1) // "│ " (2) + content + "   │" (4)
-	border := repltheme.BtwBorderStyle.Render("│")
-	var result strings.Builder
-	for i, line := range lines {
-		lineWidth := lipgloss.Width(line)
-		padding := ""
-		if lineWidth < innerWidth {
-			padding = strings.Repeat(" ", innerWidth-lineWidth)
-		}
-		result.WriteString(border + " " + line + padding + "   " + border)
-		if i < len(lines)-1 {
-			result.WriteString("\n")
-		}
-	}
-	return result.String()
+
+	return view.String()
 }

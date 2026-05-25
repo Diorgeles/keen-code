@@ -1025,9 +1025,6 @@ func TestHandleEnterKey_BtwCommandStartsStream(t *testing.T) {
 
 	newM, cmd := m.handleEnterKey()
 
-	if !newM.isBtw {
-		t.Fatal("expected btw overlay to be active")
-	}
 	if !newM.btwShowSpinner {
 		t.Fatal("expected btw spinner to be visible")
 	}
@@ -1053,7 +1050,7 @@ func TestHandleEnterKey_BtwCommandDuringActiveStream(t *testing.T) {
 
 	newM, cmd := m.handleEnterKey()
 
-	if !newM.isBtw {
+	if !newM.btwShowSpinner {
 		t.Fatal("expected btw to work even during active main stream")
 	}
 	if cmd == nil {
@@ -1068,11 +1065,11 @@ func TestHandleEnterKey_BtwCommandNoQuestion(t *testing.T) {
 
 	newM, cmd := m.handleEnterKey()
 
-	if newM.isBtw {
-		t.Fatal("expected btw overlay not to show without history")
+	if newM.btwShowSpinner {
+		t.Fatal("expected btw spinner not to show without question")
 	}
 	if cmd != nil {
-		t.Fatal("expected nil cmd for /btw without question and no history")
+		t.Fatal("expected nil cmd for /btw without question")
 	}
 	found := false
 	for _, line := range newM.output.GetLines() {
@@ -1086,19 +1083,28 @@ func TestHandleEnterKey_BtwCommandNoQuestion(t *testing.T) {
 	}
 }
 
-func TestHandleEnterKey_BtwCommandNoQuestionWithHistory(t *testing.T) {
+func TestHandleEnterKey_BtwCommandNoQuestionShowsUsage(t *testing.T) {
 	m := newTestModel()
 	m.btwStreamHandler = NewStreamHandler(nil)
-	m.btwHistory = []string{"previous answer"}
 	m.textarea.SetValue("/btw")
 
-	newM, _ := m.handleEnterKey()
+	newM, cmd := m.handleEnterKey()
 
-	if !newM.isBtw {
-		t.Fatal("expected btw overlay to show with history")
+	if newM.btwShowSpinner {
+		t.Fatal("expected btw spinner not to show without question")
 	}
-	if newM.btwQuestion != "" {
-		t.Fatal("expected empty btw question when just viewing history")
+	if cmd != nil {
+		t.Fatal("expected nil cmd for /btw without question")
+	}
+	found := false
+	for _, line := range newM.output.GetLines() {
+		if strings.Contains(line, "Usage:") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected usage hint for /btw without question")
 	}
 }
 
@@ -1160,7 +1166,7 @@ func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {
 
 	newM, cmd := m.handleEnterKey()
 
-	if newM.isBtw {
+	if newM.btwShowSpinner {
 		t.Fatal("expected btw not to activate when client is not ready")
 	}
 	if cmd != nil {
@@ -1178,36 +1184,38 @@ func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {
 	}
 }
 
-func TestDismissBtw_ResetsUserScrolled(t *testing.T) {
+func TestCancelBtwStream_ClearsState(t *testing.T) {
 	m := newTestModel()
-	m.isBtw = true
 	m.btwShowSpinner = true
 	m.btwStreamHandler = NewStreamHandler(nil)
-	m.userScrolled = true
-	m.viewport.SetContent("enough content\n" + strings.Repeat("line\n", 50))
-	m.viewport.GotoBottom()
+	eventCh := make(chan llm.StreamEvent)
+	m.btwStreamHandler.Start(eventCh, "Loading...")
+	m.btwLines = []string{"some lines"}
 
-	m.dismissBtw()
+	m.cancelBtwStream()
 
-	if m.isBtw {
-		t.Fatal("expected btw to be dismissed")
+	if m.btwShowSpinner {
+		t.Fatal("expected btw spinner to be cleared")
 	}
-	if m.userScrolled {
-		t.Fatal("expected userScrolled to be false when viewport is at bottom")
+	if m.btwLines != nil {
+		t.Fatal("expected btwLines to be nil")
 	}
 }
 
-func TestDismissBtw_PreservesUserScrolledWhenNotAtBottom(t *testing.T) {
+func TestCancelBtwStream_CancelsContext(t *testing.T) {
 	m := newTestModel()
-	m.isBtw = true
 	m.btwStreamHandler = NewStreamHandler(nil)
-	m.viewport.SetHeight(5)
-	m.viewport.SetContent(strings.Repeat("line\n", 50))
-	m.viewport.GotoTop()
+	cancelled := false
+	m.btwStreamCancel = func() {
+		cancelled = true
+	}
 
-	m.dismissBtw()
+	m.cancelBtwStream()
 
-	if m.userScrolled != true {
-		t.Fatal("expected userScrolled to remain true when viewport is not at bottom")
+	if !cancelled {
+		t.Fatal("expected btw cancel function to be called")
+	}
+	if m.btwStreamCancel != nil {
+		t.Fatal("expected btwStreamCancel to be nil after cancel")
 	}
 }

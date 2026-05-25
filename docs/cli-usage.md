@@ -24,7 +24,7 @@ Keen Code provides slash commands (prefixed with `/`) for controlling the agent.
 
 ## `/btw <question>`
 
-Asks a quick side question in a separate overlay without adding the question or answer to the main conversation. Use it for short clarifications that should not steer the active task.
+Asks a quick side question inline without adding the question or answer to the main conversation. Use it for short clarifications that should not steer the active task.
 
 ```text
 /btw What does this error mean?
@@ -32,11 +32,11 @@ Asks a quick side question in a separate overlay without adding the question or 
 
 Behavior:
 
-- Uses the current conversation as read-only context
+- Uses up to the last 10 messages (5 user + 5 agent) as read-only context
 - Runs without tool access
 - Works even while the main assistant response is streaming
-- Press `Esc` to close the overlay and return to the main conversation
-- Running `/btw` with no question reopens the side-question history if one exists; otherwise Keen shows usage help
+- Press `Esc` to cancel the stream while the response is loading
+- Running `/btw` with no question shows usage help
 
 ## `/help`
 
@@ -289,7 +289,7 @@ These shortcuts are available in the REPL:
 | `Shift+Enter` | Insert a newline in the input box |
 | `Ctrl+C` | Clear non-empty input; quit when input is empty; copy selected text when a selection is active |
 | `Ctrl+D` | Clear non-empty input; quit when input is empty |
-| `Esc` | Interrupt an active response; close `/btw`; cancel compaction/model/session pickers; hide suggestions; clear selections |
+| `Esc` | Interrupt an active response; cancel an active `/btw` stream; cancel compaction/model/session pickers; hide suggestions; clear selections |
 | `Tab` | Show or accept autocomplete suggestions |
 | `↑` / `↓` | Navigate input history when the cursor is at the top/bottom of input; otherwise move the cursor; scroll output when history cannot move |
 | `PageUp` / `PageDown` | Scroll output by a half page |

@@ -675,17 +675,6 @@ func (m *replModel) saveShowThinking(val bool) {
 func (m *replModel) handleBtwCommand(input string) (replModel, tea.Cmd) {
 	question := strings.TrimSpace(strings.TrimPrefix(input, replcommands.Btw))
 	if question == "" {
-		if len(m.btwHistory) > 0 {
-			m.isBtw = true
-			m.btwLines = nil
-			m.btwQuestion = ""
-			m.btwViewport.SetWidth(m.width - 6)
-			btwContentHeight := max(m.height-4, 10)
-			m.btwViewport.SetHeight(btwContentHeight)
-			m.updateViewportContent()
-			m.btwViewport.GotoBottom()
-			return *m, nil
-		}
 		m.output.AddStyledLine("  Usage: /btw <question>", repltheme.UsageHintStyle)
 		m.output.AddEmptyLine()
 		m.updateViewportContent()
@@ -703,6 +692,8 @@ func (m *replModel) handleBtwCommand(input string) (replModel, tea.Cmd) {
 	if m.btwStreamCancel != nil {
 		m.btwStreamCancel()
 	}
+	m.flushBtwToOutput()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	m.btwStreamCancel = cancel
 
@@ -716,19 +707,15 @@ func (m *replModel) handleBtwCommand(input string) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	m.isBtw = true
 	m.btwLines = nil
 	m.btwQuestion = question
-	m.btwViewport.SetWidth(m.width - 6)
-	btwContentHeight := max(m.height-4, 10)
-	m.btwViewport.SetHeight(btwContentHeight)
 	m.btwStreamHandler.Start(eventCh, nextLoadingText())
 	m.btwShowSpinner = true
 	m.userScrolled = false
 	m.updateViewportContent()
-	m.btwViewport.GotoBottom()
+	m.viewport.GotoBottom()
 
-	return *m, tea.Batch(m.spinner.Tick, waitForBtwEvent(eventCh))
+	return *m, tea.Batch(m.btwSpinner.Tick, waitForBtwEvent(eventCh))
 }
 
 func (m *replModel) handleLogoutCommand() replModel {
