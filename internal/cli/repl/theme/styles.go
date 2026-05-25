@@ -159,4 +159,7 @@ var (
 	BtwBorderStyle = lipgloss.NewStyle().Foreground(AccentColor)
 	BtwLabelStyle  = lipgloss.NewStyle().Foreground(TextPrimaryColor)
 	BtwChipStyle   = lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
+
+	ModeBuildChipStyle = lipgloss.NewStyle().Background(PrimaryColor).Foreground(lipgloss.Color("#FFFFFF")).Bold(true).Padding(0, 1)
+	ModePlanChipStyle  = lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
 )

@@ -598,20 +598,11 @@ func (m replModel) inputMetaView() string {
 	if m.showSpinner {
 		timerText = repltheme.LoadingTimerStyle.Render("⏱ " + m.loadingElapsedText())
 	}
-	modeStyle := repltheme.PrimaryBoldStyle
+	chipStyle := repltheme.ModeBuildChipStyle
 	if m.currentMode() == llm.ModePlan {
-		modeStyle = repltheme.AccentStyle
+		chipStyle = repltheme.ModePlanChipStyle
 	}
-
-	var modeValue string
-
-	if m.currentMode() == llm.ModePlan {
-		modeValue = modeStyle.Render("◆") + " " + modeStyle.Render(string(m.currentMode()))
-	} else {
-		modeValue = modeStyle.Render("⚒") + " " + modeStyle.Render(string(m.currentMode()))
-	}
-
-	modeText := modeValue
+	modeText := chipStyle.Render(string(m.currentMode()))
 	left := modelText + " " + separator + " " + contextText + " " + separator + " " + modeText
 	if timerText != "" {
 		left += " " + separator + " " + timerText

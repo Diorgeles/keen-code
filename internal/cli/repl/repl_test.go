@@ -632,8 +632,8 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	if !strings.Contains(meta, repltheme.HighlightStyle.Render("openai/gpt-5.4")) {
 		t.Fatalf("expected provider/model to use the same highlight style, got %q", meta)
 	}
-	if !strings.Contains(meta, repltheme.PrimaryBoldStyle.Render("⚒")+" "+repltheme.PrimaryBoldStyle.Render("build")) {
-		t.Fatalf("expected build mode glyph and value to use primary bold style, got %q", meta)
+	if !strings.Contains(meta, repltheme.ModeBuildChipStyle.Render("build")) {
+		t.Fatalf("expected build mode chip style, got %q", meta)
 	}
 	if strings.Contains(meta, "Mode:") {
 		t.Fatalf("did not expect mode label, got %q", meta)
@@ -725,8 +725,8 @@ func TestInputMetaView_UsesAccentStyleForPlanMode(t *testing.T) {
 	m.width = 120
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, repltheme.AccentStyle.Render("◆")+" "+repltheme.AccentStyle.Render("plan")) {
-		t.Fatalf("expected plan mode glyph and value to use accent style, got %q", meta)
+	if !strings.Contains(meta, repltheme.ModePlanChipStyle.Render("plan")) {
+		t.Fatalf("expected plan mode chip style, got %q", meta)
 	}
 }
 
