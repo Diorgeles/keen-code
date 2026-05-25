@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-05-25
+
+### Added
+- Support Claude skill directories in skill discovery and filesystem permissions.
+- Expanded tool reference documentation and roadmap updates.
+
+### Changed
+- Updated demo assets in the README and documentation site.
+
 ## [0.19.1] - 2026-05-23
 
 ### Changed
@@ -365,7 +374,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.2...HEAD
+[0.19.2]: https://github.com/mochow13/keen-code/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/mochow13/keen-code/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/mochow13/keen-code/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/mochow13/keen-code/compare/v0.17.0...v0.18.0
