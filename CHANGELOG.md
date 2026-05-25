@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.3] - 2026-05-26
+
+### Added
+- Inline `/btw` side-question rendering with full conversation context instead of an overlay popup.
+- Styled chip mode indicators in the REPL status bar (plan/build) replacing glyph+text labels.
+
 ## [0.19.2] - 2026-05-25
 
 ### Added
@@ -374,7 +380,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.3...HEAD
+[0.19.3]: https://github.com/mochow13/keen-code/compare/v0.19.2...v0.19.3
 [0.19.2]: https://github.com/mochow13/keen-code/compare/v0.19.1...v0.19.2
 [0.19.1]: https://github.com/mochow13/keen-code/compare/v0.19.0...v0.19.1
 [0.19.0]: https://github.com/mochow13/keen-code/compare/v0.18.0...v0.19.0
