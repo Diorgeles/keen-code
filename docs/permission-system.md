@@ -120,6 +120,7 @@ func (g *Guard) IsBlocked(path string) bool {
 Skill directories are explicitly allowed for read access:
 - `~/.agents/skills`
 - `~/.keen/skills`
+- `~/.claude/skills`
 
 ```go
 func (g *Guard) IsInSkillDir(path string) bool {
@@ -127,6 +128,7 @@ func (g *Guard) IsInSkillDir(path string) bool {
     for _, dir := range []string{
         filepath.Join(home, ".agents", "skills"),
         filepath.Join(home, ".keen", "skills"),
+        filepath.Join(home, ".claude", "skills"),
     } {
         if strings.HasPrefix(path, dir) {
             return true

@@ -139,8 +139,10 @@ type Skill struct {
 Discovery roots:
 - `<working-dir>/.agents/skills/`
 - `<working-dir>/.keen/skills/`
+- `<working-dir>/.claude/skills/`
 - `~/.agents/skills/`
 - `~/.keen/skills/`
+- `~/.claude/skills/`
 - Bundled (embedded in binary)
 
 ### Config (`internal/config/`)

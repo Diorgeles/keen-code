@@ -136,6 +136,7 @@ func (g *Guard) IsInSkillDir(path string) bool {
 	for _, dir := range []string{
 		filepath.Join(home, ".agents", "skills"),
 		filepath.Join(home, ".keen", "skills"),
+		filepath.Join(home, ".claude", "skills"),
 	} {
 		if cleaned == dir {
 			return true

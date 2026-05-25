@@ -26,6 +26,9 @@ func EnsureBundled() (string, error) {
 		return "", nil
 	}
 	root := filepath.Join(home, ".keen", "skills", "bundled")
+	if err := os.RemoveAll(root); err != nil {
+		return "", fmt.Errorf("clear bundled skills dir: %w", err)
+	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return "", fmt.Errorf("create bundled skills dir: %w", err)
 	}

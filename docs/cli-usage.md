@@ -167,8 +167,10 @@ Skills are discovered from:
 
 - `<working-dir>/.agents/skills/`
 - `<working-dir>/.keen/skills/`
+- `<working-dir>/.claude/skills/`
 - `~/.agents/skills/`
 - `~/.keen/skills/`
+- `~/.claude/skills/`
 - Bundled skills embedded in the binary
 
 Skills are enabled by default unless disabled in the skills config.

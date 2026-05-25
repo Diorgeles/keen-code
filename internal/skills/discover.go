@@ -117,11 +117,13 @@ func discoveryRoots(workingDir, bundledDir string) []string {
 	roots := []string{
 		filepath.Join(workingDir, ".agents", "skills"),
 		filepath.Join(workingDir, ".keen", "skills"),
+		filepath.Join(workingDir, ".claude", "skills"),
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		roots = append(roots,
 			filepath.Join(home, ".agents", "skills"),
 			filepath.Join(home, ".keen", "skills"),
+			filepath.Join(home, ".claude", "skills"),
 		)
 	}
 	if strings.TrimSpace(bundledDir) != "" {

@@ -25,42 +25,45 @@ func writeSkillAt(t *testing.T, skillsDir, name, content string) string {
 	return path
 }
 
-func TestDiscover_ProjectGlobalAndKeenSkills(t *testing.T) {
+func TestDiscover_ProjectGlobalKeenAndClaudeSkills(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
 	t.Setenv("HOME", home)
 	writeSkill(t, work, "project", "---\nname: project\ndescription: Project skill\n---\nBody")
 	writeSkill(t, home, "global", "---\nname: global\ndescription: Global skill\n---\nBody")
 	writeSkillAt(t, filepath.Join(home, ".keen", "skills"), "builtin", "---\nname: builtin\ndescription: Builtin skill\n---\nBody")
+	writeSkillAt(t, filepath.Join(home, ".claude", "skills"), "claude", "---\nname: claude\ndescription: Claude skill\n---\nBody")
 
 	result := Discover(work, "")
-	if len(result.Skills) != 3 {
-		t.Fatalf("expected 3 skills, got %d", len(result.Skills))
+	if len(result.Skills) != 4 {
+		t.Fatalf("expected 4 skills, got %d", len(result.Skills))
 	}
-	if result.Skills[0].Name != "project" || result.Skills[1].Name != "global" || result.Skills[2].Name != "builtin" {
-		t.Fatalf("expected discovery order project/global/builtin, got %#v", result.Skills)
+	if result.Skills[0].Name != "project" || result.Skills[1].Name != "global" || result.Skills[2].Name != "builtin" || result.Skills[3].Name != "claude" {
+		t.Fatalf("expected discovery order project/global/builtin/claude, got %#v", result.Skills)
 	}
-	if result.Skills[0].Description != "project" || result.Skills[1].Description != "global" || result.Skills[2].Description != "builtin" {
+	if result.Skills[0].Description != "project" || result.Skills[1].Description != "global" || result.Skills[2].Description != "builtin" || result.Skills[3].Description != "claude" {
 		t.Fatalf("expected discovery to avoid reading metadata, got %#v", result.Skills)
 	}
 }
 
-func TestDiscover_AllFiveRootsAndOrder(t *testing.T) {
+func TestDiscover_AllRootsAndOrder(t *testing.T) {
 	home := t.TempDir()
 	work := t.TempDir()
 	bundled := t.TempDir()
 	t.Setenv("HOME", home)
 	writeSkill(t, work, "p-agents", "---\nname: p-agents\ndescription: x\n---\nBody")
 	writeSkillAt(t, filepath.Join(work, ".keen", "skills"), "p-keen", "---\nname: p-keen\ndescription: x\n---\nBody")
+	writeSkillAt(t, filepath.Join(work, ".claude", "skills"), "p-claude", "---\nname: p-claude\ndescription: x\n---\nBody")
 	writeSkill(t, home, "g-agents", "---\nname: g-agents\ndescription: x\n---\nBody")
 	writeSkillAt(t, filepath.Join(home, ".keen", "skills"), "g-keen", "---\nname: g-keen\ndescription: x\n---\nBody")
+	writeSkillAt(t, filepath.Join(home, ".claude", "skills"), "g-claude", "---\nname: g-claude\ndescription: x\n---\nBody")
 	writeSkillAt(t, bundled, "b-skill", "---\nname: b-skill\ndescription: x\n---\nBody")
 
 	result := Discover(work, bundled)
-	if len(result.Skills) != 5 {
-		t.Fatalf("expected 5 skills, got %#v", result.Skills)
+	if len(result.Skills) != 7 {
+		t.Fatalf("expected 7 skills, got %#v", result.Skills)
 	}
-	wantOrder := []string{"p-agents", "p-keen", "g-agents", "g-keen", "b-skill"}
+	wantOrder := []string{"p-agents", "p-keen", "p-claude", "g-agents", "g-keen", "g-claude", "b-skill"}
 	for i, want := range wantOrder {
 		if result.Skills[i].Name != want {
 			t.Fatalf("at %d expected %q, got %q (full=%#v)", i, want, result.Skills[i].Name, result.Skills)

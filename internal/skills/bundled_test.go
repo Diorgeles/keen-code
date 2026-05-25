@@ -12,7 +12,6 @@ func expectedBundledSkillNames() []string {
 		"clarify",
 		"cleanup",
 		"commit",
-		"debug",
 		"explain",
 		"fix-tests",
 		"plan",

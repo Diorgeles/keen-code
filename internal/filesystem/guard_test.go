@@ -90,6 +90,7 @@ func TestGuard_IsBlocked_SkillDirsAllowed(t *testing.T) {
 	for _, skillPath := range []string{
 		filepath.Join(home, ".agents", "skills", "demo", "SKILL.md"),
 		filepath.Join(home, ".keen", "skills", "builtin", "demo", "SKILL.md"),
+		filepath.Join(home, ".claude", "skills", "demo", "SKILL.md"),
 	} {
 		if g.IsBlocked(skillPath) {
 			t.Errorf("expected skill path to not be blocked: %s", skillPath)
@@ -118,6 +119,19 @@ func TestGuard_CheckPath_KeenSkillsDirGrantsReadOutsideWorkingDir(t *testing.T) 
 	got := g.CheckPath(skillPath, "read")
 	if got != PermissionGranted {
 		t.Errorf("CheckPath(~/.keen/skills skill, read) = %v, want PermissionGranted", got)
+	}
+}
+
+func TestGuard_CheckPath_ClaudeSkillsDirGrantsReadOutsideWorkingDir(t *testing.T) {
+	home := t.TempDir()
+	workingDir := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(workingDir, nil)
+	skillPath := filepath.Join(home, ".claude", "skills", "demo", "SKILL.md")
+	got := g.CheckPath(skillPath, "read")
+	if got != PermissionGranted {
+		t.Errorf("CheckPath(~/.claude/skills skill, read) = %v, want PermissionGranted", got)
 	}
 }
 

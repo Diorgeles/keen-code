@@ -40,8 +40,10 @@ func discoveryRoots(workingDir, bundledDir string) []string {
     roots := []string{
         filepath.Join(workingDir, ".agents", "skills"),
         filepath.Join(workingDir, ".keen", "skills"),
+        filepath.Join(workingDir, ".claude", "skills"),
         filepath.Join(home, ".agents", "skills"),
         filepath.Join(home, ".keen", "skills"),
+        filepath.Join(home, ".claude", "skills"),
     }
     if bundledDir != "" {
         roots = append(roots, bundledDir)
@@ -53,9 +55,11 @@ func discoveryRoots(workingDir, bundledDir string) []string {
 Priority order:
 1. `<working-dir>/.agents/skills/`
 2. `<working-dir>/.keen/skills/`
-3. `~/.agents/skills/`
-4. `~/.keen/skills/`
-5. Bundled skills directory
+3. `<working-dir>/.claude/skills/`
+4. `~/.agents/skills/`
+5. `~/.keen/skills/`
+6. `~/.claude/skills/`
+7. Bundled skills directory
 
 ## Skill Metadata Parsing
 
