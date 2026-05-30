@@ -191,6 +191,14 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 		}
 	}
 
+	qwenMax, ok := reg.GetModel("opencode-go", "qwen3.7-max")
+	if !ok {
+		t.Fatal("expected to find opencode-go/qwen3.7-max")
+	}
+	if qwenMax.SupportsThinkingEffort() {
+		t.Fatalf("expected qwen3.7-max to omit thinking efforts, got %v", qwenMax.ThinkingEfforts)
+	}
+
 	minimax, ok := reg.GetModel("opencode-go", "minimax-m2.7")
 	if !ok {
 		t.Fatal("expected to find opencode-go/minimax-m2.7")

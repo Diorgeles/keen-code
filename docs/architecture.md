@@ -66,11 +66,11 @@ type LLMClient interface {
 Implementations:
 - `AnthropicClient` - Direct Anthropic SDK integration
 - `OpenAIResponsesClient` - OpenAI Responses API (GPT models)
-- `OpenAICompatibleClient` - OpenAI-compatible API (DeepSeek, Moonshot, Z.ai, OpenCode Go non-MiniMax models)
+- `OpenAICompatibleClient` - OpenAI-compatible API (DeepSeek, Moonshot, Z.ai, OpenCode Go compatible models)
 - `GenkitClient` - Firebase Genkit for Google AI
 
 MiniMax uses `AnthropicClient` with `https://api.minimax.io/anthropic`.
-OpenCode Go is routed by model family: `minimax-m2.*` uses `AnthropicClient`, while GLM, Kimi, DeepSeek, MiMo, and Qwen models use `OpenAICompatibleClient`.
+OpenCode Go is routed by model format: `minimax-m2.*` and `qwen3.7-max` use `AnthropicClient`, while GLM, Kimi, DeepSeek, MiMo, and other Qwen models use `OpenAICompatibleClient`.
 
 ### Tools (`internal/tools/`)
 

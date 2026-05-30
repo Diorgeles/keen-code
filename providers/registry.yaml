@@ -173,11 +173,10 @@ providers:
       - id: minimax-m2.5
         name: MiniMax M2.5
         context_window: 204800
+      - id: qwen3.7-max
+        name: Qwen3.7 Max
+        context_window: 1000000
       - id: qwen3.6-plus
         name: Qwen3.6 Plus
-        context_window: 1000000
-        thinking_efforts: ["enabled", "disabled"]
-      - id: qwen3.5-plus
-        name: Qwen3.5 Plus
         context_window: 1000000
         thinking_efforts: ["enabled", "disabled"]

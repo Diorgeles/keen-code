@@ -173,27 +173,39 @@ func TestNewClient_OpenCodeGoOpenAICompatibleModel(t *testing.T) {
 }
 
 func TestNewClient_OpenCodeGoAnthropicModel(t *testing.T) {
-	cfg := &config.ResolvedConfig{
-		Provider:       config.ProviderOpenCodeGo,
-		Model:          "minimax-m2.7",
-		APIKey:         "test-api-key",
-		ThinkingEffort: "enabled",
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{name: "minimax", model: "minimax-m2.7"},
+		{name: "qwen max", model: "qwen3.7-max"},
 	}
 
-	client, err := NewClient(cfg)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.ResolvedConfig{
+				Provider:       config.ProviderOpenCodeGo,
+				Model:          tt.model,
+				APIKey:         "test-api-key",
+				ThinkingEffort: "enabled",
+			}
 
-	anthropicClient, ok := client.(*AnthropicClient)
-	if !ok {
-		t.Fatalf("expected *AnthropicClient, got %T", client)
-	}
-	if anthropicClient.model != "minimax-m2.7" {
-		t.Fatalf("expected model minimax-m2.7, got %s", anthropicClient.model)
-	}
-	if anthropicClient.thinkingEffort != "" {
-		t.Fatalf("expected no Anthropic thinking effort for OpenCode Go MiniMax, got %q", anthropicClient.thinkingEffort)
+			client, err := NewClient(cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			anthropicClient, ok := client.(*AnthropicClient)
+			if !ok {
+				t.Fatalf("expected *AnthropicClient, got %T", client)
+			}
+			if anthropicClient.model != tt.model {
+				t.Fatalf("expected model %s, got %s", tt.model, anthropicClient.model)
+			}
+			if anthropicClient.thinkingEffort != "" {
+				t.Fatalf("expected no Anthropic thinking effort for OpenCode Go %s, got %q", tt.model, anthropicClient.thinkingEffort)
+			}
+		})
 	}
 }
 

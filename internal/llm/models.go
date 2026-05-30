@@ -83,7 +83,7 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			BaseURL:        cfg.BaseURL,
 		})
 	case config.ProviderOpenCodeGo:
-		if isOpenCodeGoMiniMaxModel(cfg.Model) {
+		if isOpenCodeGoAnthropicModel(cfg.Model) {
 			return NewAnthropicClient(&ClientConfig{
 				Provider: Provider(cfg.Provider),
 				APIKey:   cfg.APIKey,
@@ -105,6 +105,10 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 
 func isOpenCodeGoMiniMaxModel(model string) bool {
 	return strings.HasPrefix(model, "minimax-m2.")
+}
+
+func isOpenCodeGoAnthropicModel(model string) bool {
+	return isOpenCodeGoMiniMaxModel(model) || model == "qwen3.7-max"
 }
 
 func isOpenCodeGoDeepSeekModel(model string) bool {

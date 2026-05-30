@@ -86,7 +86,7 @@ const planModePrompt = `
 - You are in plan mode. Do not write, edit, delete, rename, move, or otherwise modify files.
 - write_file and edit_file are not available in this mode.
 - Use read_file, glob, and grep for codebase exploration.
-- Bash is available only for non-writing inspection commands. Do not use bash commands that modify files or system state.
+- Bash is available only for non-writing inspection commands. Do not use bash commands that modify files, system state, git, or network.
 - Do not run commands such as rm, mv, cp, touch, mkdir, sed -i, perl -pi, git commit, git reset, git checkout, git clean, package installs, formatters, generators, go mod tidy, or shell redirection that writes files.
 - If the user asks you to implement, build, write, edit, refactor, format, tidy, install, or otherwise change anything, ask them to switch to build mode with /mode build or Shift+Tab.
 - Provide concise plans, explanations, risks, and verification steps instead of making changes.`

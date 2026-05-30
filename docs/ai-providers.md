@@ -14,7 +14,7 @@ Keen Code supports multiple AI providers through a plugin-like architecture. The
 | DeepSeek | `deepseek` | API Key | DeepSeek V4 Flash, V4 Pro |
 | Z.ai | `zai` | API Key | GLM-5.1, GLM-5, GLM-5 Turbo |
 | MiniMax | `minimax` | API Key | MiniMax M2.7, M2.5 |
-| OpenCode Go | `opencode-go` | API Key | GLM-5.1, GLM-5, Kimi K2.6, Kimi K2.5, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2, MiniMax M2.7/M2.5, Qwen3 Plus |
+| OpenCode Go | `opencode-go` | API Key | GLM-5.1, GLM-5, Kimi K2.6, Kimi K2.5, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2, MiniMax M2.7/M2.5, Qwen3 Plus/Max |
 
 ## Provider Registry
 
@@ -127,7 +127,7 @@ Direct integration with Anthropic SDK:
 - Thinking budget support (low/medium/high/max)
 - Cached token tracking
 - MiniMax models (`MiniMax-M2.7`, `MiniMax-M2.5`) through MiniMax's Anthropic-compatible `/messages` endpoint
-- OpenCode Go MiniMax models (`minimax-m2.*`) through the Anthropic-compatible `/messages` endpoint
+- OpenCode Go MiniMax models (`minimax-m2.*`) and `qwen3.7-max` through the Anthropic-compatible `/messages` endpoint
 
 ### OpenAIResponsesClient (`internal/llm/openai_responses.go`)
 
@@ -140,7 +140,7 @@ OpenAI-compatible API for:
 - DeepSeek
 - Moonshot AI (Kimi)
 - Z.ai (GLM)
-- OpenCode Go GLM, Kimi, DeepSeek, MiMo, and Qwen models
+- OpenCode Go GLM, Kimi, DeepSeek, MiMo, and OpenAI-compatible Qwen models
 
 Handles provider-specific features like the `reasoning_content` extension and thinking controls for compatible providers.
 
@@ -186,12 +186,12 @@ Models support different thinking effort levels:
 | DeepSeek | off, high, max |
 | Z.ai | enabled, disabled |
 | OpenCode Go DeepSeek | off, high, max |
-| OpenCode Go GLM/Kimi/Qwen | enabled, disabled |
+| OpenCode Go GLM/Kimi/OpenAI-compatible Qwen | enabled, disabled |
 
 The thinking effort is set via config and passed to the LLM client, which configures the provider's thinking parameters.
 
 OpenCode Go thinking controls are model-family specific:
 - DeepSeek sends `thinking.type` plus `reasoning_effort` for enabled efforts.
 - GLM and Kimi send `thinking.type`.
-- Qwen sends `enable_thinking`.
+- OpenAI-compatible Qwen sends `enable_thinking`.
 - MiMo and MiniMax do not receive a Keen-sent thinking control; returned reasoning is still streamed when the provider exposes it.
