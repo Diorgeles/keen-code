@@ -48,7 +48,15 @@ func (ob *OutputBuilder) SetWidth(width int) {
 
 func (ob *OutputBuilder) AddUserInput(input string, promptStyle lipgloss.Style) {
 	inputLines := strings.Split(input, "\n")
-	wrapWidth := ob.width - 3
+	const (
+		promptWidth            = 3
+		blockHorizontalPadding = 2
+	)
+	blockContentWidth := ob.width - blockHorizontalPadding
+	if blockContentWidth < 1 {
+		blockContentWidth = 1
+	}
+	wrapWidth := blockContentWidth - promptWidth
 	if wrapWidth < 1 {
 		wrapWidth = 1
 	}

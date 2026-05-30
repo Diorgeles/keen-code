@@ -222,6 +222,19 @@ func TestOutputBuilder_AddUserInput_WrappedLinesAreIndented(t *testing.T) {
 	}
 }
 
+func TestOutputBuilder_AddUserInput_FitsWithinWidthAfterPadding(t *testing.T) {
+	ob := NewOutputBuilder(12, "")
+	style := lipgloss.NewStyle()
+
+	ob.AddUserInput("hello world", style)
+
+	for _, line := range ob.GetLines() {
+		if width := lipgloss.Width(line); width > 12 {
+			t.Fatalf("line width = %d, want <= 12: %q", width, line)
+		}
+	}
+}
+
 func TestOutputBuilder_AddAssistantResponse(t *testing.T) {
 	ob := NewOutputBuilder(80, "")
 	style := lipgloss.NewStyle()
