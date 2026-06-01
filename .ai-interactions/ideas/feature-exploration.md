@@ -643,7 +643,7 @@ Why it is valuable:
 - Forum discussions show maintainers want repo-level AI contribution policies.
 - It keeps permission decisions deterministic and reviewable.
 
-### E. Cross-Provider Second Opinion
+### ✅ E. Cross-Provider Second Opinion
 
 Add a command that sends the same plan/diff/question to a second configured model:
 
