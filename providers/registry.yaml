@@ -124,11 +124,11 @@ providers:
   - id: minimax
     name: MiniMax
     models:
-      - id: MiniMax-M2.7
+      - id: minimax-m3
+        name: MiniMax M3
+        context_window: 1000000
+      - id: minimax-m2.7
         name: MiniMax M2.7
-        context_window: 204800
-      - id: MiniMax-M2.5
-        name: MiniMax M2.5
         context_window: 204800
 
   - id: opencode-go
@@ -170,11 +170,11 @@ providers:
       - id: mimo-v2.5
         name: MiMo-V2.5
         context_window: 256000
+      - id: minimax-m3
+        name: MiniMax M3
+        context_window: 1000000
       - id: minimax-m2.7
         name: MiniMax M2.7
-        context_window: 204800
-      - id: minimax-m2.5
-        name: MiniMax M2.5
         context_window: 204800
       - id: qwen3.7-max
         name: Qwen3.7 Max
