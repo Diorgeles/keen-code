@@ -58,7 +58,7 @@ type btwErrorMsg struct {
 }
 
 type adversaryChunkMsg string
-type adversaryDoneMsg  struct{}
+type adversaryDoneMsg struct{}
 type adversaryErrorMsg struct {
 	err error
 }

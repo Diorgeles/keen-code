@@ -3,9 +3,9 @@ package commands
 import "strings"
 
 const (
-	Adversary      = "/adversary"
-	AdversaryModel = "/adversary model"
-	Btw            = "/btw"
+	Adversary       = "/adversary"
+	AdversaryModel  = "/adversary model"
+	Btw             = "/btw"
 	Clear           = "/clear"
 	Compact         = "/compact"
 	Exit            = "/exit"
