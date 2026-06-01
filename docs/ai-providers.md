@@ -53,6 +53,8 @@ type Model struct {
   "active_model": "kimi-k2.6",
   "thinking_effort": "enabled",
   "show_thinking": true,
+  "adversary_provider": "anthropic",
+  "adversary_model": "claude-sonnet-4-6",
   "providers": {
     "opencode-go": {
       "models": ["kimi-k2.6"],
@@ -61,6 +63,8 @@ type Model struct {
   }
 }
 ```
+
+`adversary_provider` and `adversary_model` are set via `/adversary model` and control which model is used for adversarial reviews. They are independent of `active_provider`/`active_model` and can point to any configured provider.
 
 ### Config Resolution
 

@@ -3,7 +3,9 @@ package commands
 import "strings"
 
 const (
-	Btw             = "/btw"
+	Adversary      = "/adversary"
+	AdversaryModel = "/adversary model"
+	Btw            = "/btw"
 	Clear           = "/clear"
 	Compact         = "/compact"
 	Exit            = "/exit"
@@ -35,6 +37,8 @@ type SlashCommand struct {
 }
 
 var All = []SlashCommand{
+	{Adversary, "Adversarially review the conversation for issues, bugs, risks, and security problems"},
+	{AdversaryModel, "Configure the adversary model"},
 	{AllowPermission, "Always allow a tool (bypasses prompts, including dangerous bash)"},
 	{Btw, "Ask a quick side question (not added to conversation)"},
 	{Clear, "Clear the session and create a new one (also /new)"},
@@ -55,6 +59,8 @@ var All = []SlashCommand{
 }
 
 var Suggestions = []SlashCommand{
+	{Adversary, "Adversarially review the conversation for issues, bugs, risks, and security problems"},
+	{AdversaryModel, "Configure the adversary model"},
 	{AllowPermission, "Always allow a tool (bypasses prompts, including dangerous bash)"},
 	{Btw, "Ask a quick side question (not added to conversation)"},
 	{Clear, "Clear the session and create a new one (also /new)"},

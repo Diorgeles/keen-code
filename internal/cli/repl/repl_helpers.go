@@ -21,6 +21,8 @@ import (
 	"github.com/user/keen-code/internal/mcpskills"
 	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/internal/updater"
+
+	"github.com/user/keen-code/internal/config"
 )
 
 var loadingTexts = []string{
@@ -566,6 +568,72 @@ func (m *replModel) flushBtwToOutput() {
 	m.output.AddEmptyLine()
 	m.btwLines = nil
 	m.btwQuestion = ""
+}
+
+func (m *replModel) cancelAdversaryStream() {
+	if m.adversary.streamHandler != nil && m.adversary.streamHandler.IsActive() {
+		m.adversary.streamHandler.HandleInterrupt()
+	}
+	if m.adversary.streamCancel != nil {
+		m.adversary.streamCancel()
+		m.adversary.streamCancel = nil
+	}
+	m.adversary.lines = nil
+	m.adversary.showSpinner = false
+}
+
+func (m *replModel) flushAdversaryToOutput() {
+	if m.adversary.lines == nil {
+		return
+	}
+	m.output.AddLine(renderAdversaryLeftBorder(renderAdversaryHeader(m.adversary.focus)))
+	for _, line := range m.adversary.lines {
+		m.output.AddLine(renderAdversaryLeftBorder(line))
+	}
+	m.output.AddEmptyLine()
+	m.adversary.lines = nil
+	m.adversary.focus = ""
+}
+
+func (m *replModel) buildAdversaryClient() error {
+	resolved, err := config.ResolveAdversary(m.ctx.globalCfg)
+	if err != nil {
+		return err
+	}
+	client, err := llm.NewClient(resolved)
+	if err != nil {
+		return err
+	}
+	m.appState.SetAdversaryClient(client)
+	return nil
+}
+
+func waitForAdversaryEvent(llmCh <-chan llm.StreamEvent) tea.Cmd {
+	if llmCh == nil {
+		return nil
+	}
+
+	return func() tea.Msg {
+		for {
+			event, ok := <-llmCh
+			if !ok {
+				return adversaryDoneMsg{}
+			}
+
+			switch event.Type {
+			case llm.StreamEventTypeChunk:
+				return adversaryChunkMsg(event.Content)
+			case llm.StreamEventTypeDone:
+				return adversaryDoneMsg{}
+			case llm.StreamEventTypeError:
+				return adversaryErrorMsg{err: event.Error}
+			case llm.StreamEventTypeIncomplete:
+				return adversaryErrorMsg{err: event.Error}
+			default:
+				continue
+			}
+		}
+	}
 }
 
 func (m *replModel) scrollToBottomIfFollowing() {

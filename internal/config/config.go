@@ -22,11 +22,13 @@ const (
 )
 
 type GlobalConfig struct {
-	ActiveProvider string                    `json:"active_provider"`
-	ActiveModel    string                    `json:"active_model"`
-	ThinkingEffort string                    `json:"thinking_effort,omitempty"`
-	ShowThinking   *bool                     `json:"show_thinking,omitempty"`
-	Providers      map[string]ProviderConfig `json:"providers"`
+	ActiveProvider    string                    `json:"active_provider"`
+	ActiveModel       string                    `json:"active_model"`
+	ThinkingEffort    string                    `json:"thinking_effort,omitempty"`
+	ShowThinking      *bool                     `json:"show_thinking,omitempty"`
+	AdversaryProvider string                    `json:"adversary_provider,omitempty"`
+	AdversaryModel    string                    `json:"adversary_model,omitempty"`
+	Providers         map[string]ProviderConfig `json:"providers"`
 }
 
 type ProviderConfig struct {
@@ -149,6 +151,20 @@ func DefaultGlobalConfig() *GlobalConfig {
 	return &GlobalConfig{
 		Providers: make(map[string]ProviderConfig),
 	}
+}
+
+func ResolveAdversary(global *GlobalConfig) (*ResolvedConfig, error) {
+	if global.AdversaryProvider == "" || global.AdversaryModel == "" {
+		return nil, fmt.Errorf("adversary model not configured")
+	}
+	provCfg := global.Providers[global.AdversaryProvider]
+	return &ResolvedConfig{
+		Provider: global.AdversaryProvider,
+		Model:    global.AdversaryModel,
+		APIKey:   provCfg.APIKey,
+		BaseURL:  provCfg.BaseURL,
+		AuthMode: AuthModeForProvider(global.AdversaryProvider),
+	}, nil
 }
 
 func ConfigPath() string {

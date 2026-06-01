@@ -160,6 +160,10 @@ var (
 	BtwLabelStyle  = lipgloss.NewStyle().Foreground(TextPrimaryColor)
 	BtwChipStyle   = lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
 
+	AdversaryBorderStyle = lipgloss.NewStyle().Foreground(SecondaryColor)
+	AdversaryLabelStyle  = lipgloss.NewStyle().Foreground(TextPrimaryColor)
+	AdversaryChipStyle   = lipgloss.NewStyle().Background(SecondaryColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
+
 	ModeBuildChipStyle = lipgloss.NewStyle().Background(PrimaryColor).Foreground(lipgloss.Color("#FFFFFF")).Bold(true).Padding(0, 1)
 	ModePlanChipStyle  = lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
 )

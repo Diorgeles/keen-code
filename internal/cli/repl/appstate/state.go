@@ -14,14 +14,15 @@ import (
 const compactionUserInstruction = "Please compact this conversation according to the system instructions."
 
 type AppState struct {
-	messages     []llm.Message
-	llmClient    llm.LLMClient
-	toolRegistry *tools.Registry
-	mode         llm.AgentMode
-	workingDir   string
-	lastUsage    *llm.TokenUsage
-	skills       skills.Discovery
-	skillsConfig skills.Config
+	messages        []llm.Message
+	llmClient       llm.LLMClient
+	adversaryClient llm.LLMClient
+	toolRegistry    *tools.Registry
+	mode            llm.AgentMode
+	workingDir      string
+	lastUsage       *llm.TokenUsage
+	skills          skills.Discovery
+	skillsConfig    skills.Config
 }
 
 func New(client llm.LLMClient, workingDir string) *AppState {
@@ -206,6 +207,29 @@ func (s *AppState) StreamBtw(ctx context.Context, question string, opts ...llm.S
 	return s.llmClient.StreamChat(ctx, messages, nil, streamOpts)
 }
 
+func (s *AppState) StreamAdversary(ctx context.Context, focus string) (<-chan llm.StreamEvent, error) {
+	if s.adversaryClient == nil {
+		return nil, nil
+	}
+	history := s.GetMessages()
+	messages := make([]llm.Message, 0, 2+len(history))
+	messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: llm.BuildAdversaryPrompt(s.workingDir)})
+	for _, msg := range history {
+		if msg.Role == llm.RoleAssistant {
+			messages = append(messages, llm.Message{Role: llm.RoleUser, Content: "[main agent]: " + msg.Content})
+		} else {
+			messages = append(messages, msg)
+		}
+	}
+	instruction := "Review this conversation."
+	if focus != "" {
+		instruction = focus
+	}
+	messages = append(messages, llm.Message{Role: llm.RoleUser, Content: instruction})
+	readOnlyRegistry := s.toolRegistry.Without("write_file", "edit_file", "bash", "call_mcp_tool")
+	return s.adversaryClient.StreamChat(ctx, messages, readOnlyRegistry, llm.StreamOptions{OneShot: true})
+}
+
 func btwContext(messages []llm.Message, max int) []llm.Message {
 	end := len(messages)
 	if end > 0 && messages[end-1].Role == llm.RoleUser {
@@ -241,6 +265,14 @@ func (s *AppState) IsClientReady(cfg *config.ResolvedConfig) bool {
 
 func (s *AppState) UpdateClient(client llm.LLMClient) {
 	s.llmClient = client
+}
+
+func (s *AppState) SetAdversaryClient(client llm.LLMClient) {
+	s.adversaryClient = client
+}
+
+func (s *AppState) IsAdversaryClientReady() bool {
+	return s.adversaryClient != nil
 }
 
 func (s *AppState) GetClient() llm.LLMClient {

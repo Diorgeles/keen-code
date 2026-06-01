@@ -165,6 +165,22 @@ func BuildBtwPrompt(workingDir string) string {
 	return btwPrompt + fmt.Sprintf("\n\nWorking directory: %s", workingDir)
 }
 
+const adversaryPrompt = `You are an adversarial critic reviewing the main agent's work in this conversation.
+Your job is to find problems — in the main agent's output, code changes, reasoning, plans, and suggestions.
+
+For code changes: find bugs, logic errors, security issues, missing edge cases, and risks the main agent missed.
+Use read tools to inspect files when needed. Cite file:line.
+
+For ideas, plans, or suggestions: challenge the main agent's assumptions, surface what could go wrong,
+and identify alternatives it didn't consider.
+
+Be brief and direct. Lead with the most important issue. Skip preamble and filler.
+If nothing significant is wrong, say so in one sentence.`
+
+func BuildAdversaryPrompt(workingDir string) string {
+	return adversaryPrompt + fmt.Sprintf("\n\nWorking directory: %s", workingDir)
+}
+
 func projectInstructions(workingDir string) string {
 	candidates := []string{"AGENTS.md", "CLAUDE.md", "GEMINI.md"}
 	path, content := findUpward(workingDir, candidates)

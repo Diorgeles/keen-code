@@ -718,6 +718,96 @@ func (m *replModel) handleBtwCommand(input string) (replModel, tea.Cmd) {
 	return *m, tea.Batch(m.btwSpinner.Tick, waitForBtwEvent(eventCh))
 }
 
+func (m *replModel) handleAdversaryCommand(input string) (replModel, tea.Cmd) {
+	arg := strings.TrimSpace(strings.TrimPrefix(input, replcommands.Adversary))
+
+	if arg == "model" {
+		return m.startAdversaryModelSelection(), nil
+	}
+
+	if m.ctx.globalCfg.AdversaryProvider == "" || m.ctx.globalCfg.AdversaryModel == "" {
+		m.output.AddStyledLine("  Run /adversary model to configure an adversary model", repltheme.MutedStyle)
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	if !m.appState.IsAdversaryClientReady() {
+		if err := m.buildAdversaryClient(); err != nil {
+			m.output.AddError("Failed to initialize adversary client: "+err.Error(), repltheme.ErrorStyle)
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil
+		}
+	}
+
+	m.cancelAdversaryStream()
+	m.flushAdversaryToOutput()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.adversary.streamCancel = cancel
+
+	eventCh, err := m.appState.StreamAdversary(ctx, arg)
+	if err != nil {
+		cancel()
+		m.adversary.streamCancel = nil
+		m.output.AddError(err.Error(), repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+	if eventCh == nil {
+		cancel()
+		m.adversary.streamCancel = nil
+		m.output.AddError("adversary stream unavailable", repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m, nil
+	}
+
+	m.adversary.lines = nil
+	m.adversary.focus = arg
+	m.adversary.streamHandler.Start(eventCh, nextLoadingText())
+	m.adversary.showSpinner = true
+	m.userScrolled = false
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+
+	return *m, tea.Batch(m.adversary.spinner.Tick, waitForAdversaryEvent(eventCh))
+}
+
+func (m *replModel) startAdversaryModelSelection() replModel {
+	savedProvider := m.ctx.globalCfg.ActiveProvider
+	savedModel := m.ctx.globalCfg.ActiveModel
+
+	onComplete := func(provider, model, apiKey string) error {
+		m.ctx.globalCfg.AdversaryProvider = provider
+		m.ctx.globalCfg.AdversaryModel = model
+		m.ctx.globalCfg.ActiveProvider = savedProvider
+		m.ctx.globalCfg.ActiveModel = savedModel
+		if err := m.ctx.loader.Save(m.ctx.globalCfg); err != nil {
+			return err
+		}
+		return m.buildAdversaryClient()
+	}
+
+	adversaryResolved, _ := config.ResolveAdversary(m.ctx.globalCfg)
+	if adversaryResolved == nil {
+		adversaryResolved = &config.ResolvedConfig{}
+	}
+	m.adversary.modelSelection = replwidgets.New(
+		m.ctx.registry,
+		m.ctx.globalCfg,
+		m.ctx.loader,
+		adversaryResolved,
+		onComplete,
+	)
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
+}
+
 func (m *replModel) handleLogoutCommand() replModel {
 	if m.ctx == nil || m.ctx.cfg == nil || m.ctx.cfg.Provider == "" {
 		m.output.AddError("No provider is configured.", repltheme.ErrorStyle)

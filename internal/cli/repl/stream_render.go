@@ -399,3 +399,54 @@ func (m *replModel) renderBtwInlineFinished(width int) string {
 
 	return view.String()
 }
+
+func renderAdversaryHeader(focus string) string {
+	chip := repltheme.AdversaryChipStyle.Render("adversary")
+	if focus == "" {
+		return chip
+	}
+	return chip + " " + repltheme.AdversaryLabelStyle.Render(focus)
+}
+
+func renderAdversaryLeftBorder(line string) string {
+	border := repltheme.AdversaryBorderStyle.Render("▌")
+	return border + " " + line
+}
+
+func (m *replModel) renderAdversaryInline(width int) string {
+	contentWidth := max(width-4, 1)
+
+	var view strings.Builder
+	view.WriteString("\n\n")
+
+	view.WriteString(renderAdversaryLeftBorder(renderAdversaryHeader(m.adversary.focus)))
+	view.WriteString("\n")
+
+	streamView := strings.TrimLeft(m.adversary.streamHandler.View(contentWidth), "\n")
+	for _, line := range strings.Split(streamView, "\n") {
+		view.WriteString(renderAdversaryLeftBorder(line))
+		view.WriteString("\n")
+	}
+
+	if m.adversary.showSpinner {
+		view.WriteString(renderAdversaryLeftBorder(m.adversary.spinner.View()))
+		view.WriteString("\n")
+	}
+
+	return view.String()
+}
+
+func (m *replModel) renderAdversaryInlineFinished(width int) string {
+	var view strings.Builder
+	view.WriteString("\n")
+
+	view.WriteString(renderAdversaryLeftBorder(renderAdversaryHeader(m.adversary.focus)))
+	view.WriteString("\n")
+
+	for _, line := range m.adversary.lines {
+		view.WriteString(renderAdversaryLeftBorder(line))
+		view.WriteString("\n")
+	}
+
+	return view.String()
+}

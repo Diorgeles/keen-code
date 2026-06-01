@@ -87,6 +87,17 @@ type replModel struct {
 	btwStreamCancel     context.CancelFunc
 	btwShowSpinner      bool
 	btwSpinner          spinner.Model
+	adversary           adversaryState
+}
+
+type adversaryState struct {
+	streamHandler  *StreamHandler
+	streamCancel   context.CancelFunc
+	lines          []string
+	focus          string
+	showSpinner    bool
+	spinner        spinner.Model
+	modelSelection *replwidgets.Model
 }
 
 func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) replModel {
@@ -124,6 +135,10 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	bs := spinner.New()
 	bs.Spinner = spinner.MiniDot
 	bs.Style = lipgloss.NewStyle().Foreground(repltheme.AccentColor)
+
+	as := spinner.New()
+	as.Spinner = spinner.Points
+	as.Style = lipgloss.NewStyle().Foreground(repltheme.SecondaryColor)
 
 	appState := replappstate.New(llmClient, ctx.workingDir)
 
@@ -180,6 +195,10 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		fileSearcher:        fileSearcher,
 		showThinking:        true,
 		btwStreamHandler:    NewStreamHandler(mdRenderer),
+		adversary: adversaryState{
+			spinner:       as,
+			streamHandler: NewStreamHandler(mdRenderer),
+		},
 	}
 	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
 		model.showThinking = *ctx.globalCfg.ShowThinking
@@ -221,6 +240,16 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
+	if input == replcommands.Adversary || strings.HasPrefix(input, replcommands.Adversary+" ") {
+		if m.showSpinner {
+			return *m, nil
+		}
+		m.history.Push(input)
+		m.textarea.Reset()
+		result, cmd := m.handleAdversaryCommand(input)
+		return result, cmd
+	}
+
 	if input == replcommands.Btw || strings.HasPrefix(input, replcommands.Btw+" ") {
 		m.history.Push(input)
 		m.textarea.Reset()
@@ -237,6 +266,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	m.flushBtwToOutput()
+	m.flushAdversaryToOutput()
 	m.output.AddUserInput(input, repltheme.PromptStyle)
 	m.history.Push(input)
 
@@ -335,8 +365,18 @@ func (m *replModel) updateViewportContent() {
 		content.WriteString(m.renderBtwInlineFinished(contentWidth))
 	}
 
+	if m.adversary.streamHandler != nil && m.adversary.streamHandler.IsActive() {
+		content.WriteString(m.renderAdversaryInline(contentWidth))
+	} else if m.adversary.lines != nil {
+		content.WriteString(m.renderAdversaryInlineFinished(contentWidth))
+	}
+
 	if m.modelSelection != nil {
 		content.WriteString(formatModelSelectionCard(m.modelSelection, m.viewport.Width()))
+	}
+
+	if m.adversary.modelSelection != nil {
+		content.WriteString(formatModelSelectionCard(m.adversary.modelSelection, m.viewport.Width()))
 	}
 
 	if m.sessionPicker != nil {
@@ -381,6 +421,10 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 		return updated, cmd
 	}
 
+	if updated, cmd, handled := m.consumeAdversaryModelSelectionResult(msg); handled {
+		return updated, cmd
+	}
+
 	if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.applyWindowSize(sizeMsg)
 		if m.modelSelection != nil {
@@ -390,6 +434,10 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 	}
 
 	if m.modelSelection != nil {
+		return m.handleKeyMsg(msg)
+	}
+
+	if m.adversary.modelSelection != nil {
 		return m.handleKeyMsg(msg)
 	}
 
@@ -513,8 +561,36 @@ func (m replModel) consumeModelSelectionResult(msg tea.Msg) (replModel, tea.Cmd,
 	return m, nil, false
 }
 
+func (m replModel) consumeAdversaryModelSelectionResult(msg tea.Msg) (replModel, tea.Cmd, bool) {
+	if m.adversary.modelSelection == nil {
+		return m, nil, false
+	}
+
+	if replwidgets.IsComplete(msg) {
+		successMsg := "✓ Adversary set to " + m.adversary.modelSelection.SelectedProvider + " / " + m.adversary.modelSelection.SelectedModel
+		m.output.AddStyledLine("  "+successMsg, repltheme.HighlightStyle)
+		m.output.AddEmptyLine()
+		m.adversary.modelSelection = nil
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return m, nil, true
+	}
+
+	if replwidgets.IsCancel(msg) {
+		cancelStyle := lipgloss.NewStyle().Foreground(repltheme.MutedColor)
+		m.output.AddStyledLine("  Adversary model selection cancelled", cancelStyle)
+		m.output.AddEmptyLine()
+		m.adversary.modelSelection = nil
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return m, nil, true
+	}
+
+	return m, nil, false
+}
+
 func (m replModel) handleSpinnerTick(msg spinner.TickMsg) (replModel, tea.Cmd, bool) {
-	if !m.showSpinner && !m.btwShowSpinner {
+	if !m.showSpinner && !m.btwShowSpinner && !m.adversary.showSpinner {
 		return m, nil, false
 	}
 
@@ -526,6 +602,10 @@ func (m replModel) handleSpinnerTick(msg spinner.TickMsg) (replModel, tea.Cmd, b
 	}
 	if m.btwShowSpinner {
 		m.btwSpinner, cmd = m.btwSpinner.Update(msg)
+		cmds = append(cmds, cmd)
+	}
+	if m.adversary.showSpinner {
+		m.adversary.spinner, cmd = m.adversary.spinner.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 	m.updateViewportContent()

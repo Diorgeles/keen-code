@@ -336,6 +336,13 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		return *m, cmd
 	}
 
+	if m.adversary.modelSelection != nil {
+		var cmd tea.Cmd
+		m.adversary.modelSelection, cmd = m.adversary.modelSelection.Update(msg)
+		m.updateViewportContent()
+		return *m, cmd
+	}
+
 	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return *m, nil
@@ -399,6 +406,12 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		_ = m.history.Flush()
 		return *m, tea.Quit
 	case keyEsc:
+		if m.adversary.streamHandler != nil && m.adversary.streamHandler.IsActive() {
+			m.cancelAdversaryStream()
+			m.updateViewportContent()
+			m.scrollToBottomIfFollowing()
+			return *m, nil
+		}
 		if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
 			m.cancelBtwStream()
 			m.updateViewportContent()
@@ -611,6 +624,10 @@ func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 		return updated, cmd, true
 	}
 
+	if updated, cmd, handled := m.handleAdversaryStreamMsg(msg); handled {
+		return updated, cmd, true
+	}
+
 	if m.streamHandler == nil || !m.streamHandler.IsActive() {
 		switch msg.(type) {
 		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmIncompleteMsg, llmErrorMsg, llmRetryMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
@@ -695,6 +712,44 @@ func (m replModel) handleBtwStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 			lines = append(lines, "  "+repltheme.ErrorStyle.Render(errMsg))
 		}
 		m.btwLines = lines
+		m.updateViewportContent()
+		m.scrollToBottomIfFollowing()
+		return m, nil, true
+	default:
+		return m, nil, false
+	}
+}
+
+func (m replModel) handleAdversaryStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
+	if m.adversary.streamHandler == nil || !m.adversary.streamHandler.IsActive() {
+		switch msg.(type) {
+		case adversaryChunkMsg, adversaryDoneMsg, adversaryErrorMsg:
+			return m, nil, true
+		}
+		return m, nil, false
+	}
+
+	switch msg := msg.(type) {
+	case adversaryChunkMsg:
+		m.adversary.streamHandler.HandleChunk(string(msg))
+		m.updateViewportContent()
+		m.scrollToBottomIfFollowing()
+		return m, waitForAdversaryEvent(m.adversary.streamHandler.eventCh), true
+	case adversaryDoneMsg:
+		responseLines, _ := m.adversary.streamHandler.HandleDone()
+		m.adversary.showSpinner = false
+		m.adversary.lines = responseLines
+		m.updateViewportContent()
+		m.scrollToBottomIfFollowing()
+		return m, nil, true
+	case adversaryErrorMsg:
+		pendingLines, errMsg := m.adversary.streamHandler.HandleError(msg.err)
+		m.adversary.showSpinner = false
+		lines := pendingLines
+		if msg.err != nil && !errors.Is(msg.err, context.Canceled) {
+			lines = append(lines, "  "+repltheme.ErrorStyle.Render(errMsg))
+		}
+		m.adversary.lines = lines
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 		return m, nil, true

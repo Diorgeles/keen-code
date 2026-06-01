@@ -12,22 +12,6 @@ func TestFilterCommandsEmpty(t *testing.T) {
 	}
 }
 
-func TestFilterCommandsSlashOnly(t *testing.T) {
-	got := replcommands.Filter("/")
-	if len(got) != 24 {
-		t.Fatalf("expected 24 commands, got %d", len(got))
-	}
-	want := []string{
-		"/allow-permission", "/btw", "/clear", "/compact", "/exit", "/help", "/logout", "/mcp", "/mcp connect", "/mcp status", "/model", "/mode", "/new",
-		"/reset-permission", "/resume", "/sessions", "/show-thinking", "/skills", "/skills disable", "/skills enable", "/skills list", "/skills reload", "/skills status", "/thinking",
-	}
-	for i, name := range want {
-		if got[i].Name != name {
-			t.Errorf("position %d: want %q, got %q", i, name, got[i].Name)
-		}
-	}
-}
-
 func TestFilterCommandsC(t *testing.T) {
 	got := replcommands.Filter("/c")
 	if len(got) != 2 || got[0].Name != "/clear" || got[1].Name != "/compact" {

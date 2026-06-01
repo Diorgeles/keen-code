@@ -6,6 +6,8 @@ Keen Code provides slash commands (prefixed with `/`) for controlling the agent.
 
 | Command | Description |
 |---------|-------------|
+| `/adversary [prompt]` | Run a second model as an adversarial critic of the main agent's work |
+| `/adversary model` | Configure which provider and model acts as the adversary |
 | `/btw <question>` | Ask a quick side question without adding it to the main conversation |
 | `/help` | Show available commands |
 | `/model` | Change provider or model |
@@ -21,6 +23,37 @@ Keen Code provides slash commands (prefixed with `/`) for controlling the agent.
 | `/clear` or `/new` | Clear the current session and start a new one |
 | `/logout` | Sign out of the current OAuth provider |
 | `/exit` | Quit Keen Code |
+
+## `/adversary [prompt]`
+
+Runs a separately-configured model as an adversarial critic of the main agent's work. The adversary reviews the full conversation and looks for problems — bugs, logic errors, security issues, faulty assumptions, risks in plans, or ideas the main agent didn't consider.
+
+```text
+/adversary
+/adversary Focus on security implications
+```
+
+Behavior:
+
+- Passes the full conversation history to the adversary model, with the main agent's turns clearly labelled so the adversary does not confuse them with its own output
+- Starts fresh each invocation — previous adversary responses are not included in the context
+- Has read-only tool access (`read_file`, `glob`, `grep`) — no write, edit, bash, or MCP tools
+- Cannot be invoked while the main agent is streaming; the command is silently ignored
+- Press `Esc` to cancel an in-progress adversary response
+- Rendered as a teal left-border block in the output, separate from the main conversation
+- Adversary output is not added to main session history
+
+Run `/adversary model` first to configure which model acts as the adversary.
+
+## `/adversary model`
+
+Opens the interactive model picker to select the provider and model used for adversary reviews. The adversary model is stored separately from the main agent model in Keen's global config.
+
+```text
+/adversary model
+```
+
+Navigation is the same as `/model`. Once configured, the adversary model persists across sessions.
 
 ## `/btw <question>`
 
