@@ -339,13 +339,13 @@ func buildInitialScreen(ctx *replContext, lastSession *session.Summary, width in
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, "  "+repltheme.TitleStyle.Render("✦︎ Keen v"+ctx.version+" .✦ ݁˖"))
+	lines = append(lines, "  "+repltheme.PrimaryBoldStyle.Render("✦︎ Keen v"+ctx.version+" .✦ ݁˖"))
 	lines = append(lines, "")
 
 	displayDir := abbreviateHome(ctx.workingDir)
 	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Directory:")+" "+repltheme.InfoValueStyle.Render(displayDir))
 	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Provider:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.Provider))
-	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Model:")+" "+repltheme.HighlightStyle.Render(ctx.cfg.Model))
+	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Model:")+" "+repltheme.ModelChipStyle.Render(ctx.cfg.Model))
 	if ctx.cfg.ThinkingEffort != "" && ctx.registry != nil {
 		if modelMeta, ok := ctx.registry.GetModel(ctx.cfg.Provider, ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
 			lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Thinking:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.ThinkingEffort))
@@ -361,7 +361,7 @@ func buildInitialScreen(ctx *replContext, lastSession *session.Summary, width in
 		ago := formatTimeAgo(lastSession.UpdatedAt)
 		resumeLine := "  " +
 			repltheme.MutedStyle.Render("Last session:") + " " +
-			repltheme.HighlightStyle.Render("'"+preview+"'") + "  " +
+			repltheme.PrimaryBoldStyle.Render("'"+preview+"'") + "  " +
 			repltheme.MutedStyle.Render("•") + "  " +
 			repltheme.InfoValueStyle.Render(ago) + "  " +
 			repltheme.MutedStyle.Render("•") + "  " +
@@ -370,15 +370,15 @@ func buildInitialScreen(ctx *replContext, lastSession *session.Summary, width in
 		lines = append(lines, "")
 	}
 
-	rule := repltheme.AccentStyle.Render(strings.Repeat("─", width))
-	label := "  " + repltheme.AccentStyle.Bold(true).Render("✦ Did you know?")
+	rule := repltheme.HighlightStyle.Render(strings.Repeat("─", width))
+	label := "  " + repltheme.HighlightStyle.Bold(true).Render("✦ Tip of the session")
 	indent := "  "
 	wrappedTip := wrapTextWithStyle(randomTip(), repltheme.TipStyle, width-len(indent))
 	tipText := indent + strings.ReplaceAll(wrappedTip, "\n", "\n"+indent)
-	lines = append(lines, rule)
+	lines = append(lines, rule+"\n")
 	lines = append(lines, label)
 	lines = append(lines, tipText)
-	lines = append(lines, rule)
+	lines = append(lines, "\n"+rule)
 	lines = append(lines, "")
 
 	return lines
@@ -510,7 +510,6 @@ func (m *replModel) adjustTextareaHeight() {
 	if m.height <= 0 {
 		return
 	}
-	m.textarea.SetHeight(maxHeight)
 	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())
 }
 

@@ -30,8 +30,10 @@ func newTestModel() replModel {
 	ta := textarea.New()
 	ta.Focus()
 	ta.SetWidth(80)
-	ta.SetHeight(maxHeight)
-	ta.MaxHeight = 0
+	ta.DynamicHeight = true
+	ta.MinHeight = inputMinHeight
+	ta.MaxHeight = inputMaxHeight
+	ta.SetHeight(inputMinHeight)
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	return replModel{
 		textarea:            ta,
@@ -118,15 +120,30 @@ func TestUpdate_InlinePermission_AllowsToolStartEvent(t *testing.T) {
 
 func TestAdjustTextareaHeight(t *testing.T) {
 	m := newTestModel()
-	m.textarea.SetHeight(1)
 	m.adjustTextareaHeight()
 
-	if m.textarea.Height() != maxHeight {
-		t.Errorf("expected textarea height %d, got %d", maxHeight, m.textarea.Height())
+	if m.textarea.Height() != inputMinHeight {
+		t.Errorf("expected textarea height %d for empty input, got %d", inputMinHeight, m.textarea.Height())
 	}
 	expectedVPHeight := m.height - m.textarea.Height() - 4
 	if m.viewport.Height() != expectedVPHeight {
 		t.Errorf("expected viewport height %d, got %d", expectedVPHeight, m.viewport.Height())
+	}
+
+	m.textarea.SetValue("line1\nline2\nline3\nline4")
+	m.adjustTextareaHeight()
+	if m.textarea.Height() != 4 {
+		t.Errorf("expected textarea height 4 for 4-line input, got %d", m.textarea.Height())
+	}
+	expectedVPHeight = m.height - m.textarea.Height() - 4
+	if m.viewport.Height() != expectedVPHeight {
+		t.Errorf("expected viewport height %d, got %d", expectedVPHeight, m.viewport.Height())
+	}
+
+	m.textarea.Reset()
+	m.adjustTextareaHeight()
+	if m.textarea.Height() != inputMinHeight {
+		t.Errorf("expected textarea to shrink to %d after reset, got %d", inputMinHeight, m.textarea.Height())
 	}
 }
 
@@ -213,8 +230,8 @@ func TestUpdateNormalMode_WindowResizeWhileModelSelectionActive(t *testing.T) {
 	if newM.height != 40 {
 		t.Errorf("expected height 40, got %d", newM.height)
 	}
-	if newM.viewport.Height() != 33 {
-		t.Errorf("expected viewport height 33, got %d", newM.viewport.Height())
+	if newM.viewport.Height() != 35 {
+		t.Errorf("expected viewport height 35, got %d", newM.viewport.Height())
 	}
 	if cmd != nil {
 		t.Error("expected nil cmd for window resize")

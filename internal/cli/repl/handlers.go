@@ -424,6 +424,10 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		return *m, nil
 	case keyUp, keyShiftUp:
 		if m.isAtTopOfInput() {
+			if !m.history.IsNavigating() && m.textarea.Column() > 0 {
+				m.textarea.MoveToBegin()
+				return *m, nil
+			}
 			if val, ok := m.history.NavigateUp(m.textarea.Value()); ok {
 				m.textarea.SetValue(val)
 				m.textarea.MoveToEnd()

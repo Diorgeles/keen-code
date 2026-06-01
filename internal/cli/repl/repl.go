@@ -33,8 +33,9 @@ import (
 )
 
 const (
-	defaultWidth = 120
-	maxHeight    = 3
+	defaultWidth   = 120
+	inputMinHeight = 1
+	inputMaxHeight = 15
 )
 
 type replContext struct {
@@ -109,8 +110,10 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	ta.Focus()
 	ta.CharLimit = 0
 	ta.SetWidth(defaultWidth - 3)
-	ta.SetHeight(maxHeight)
-	ta.MaxHeight = 0
+	ta.DynamicHeight = true
+	ta.MinHeight = inputMinHeight
+	ta.MaxHeight = inputMaxHeight
+	ta.SetHeight(inputMinHeight)
 	ta.ShowLineNumbers = false
 	ta.SetPromptFunc(3, func(info textarea.PromptInfo) string {
 		if info.LineNumber == 0 {

@@ -3,13 +3,13 @@ module github.com/user/keen-code
 go 1.25.7
 
 require (
-	charm.land/bubbles/v2 v2.0.0
-	charm.land/bubbletea/v2 v2.0.0
-	charm.land/lipgloss/v2 v2.0.0
+	charm.land/bubbles/v2 v2.1.0
+	charm.land/bubbletea/v2 v2.0.2
+	charm.land/lipgloss/v2 v2.0.2
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.1
 	github.com/anthropics/anthropic-sdk-go v1.37.0
 	github.com/atotto/clipboard v0.1.4
-	github.com/aymanbagabas/go-udiff v0.4.0
+	github.com/aymanbagabas/go-udiff v0.4.1
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/ultraviolet v0.0.0-20260205113103-524a6607adb8
@@ -65,7 +65,7 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
-	github.com/mattn/go-runewidth v0.0.20 // indirect
+	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mbleigh/raymond v0.0.0-20250414171441-6b3a58ab9e0a // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect

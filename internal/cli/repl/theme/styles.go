@@ -122,6 +122,7 @@ var (
 	DiffLineNumStyle = lipgloss.NewStyle().Foreground(TextDimColor)
 	RuleStyle        = lipgloss.NewStyle().Foreground(RuleColor)
 
+	ModelChipStyle           = lipgloss.NewStyle().Background(PrimaryColor).Foreground(WhiteColor).Bold(true).Padding(0, 1)
 	ModelSelectionStyle      = lipgloss.NewStyle().Foreground(SecondaryColor).Bold(true)
 	ModelSelectionRuleStyle  = lipgloss.NewStyle().Foreground(SecondaryColor)
 	UserPromptCardStyle      = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(SecondaryColor).Padding(1, 2)

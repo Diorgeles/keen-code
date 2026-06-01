@@ -64,6 +64,10 @@ func (h *InputHistory) Reset() {
 	h.draft = ""
 }
 
+func (h *InputHistory) IsNavigating() bool {
+	return h.idx != -1
+}
+
 func (h *InputHistory) LoadFromFile(path string) error {
 	h.filePath = path
 	h.idx = -1
