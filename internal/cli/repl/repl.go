@@ -88,6 +88,9 @@ type replModel struct {
 	btwShowSpinner      bool
 	btwSpinner          spinner.Model
 	adversary           adversaryState
+	lastSession         *session.Summary
+	projectPermsErr     error
+	initialScreenDone   bool
 }
 
 type adversaryState struct {
@@ -165,13 +168,9 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	}
 
 	output := reploutput.NewOutputBuilder(defaultWidth, ctx.workingDir)
-	initialLines := buildInitialScreen(ctx)
-	for _, line := range initialLines {
-		output.AddLine(line)
-	}
-	if projectPermsErr != nil {
-		output.AddError("Failed to load .keen/permissions.json: "+projectPermsErr.Error()+" (using defaults)", repltheme.ErrorStyle)
-		output.AddEmptyLine()
+	var lastSession *session.Summary
+	if summaries, err := sessions.listSessions(); err == nil && len(summaries) > 0 {
+		lastSession = &summaries[0]
 	}
 
 	vp := viewport.New(viewport.WithWidth(defaultWidth), viewport.WithHeight(24))
@@ -199,6 +198,8 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 			spinner:       as,
 			streamHandler: NewStreamHandler(mdRenderer),
 		},
+		lastSession:     lastSession,
+		projectPermsErr: projectPermsErr,
 	}
 	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
 		model.showThinking = *ctx.globalCfg.ShowThinking

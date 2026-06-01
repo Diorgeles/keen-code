@@ -249,7 +249,7 @@ func TestBuildInitialScreen_HighlightsModelOnly(t *testing.T) {
 		},
 	}
 
-	lines := buildInitialScreen(ctx)
+	lines := buildInitialScreen(ctx, nil, 0)
 	rendered := strings.Join(lines, "\n")
 
 	if strings.Contains(rendered, repltheme.HighlightStyle.Render("openai")) {

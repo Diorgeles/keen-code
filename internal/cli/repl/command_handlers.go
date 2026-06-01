@@ -62,7 +62,33 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 		result := m.handleLogoutCommand()
 		return result, nil, true
 
-	case input == replcommands.Sessions || input == replcommands.Resume:
+	case input == replcommands.Resume:
+		m.textarea.Reset()
+		summaries, err := m.sessions.listSessions()
+		if err != nil {
+			m.output.AddError("Failed to load sessions: "+err.Error(), repltheme.ErrorStyle)
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil, true
+		}
+		if len(summaries) == 0 {
+			m.output.AddStyledLine("  No saved sessions for this directory.", repltheme.MutedStyle)
+			m.output.AddEmptyLine()
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil, true
+		}
+		loaded, err := m.sessions.load(summaries[0])
+		if err != nil {
+			m.output.AddError("Failed to load session: "+err.Error(), repltheme.ErrorStyle)
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m, nil, true
+		}
+		m.replayLoadedSession(loaded)
+		return *m, nil, true
+
+	case input == replcommands.Sessions:
 		m.textarea.Reset()
 		summaries, err := m.sessions.listSessions()
 		if err != nil {
@@ -848,7 +874,7 @@ func (m *replModel) handleClearCommand() replModel {
 	m.history.Reset()
 
 	newOutput := reploutput.NewOutputBuilder(m.width, m.ctx.workingDir)
-	initialLines := buildInitialScreen(m.ctx)
+	initialLines := buildInitialScreen(m.ctx, nil, m.width)
 	for _, line := range initialLines {
 		newOutput.AddLine(line)
 	}

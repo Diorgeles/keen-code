@@ -16,13 +16,13 @@ import (
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
+	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/mcpskills"
+	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/internal/updater"
-
-	"github.com/user/keen-code/internal/config"
 )
 
 var loadingTexts = []string{
@@ -316,7 +316,10 @@ func abbreviateHome(path string) string {
 	return path
 }
 
-func buildInitialScreen(ctx *replContext) []string {
+func buildInitialScreen(ctx *replContext, lastSession *session.Summary, width int) []string {
+	if width <= 0 {
+		width = defaultWidth
+	}
 	var lines []string
 
 	asciiArt := []string{
@@ -350,18 +353,54 @@ func buildInitialScreen(ctx *replContext) []string {
 	}
 	lines = append(lines, "")
 
-	tips := []string{
-		"Use /help for all commands, `/skills list` for available skills",
-		"Use /model to change provider and model",
-		"Use /mode plan|build or Shift+Tab to switch modes",
-		"Press enter to send, shift+enter for new line",
-		"Press ctrl+C or cmd+C for copying, tab to switch focus",
+	if lastSession != nil && lastSession.LastUserMessage != "" {
+		preview := lastSession.LastUserMessage
+		if len([]rune(preview)) > 20 {
+			preview = string([]rune(preview)[:20]) + "…"
+		}
+		ago := formatTimeAgo(lastSession.UpdatedAt)
+		resumeLine := "  " +
+			repltheme.MutedStyle.Render("Last session:") + " " +
+			repltheme.HighlightStyle.Render("'"+preview+"'") + "  " +
+			repltheme.MutedStyle.Render("•") + "  " +
+			repltheme.InfoValueStyle.Render(ago) + "  " +
+			repltheme.MutedStyle.Render("•") + "  " +
+			repltheme.AccentStyle.Render("/resume")
+		lines = append(lines, wrapTextWithStyle(resumeLine, lipgloss.NewStyle(), width))
+		lines = append(lines, "")
 	}
-	tipsBox := repltheme.BoxStyle.Render(repltheme.TipStyle.Render(strings.Join(tips, "\n")))
-	lines = append(lines, tipsBox)
+
+	rule := repltheme.AccentStyle.Render(strings.Repeat("─", width))
+	label := "  " + repltheme.AccentStyle.Bold(true).Render("✦ Did you know?")
+	indent := "  "
+	wrappedTip := wrapTextWithStyle(randomTip(), repltheme.TipStyle, width-len(indent))
+	tipText := indent + strings.ReplaceAll(wrappedTip, "\n", "\n"+indent)
+	lines = append(lines, rule)
+	lines = append(lines, label)
+	lines = append(lines, tipText)
+	lines = append(lines, rule)
 	lines = append(lines, "")
 
 	return lines
+}
+
+func formatTimeAgo(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		m := int(d.Minutes())
+		return fmt.Sprintf("%dm ago", m)
+	case d < 24*time.Hour:
+		h := int(d.Hours())
+		return fmt.Sprintf("%dh ago", h)
+	case d < 7*24*time.Hour:
+		days := int(d.Hours() / 24)
+		return fmt.Sprintf("%d day(s) ago", days)
+	default:
+		return t.Local().Format("Jan 2")
+	}
 }
 
 func checkForUpdate(currentVersion string) tea.Cmd {
@@ -682,6 +721,19 @@ func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
 	}
 	m.viewport.SetWidth(msg.Width)
 	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height())
+
+	if !m.initialScreenDone && msg.Width > 0 {
+		for _, line := range buildInitialScreen(m.ctx, m.lastSession, m.width) {
+			m.output.AddLine(line)
+		}
+		if m.projectPermsErr != nil {
+			m.output.AddError("Failed to load .keen/permissions.json: "+m.projectPermsErr.Error()+" (using defaults)", repltheme.ErrorStyle)
+			m.output.AddEmptyLine()
+		}
+		m.initialScreenDone = true
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+	}
 }
 
 func (m *replModel) updateLLMClient() error {
