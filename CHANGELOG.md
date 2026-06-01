@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-06-01
+
+### Added
+- `/adversary` REPL command to trigger an adversarial review of the current conversation for gaps, risks, and missed alternatives.
+
 ## [0.19.4] - 2026-05-31
 
 ## [0.19.3] - 2026-05-26
@@ -382,7 +387,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.19.4...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/mochow13/keen-code/compare/v0.19.4...v0.20.0
 [0.19.4]: https://github.com/mochow13/keen-code/compare/v0.19.3...v0.19.4
 [0.19.3]: https://github.com/mochow13/keen-code/compare/v0.19.2...v0.19.3
 [0.19.2]: https://github.com/mochow13/keen-code/compare/v0.19.1...v0.19.2
