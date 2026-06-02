@@ -258,7 +258,7 @@ func TestUpdateViewportContent_UsesViewportWidthWhenModelStartsWithoutResize(t *
 
 func TestBuildInitialScreen_HighlightsModelOnly(t *testing.T) {
 	ctx := &replContext{
-		version:    "0.2.1",
+		version:    "0.20.1",
 		workingDir: "/tmp/project",
 		cfg: &config.ResolvedConfig{
 			Provider: "openai",
@@ -272,8 +272,8 @@ func TestBuildInitialScreen_HighlightsModelOnly(t *testing.T) {
 	if strings.Contains(rendered, repltheme.HighlightStyle.Render("openai")) {
 		t.Fatalf("expected provider in initial screen to not use highlight style, got %q", rendered)
 	}
-	if !strings.Contains(rendered, repltheme.HighlightStyle.Render("gpt-5.4")) {
-		t.Fatalf("expected model in initial screen to use highlight style, got %q", rendered)
+	if !strings.Contains(rendered, repltheme.ModelChipStyle.Render("gpt-5.4")) {
+		t.Fatalf("expected model in initial screen to use model chip style, got %q", rendered)
 	}
 }
 

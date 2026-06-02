@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-06-02
+
+### Added
+- REPL startup screen hints showing the last session and rotating usage tips.
+- Support for the MiniMax `m3` model in the provider registry.
+
+### Changed
+- Polished REPL input UX with dynamic textarea height and up-arrow history navigation.
+- Renamed MiniMax model identifiers to lowercase in the provider registry.
+
 ## [0.20.0] - 2026-06-01
 
 ### Added
@@ -388,6 +398,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - npm wrapper package for installation via `npm install -g keen-code`
 
 [Unreleased]: https://github.com/mochow13/keen-code/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.20.1...HEAD
+[0.20.1]: https://github.com/mochow13/keen-code/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/mochow13/keen-code/compare/v0.19.4...v0.20.0
 [0.19.4]: https://github.com/mochow13/keen-code/compare/v0.19.3...v0.19.4
 [0.19.3]: https://github.com/mochow13/keen-code/compare/v0.19.2...v0.19.3
