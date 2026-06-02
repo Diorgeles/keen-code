@@ -13,9 +13,8 @@
 
 ## Checklist
 
-- [ ] `go test ./...` passes
+- [ ] `go test -race ./...` passes
 - [ ] `go mod tidy` has been run
-- [ ] `go test -race ./...` has been run
 - [ ] New behavior is covered by tests where it makes sense
 - [ ] For new providers: entry added to `providers/registry.yaml` with correct `context_window`
 

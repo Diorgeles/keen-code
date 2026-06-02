@@ -8,8 +8,8 @@ Concrete UI/UX improvement ideas for `internal/cli/repl/`, ordered from launch t
 
 Tighten the banner; expand the orientation. The ASCII logo is nice but the tips box is the more useful real estate.
 
-- Show **last session summary** ("Resuming? Last session: 'fix auth tests' • 2h ago • `/resume`") so the user can continue without remembering the command.
-- Replace static tips with a **rotating "Did you know"** line — one tip per launch keeps it fresh and surfaces lesser-known features (`@`-mention, Shift+Tab, `/adversary`).
+- ✅ Show **last session summary** ("Resuming? Last session: 'fix auth tests' • 2h ago • `/resume`") so the user can continue without remembering the command.
+- ✅ Replace static tips with a **rotating "Did you know"** line — one tip per launch keeps it fresh and surfaces lesser-known features (`@`-mention, Shift+Tab, `/adversary`).
 - Add a **health check line**: API key validated, working dir is git-clean / has uncommitted changes, model reachable. Catches misconfig before the first prompt.
 - Compact the working-dir/provider/model block into one line: `~/stuff/ai/keen-code (main, +3) · anthropic/opus-4.7 · build`.
 

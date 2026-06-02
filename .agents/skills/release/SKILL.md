@@ -20,7 +20,7 @@ Target version (required): $ARGUMENTS
 
 3. **Run the tests.**
    ```bash
-   go test ./...
+   go test -race ./...
    ```
 
 4. **Verify the npm wrapper.**
