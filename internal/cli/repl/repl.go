@@ -629,7 +629,11 @@ func (m replModel) View() tea.View {
 		view.WriteString("\n")
 
 		if m.showSpinner {
-			spinnerText := " " + m.spinner.View() + " " + repltheme.LoadingTextStyled.Render(m.loadingText)
+			elapsed := time.Duration(0)
+			if !m.loadingStartedAt.IsZero() {
+				elapsed = time.Since(m.loadingStartedAt)
+			}
+			spinnerText := " " + m.spinner.View() + " " + renderLoadingText(m.loadingText, elapsed)
 			view.WriteString("\n")
 			view.WriteString(spinnerText)
 			view.WriteString("\n")

@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
@@ -828,10 +829,11 @@ func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
 	outputLine := -1
 	spinnerLine := -1
 	for i, line := range lines {
-		if strings.Contains(line, "assistant output") {
+		stripped := ansi.Strip(line)
+		if strings.Contains(stripped, "assistant output") {
 			outputLine = i
 		}
-		if strings.Contains(line, "Accio...") {
+		if strings.Contains(stripped, "Accio...") {
 			spinnerLine = i
 		}
 	}

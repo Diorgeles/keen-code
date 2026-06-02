@@ -26,66 +26,61 @@ import (
 )
 
 var loadingTexts = []string{
-	"Accio...",
-	"Aguamenti...",
-	"Alohomora...",
-	"Anapneo...",
-	"Aparecium...",
-	"Ascendio...",
-	"Avis...",
-	"Bombarda...",
-	"Colloportus...",
-	"Confundo...",
-	"Confringo...",
-	"Defodio...",
-	"Depulso...",
-	"Descendo...",
-	"Diffindo...",
-	"Duro...",
-	"Engorgio...",
-	"Episkey...",
-	"Evanesco...",
-	"Expelliarmus...",
-	"Expulso...",
-	"Ferula...",
-	"Finite...",
-	"Flagrate...",
-	"Flipendo...",
-	"Geminio...",
-	"Homenum Revelio...",
-	"Impedimenta...",
-	"Impervius...",
-	"Incendio...",
-	"Langlock...",
-	"Levicorpus...",
-	"Liberacorpus...",
-	"Locomotor...",
-	"Lumos...",
-	"Muffliato...",
-	"Nox...",
-	"Obliviate...",
-	"Obscuro...",
-	"Oppugno...",
-	"Orchideous...",
-	"Petrificus Totalus...",
-	"Protego...",
-	"Quietus...",
-	"Reducio...",
-	"Reducto...",
-	"Reparo...",
-	"Revelio...",
-	"Rictusempra...",
-	"Ridikulus...",
-	"Scourgify...",
-	"Sectumsempra...",
-	"Serpensortia...",
-	"Silencio...",
-	"Sonorus...",
-	"Stupefy...",
-	"Tarantallegra...",
-	"Tergeo...",
-	"Waddiwasi...",
-	"Wingardium Leviosa...",
+	"`/btw` asks aside, off the record",
+	"`Shift+Tab` swaps plan ↔ build",
+	"`/adversary` calls in a critic",
+	"`@file` autocompletes paths",
+	"`Shift+Enter` adds a newline",
+	"`PgUp`/`PgDn` scrolls half a page",
+	"`Home`/`End` jumps to top/bottom",
+	"`Esc` cancels the active stream",
+	"`/compact <hint>` shapes the summary",
+	"`/sessions` lists past chats",
+	"`/allow-permission` silences prompts",
+	"`/reset-permission` restores defaults",
+	"Skills live in `.agents/skills/`",
+	"Skills take `$1`, `$2`, `$ARGUMENTS`",
+	"`/show-thinking on` reveals reasoning",
+	"`/thinking` sets effort: low → max",
+	"`/mcp connect` re-auths a server",
+	"`grep` tool's `output_mode:file` lists names",
+	"`read_file` tool accepts `offset` & `limit`",
+	"Workdir `bash` auto-approves",
+	"`/adversary model` picks the critic",
+	"`/mode build` exits plan-only mode",
+	"`/skills list` shows everything",
+	"`Tab` swaps input ↔ viewport focus",
+	"`/mcp connect` takes tool names too",
+}
+
+var keenSparkleSpinner = spinner.Spinner{
+	Frames: []string{"·", "✦", "✧", "✫", "✧", "✦"},
+	FPS:    time.Second / 8,
+}
+
+var keenWandTrailSpinner = spinner.Spinner{
+	Frames: []string{"~", "⌒", "∼", "≈", "∼", "⌒"},
+	FPS:    time.Second / 8,
+}
+
+var keenBrailleDriftSpinner = spinner.Spinner{
+	Frames: []string{"⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"},
+	FPS:    time.Second / 10,
+}
+
+var keenStarTwinkleSpinner = spinner.Spinner{
+	Frames: []string{"⋆", "✧", "✦", "✷", "✦", "✧"},
+	FPS:    time.Second / 8,
+}
+
+var keenPotionBubblesSpinner = spinner.Spinner{
+	Frames: []string{"·", "°", "∘", "○", "∘", "°"},
+	FPS:    time.Second / 8,
+}
+
+var keenCrystalBallSpinner = spinner.Spinner{
+	Frames: []string{"◌", "○", "◎", "●", "◎", "○"},
+	FPS:    time.Second / 8,
 }
 
 var loadingSpinners = []spinner.Spinner{
@@ -95,12 +90,64 @@ var loadingSpinners = []spinner.Spinner{
 	spinner.Jump,
 	spinner.Pulse,
 	spinner.Points,
-	spinner.Meter,
-	spinner.Hamburger,
+	keenSparkleSpinner,
+	keenWandTrailSpinner,
+	keenBrailleDriftSpinner,
+	keenStarTwinkleSpinner,
+	keenPotionBubblesSpinner,
+	keenCrystalBallSpinner,
 }
 
 func nextLoadingText() string {
 	return loadingTexts[rand.Intn(len(loadingTexts))]
+}
+
+func renderLoadingText(text string, elapsed time.Duration) string {
+	parts := strings.Split(text, "`")
+
+	visibleLen := 0
+	for _, p := range parts {
+		visibleLen += len([]rune(p))
+	}
+	if visibleLen == 0 {
+		return ""
+	}
+
+	cycleLen := visibleLen + 12
+	pos := int(elapsed.Milliseconds()/40) % cycleLen
+
+	var sb strings.Builder
+	visIdx := 0
+	for i, part := range parts {
+		isCode := i%2 == 1
+		for _, r := range part {
+			d := pos - visIdx
+			if d < 0 {
+				d = -d
+			}
+			var style lipgloss.Style
+			if isCode {
+				style = repltheme.LoadingTextCodeStyle
+				switch {
+				case d == 0:
+					style = repltheme.LoadingTextCodeShimmerStyle
+				case d <= 2:
+					style = repltheme.LoadingTextCodeShimmerMid
+				}
+			} else {
+				style = repltheme.LoadingTextStyled
+				switch {
+				case d == 0:
+					style = repltheme.LoadingTextShimmerStyle
+				case d <= 2:
+					style = repltheme.LoadingTextShimmerMid
+				}
+			}
+			sb.WriteString(style.Render(string(r)))
+			visIdx++
+		}
+	}
+	return sb.String()
 }
 
 func nextLoadingSpinner() spinner.Spinner {

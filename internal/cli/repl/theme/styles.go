@@ -10,6 +10,10 @@ var (
 		Light: lipgloss.Color("#3F51B5"),
 		Dark:  lipgloss.Color("#5C6BC0"),
 	}
+	PrimaryLightColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#5C6BC0"),
+		Dark:  lipgloss.Color("#7986CB"),
+	}
 	SecondaryColor = compat.AdaptiveColor{
 		Light: lipgloss.Color("#00897B"),
 		Dark:  lipgloss.Color("#4DB6AC"),
@@ -34,6 +38,22 @@ var (
 	TextDimColor = compat.AdaptiveColor{
 		Light: lipgloss.Color("#5e5d5d"),
 		Dark:  lipgloss.Color("#B3B3B3"),
+	}
+	LoadingShimmerColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#212121"),
+		Dark:  lipgloss.Color("#FFFFFF"),
+	}
+	LoadingShimmerMidColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#424242"),
+		Dark:  lipgloss.Color("#D0D0D0"),
+	}
+	LoadingCodeShimmerColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#283593"),
+		Dark:  lipgloss.Color("#E8EAF6"),
+	}
+	LoadingCodeShimmerMidColor = compat.AdaptiveColor{
+		Light: lipgloss.Color("#3F51B5"),
+		Dark:  lipgloss.Color("#C5CAE9"),
 	}
 	RuleColor = compat.AdaptiveColor{
 		Light: lipgloss.Color("#bdbdbd"),
@@ -96,15 +116,20 @@ var (
 	HelpDescStyle  = lipgloss.NewStyle().Foreground(TextSecondaryColor)
 	TimestampStyle = lipgloss.NewStyle().Foreground(TextDimColor)
 
-	AssistantStyle           = lipgloss.NewStyle().Foreground(TextPrimaryColor)
-	ReasoningStyle           = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
-	ErrorStyle               = lipgloss.NewStyle().Foreground(ErrorColor)
-	InterruptedStyle         = lipgloss.NewStyle().Foreground(PrimaryColor).Bold(true)
-	LoadingTextStyled        = lipgloss.NewStyle().Foreground(PrimaryColor)
-	LoadingTimerStyle        = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
-	CompactionSuccessStyle   = lipgloss.NewStyle().Foreground(SecondaryColor)
-	CompactionErrorStyle     = lipgloss.NewStyle().Foreground(ErrorColor)
-	CompactionCancelledStyle = lipgloss.NewStyle().Foreground(TextDimColor)
+	AssistantStyle              = lipgloss.NewStyle().Foreground(TextPrimaryColor)
+	ReasoningStyle              = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
+	ErrorStyle                  = lipgloss.NewStyle().Foreground(ErrorColor)
+	InterruptedStyle            = lipgloss.NewStyle().Foreground(PrimaryColor).Bold(true)
+	LoadingTextStyled           = lipgloss.NewStyle().Foreground(TextDimColor)
+	LoadingTextCodeStyle        = lipgloss.NewStyle().Foreground(PrimaryLightColor).Bold(true)
+	LoadingTextCodeShimmerMid   = lipgloss.NewStyle().Foreground(LoadingCodeShimmerMidColor).Bold(true)
+	LoadingTextCodeShimmerStyle = lipgloss.NewStyle().Foreground(LoadingCodeShimmerColor).Bold(true)
+	LoadingTextShimmerStyle     = lipgloss.NewStyle().Foreground(LoadingShimmerColor).Bold(true)
+	LoadingTextShimmerMid       = lipgloss.NewStyle().Foreground(LoadingShimmerMidColor)
+	LoadingTimerStyle           = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
+	CompactionSuccessStyle      = lipgloss.NewStyle().Foreground(SecondaryColor)
+	CompactionErrorStyle        = lipgloss.NewStyle().Foreground(ErrorColor)
+	CompactionCancelledStyle    = lipgloss.NewStyle().Foreground(TextDimColor)
 
 	ToolStartStyle    = lipgloss.NewStyle().Foreground(SecondaryColor)
 	ToolSuccessStyle  = lipgloss.NewStyle().Foreground(SecondaryColor)
