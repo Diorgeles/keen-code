@@ -213,6 +213,20 @@ func (m *replModel) messageWidth() int {
 	return max(width-4, 1)
 }
 
+func renderTipText(text string, width int) string {
+	parts := strings.Split(text, "`")
+	var sb strings.Builder
+	for i, part := range parts {
+		if i%2 == 1 {
+			sb.WriteString(repltheme.TipCodeStyle.Render(part))
+		} else {
+			sb.WriteString(repltheme.TipStyle.Render(part))
+		}
+	}
+	width = max(width, 1)
+	return lipgloss.NewStyle().Width(width).Render(sb.String())
+}
+
 func wrapTextWithStyle(text string, style lipgloss.Style, width int) string {
 	if width < 1 {
 		width = 1
@@ -420,8 +434,7 @@ func buildInitialScreen(ctx *replContext, lastSession *session.Summary, width in
 	rule := repltheme.HighlightStyle.Render(strings.Repeat("─", width))
 	label := "  " + repltheme.HighlightStyle.Bold(true).Render("✦ Tip of the session")
 	indent := "  "
-	wrappedTip := wrapTextWithStyle(randomTip(), repltheme.TipStyle, width-len(indent))
-	tipText := indent + strings.ReplaceAll(wrappedTip, "\n", "\n"+indent)
+	tipText := indent + strings.ReplaceAll(renderTipText(randomTip(), width-len(indent)), "\n", "\n"+indent)
 	lines = append(lines, rule+"\n")
 	lines = append(lines, label)
 	lines = append(lines, tipText)
