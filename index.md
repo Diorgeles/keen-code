@@ -17,6 +17,12 @@ A CLI-based minimal coding agent with lean context management and skill-driven M
 <a href="TOUR.html" class="md-button md-button--secondary">A Tour of Keen</a>
 </div>
 
+<div align="center">
+
+<a href="https://www.producthunt.com/products/keen-code-a-cli-coding-agent?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-keen-code" target="_blank" rel="noopener noreferrer"><img alt="Keen Code - A context-efficient CLI coding agent built by agents | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1162542&theme=dark&t=1780593417757"></a>
+
+</div>
+
 </div>
 
 <div class="section-divider"></div>
