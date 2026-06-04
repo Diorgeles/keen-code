@@ -18,7 +18,6 @@ A CLI-based minimal coding agent with lean context management and skill-driven M
 </div>
 
 <br>
-<br>
 
 <div align="center">
 
