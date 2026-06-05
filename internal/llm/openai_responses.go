@@ -48,13 +48,14 @@ func (s *sdkResponseStream) Close() error {
 }
 
 type OpenAIResponsesClient struct {
-	provider           Provider
-	model              string
-	thinkingEffort     string
-	maxRetries         int
-	client             openai.Client
-	responseStreamImpl responseStreamFactory
-	pendingState       []responses.ResponseInputItemUnionParam
+	provider                Provider
+	model                   string
+	thinkingEffort          string
+	maxRetries              int
+	client                  openai.Client
+	responseStreamImpl      responseStreamFactory
+	pendingState            []responses.ResponseInputItemUnionParam
+	contextWindowTokenCount int
 }
 
 func NewOpenAIResponsesClient(cfg *ClientConfig) (*OpenAIResponsesClient, error) {
@@ -71,11 +72,12 @@ func NewOpenAIResponsesClient(cfg *ClientConfig) (*OpenAIResponsesClient, error)
 	client := openai.NewClient(opts...)
 
 	c := &OpenAIResponsesClient{
-		provider:       cfg.Provider,
-		model:          cfg.Model,
-		thinkingEffort: cfg.ThinkingEffort,
-		maxRetries:     retryCount(cfg.MaxRetries),
-		client:         client,
+		provider:                cfg.Provider,
+		model:                   cfg.Model,
+		thinkingEffort:          cfg.ThinkingEffort,
+		maxRetries:              retryCount(cfg.MaxRetries),
+		client:                  client,
+		contextWindowTokenCount: cfg.ContextWindowTokens,
 	}
 	c.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
 		return &sdkResponseStream{stream: c.client.Responses.NewStreaming(ctx, params, opts...)}
@@ -160,6 +162,7 @@ func (c *OpenAIResponsesClient) StreamChat(
 		}
 		turnStartLen := len(input)
 		responseTools := toOpenAIResponseTools(toolRegistry)
+		lastInputTokenCount := 0
 
 		for range maxToolTurns {
 			params := responses.ResponseNewParams{
@@ -188,6 +191,9 @@ func (c *OpenAIResponsesClient) StreamChat(
 				return
 			}
 
+			if completed.Usage.InputTokens > 0 {
+				lastInputTokenCount = int(completed.Usage.InputTokens)
+			}
 			if completed.Usage.InputTokens > 0 || completed.Usage.OutputTokens > 0 {
 				eventCh <- StreamEvent{
 					Type: StreamEventTypeUsage,
@@ -209,6 +215,16 @@ func (c *OpenAIResponsesClient) StreamChat(
 
 			input = append(input, responseOutputInputs(completed.Output, toolCalls, streamedContent)...)
 			input = append(input, c.executeTools(ctx, toolCalls, toolRegistry, eventCh)...)
+
+			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
+				reducedInput, reduction := reduceResponsesContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, input)
+				if !reduction.FitsBudget {
+					slog.Debug("OpenAI Responses context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+					c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, fmt.Errorf(contextWindowExceededError), oneShot)
+					return
+				}
+				input = reducedInput
+			}
 		}
 
 		c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil, oneShot)

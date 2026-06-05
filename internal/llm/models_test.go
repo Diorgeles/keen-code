@@ -61,7 +61,7 @@ func TestNewClient_UnsupportedProvider(t *testing.T) {
 func TestNewClient_Anthropic(t *testing.T) {
 	cfg := &config.ResolvedConfig{
 		Provider: "anthropic",
-		Model:    "claude-3-haiku",
+		Model:    "claude-haiku-4-5",
 		APIKey:   "test-api-key",
 	}
 
@@ -79,15 +79,18 @@ func TestNewClient_Anthropic(t *testing.T) {
 		t.Fatalf("expected *AnthropicClient, got %T", client)
 	}
 
-	if anthropicClient.model != "claude-3-haiku" {
-		t.Errorf("expected model claude-3-haiku, got %s", anthropicClient.model)
+	if anthropicClient.model != "claude-haiku-4-5" {
+		t.Errorf("expected model claude-haiku-4-5, got %s", anthropicClient.model)
+	}
+	if anthropicClient.contextWindowTokenCount != 200000 {
+		t.Errorf("expected context window 200000, got %d", anthropicClient.contextWindowTokenCount)
 	}
 }
 
 func TestNewClient_OpenAI(t *testing.T) {
 	cfg := &config.ResolvedConfig{
 		Provider: "openai",
-		Model:    "gpt-4",
+		Model:    "gpt-5.4-mini",
 		APIKey:   "test-api-key",
 	}
 
@@ -109,15 +112,18 @@ func TestNewClient_OpenAI(t *testing.T) {
 		t.Errorf("expected provider openai, got %s", responsesClient.provider)
 	}
 
-	if responsesClient.model != "gpt-4" {
-		t.Errorf("expected model gpt-4, got %s", responsesClient.model)
+	if responsesClient.model != "gpt-5.4-mini" {
+		t.Errorf("expected model gpt-5.4-mini, got %s", responsesClient.model)
+	}
+	if responsesClient.contextWindowTokenCount != 400000 {
+		t.Errorf("expected context window 400000, got %d", responsesClient.contextWindowTokenCount)
 	}
 }
 
 func TestNewClient_Gemini(t *testing.T) {
 	cfg := &config.ResolvedConfig{
 		Provider: "googleai",
-		Model:    "gemini-pro",
+		Model:    "gemini-3-flash-preview",
 		APIKey:   "test-api-key",
 	}
 
@@ -139,8 +145,11 @@ func TestNewClient_Gemini(t *testing.T) {
 		t.Errorf("expected provider googleai, got %s", genkitClient.provider)
 	}
 
-	if genkitClient.model != "googleai/gemini-pro" {
-		t.Errorf("expected model googleai/gemini-pro, got %s", genkitClient.model)
+	if genkitClient.model != "googleai/gemini-3-flash-preview" {
+		t.Errorf("expected model googleai/gemini-3-flash-preview, got %s", genkitClient.model)
+	}
+	if genkitClient.contextWindowTokenCount != 1048576 {
+		t.Errorf("expected context window 1048576, got %d", genkitClient.contextWindowTokenCount)
 	}
 }
 
@@ -169,6 +178,9 @@ func TestNewClient_OpenCodeGoOpenAICompatibleModel(t *testing.T) {
 	}
 	if oaiClient.thinkingEffort != "enabled" {
 		t.Fatalf("expected thinking effort enabled, got %q", oaiClient.thinkingEffort)
+	}
+	if oaiClient.contextWindowTokenCount != 256000 {
+		t.Fatalf("expected context window 256000, got %d", oaiClient.contextWindowTokenCount)
 	}
 }
 
@@ -205,6 +217,9 @@ func TestNewClient_OpenCodeGoAnthropicModel(t *testing.T) {
 			if anthropicClient.thinkingEffort != "" {
 				t.Fatalf("expected no Anthropic thinking effort for OpenCode Go %s, got %q", tt.model, anthropicClient.thinkingEffort)
 			}
+			if anthropicClient.contextWindowTokenCount <= 0 {
+				t.Fatalf("expected context window to be populated")
+			}
 		})
 	}
 }
@@ -234,6 +249,9 @@ func TestNewClient_MiniMax(t *testing.T) {
 	}
 	if anthropicClient.thinkingEffort != "" {
 		t.Fatalf("expected no Anthropic thinking effort for MiniMax, got %q", anthropicClient.thinkingEffort)
+	}
+	if anthropicClient.contextWindowTokenCount != defaultContextWindowTokenCount {
+		t.Fatalf("expected fallback context window %d, got %d", defaultContextWindowTokenCount, anthropicClient.contextWindowTokenCount)
 	}
 }
 
@@ -279,6 +297,9 @@ func TestNewClient_ZAI(t *testing.T) {
 	if oaiClient.model != "glm-4-plus" {
 		t.Errorf("expected model glm-4-plus, got %s", oaiClient.model)
 	}
+	if oaiClient.contextWindowTokenCount != defaultContextWindowTokenCount {
+		t.Errorf("expected fallback context window %d, got %d", defaultContextWindowTokenCount, oaiClient.contextWindowTokenCount)
+	}
 }
 
 func TestNewClient_DeepSeek(t *testing.T) {
@@ -307,5 +328,8 @@ func TestNewClient_DeepSeek(t *testing.T) {
 	}
 	if oaiClient.model != "deepseek-chat" {
 		t.Errorf("expected model deepseek-chat, got %s", oaiClient.model)
+	}
+	if oaiClient.contextWindowTokenCount != defaultContextWindowTokenCount {
+		t.Errorf("expected fallback context window %d, got %d", defaultContextWindowTokenCount, oaiClient.contextWindowTokenCount)
 	}
 }

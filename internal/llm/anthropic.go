@@ -59,13 +59,14 @@ func (s *sdkAnthropicStream) Close() error {
 }
 
 type AnthropicClient struct {
-	client         anthropic.Client
-	provider       Provider
-	model          string
-	thinkingEffort string
-	maxRetries     int
-	streamImpl     anthropicStreamFactory
-	pendingState   []anthropic.MessageParam
+	client                  anthropic.Client
+	provider                Provider
+	model                   string
+	thinkingEffort          string
+	maxRetries              int
+	streamImpl              anthropicStreamFactory
+	pendingState            []anthropic.MessageParam
+	contextWindowTokenCount int
 }
 
 func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
@@ -79,11 +80,12 @@ func NewAnthropicClient(cfg *ClientConfig) (*AnthropicClient, error) {
 	client := anthropic.NewClient(opts...)
 
 	c := &AnthropicClient{
-		client:         client,
-		provider:       cfg.Provider,
-		model:          cfg.Model,
-		thinkingEffort: cfg.ThinkingEffort,
-		maxRetries:     retryCount(cfg.MaxRetries),
+		client:                  client,
+		provider:                cfg.Provider,
+		model:                   cfg.Model,
+		thinkingEffort:          cfg.ThinkingEffort,
+		maxRetries:              retryCount(cfg.MaxRetries),
+		contextWindowTokenCount: cfg.ContextWindowTokens,
 	}
 	c.streamImpl = func(ctx context.Context, params anthropic.MessageNewParams, opts ...option.RequestOption) anthropicStream {
 		return &sdkAnthropicStream{stream: c.client.Messages.NewStreaming(ctx, params, opts...)}
@@ -436,6 +438,7 @@ func (c *AnthropicClient) StreamChat(
 		turnStartLen := len(msgParams)
 		anthropicTools := toAnthropicTools(toolRegistry)
 		requestOpts := c.requestOptions(streamOpts)
+		lastInputTokenCount := 0
 
 		for range maxToolTurns {
 			thinking, outCfg, maxTok := anthropicThinkingParams(c.thinkingEffort)
@@ -463,6 +466,9 @@ func (c *AnthropicClient) StreamChat(
 			}
 
 			if usage != nil {
+				if usage.InputTokens > 0 {
+					lastInputTokenCount = usage.InputTokens
+				}
 				slog.Debug(
 					"Anthropic usage emitted",
 					"input_tokens", usage.InputTokens,
@@ -484,6 +490,16 @@ func (c *AnthropicClient) StreamChat(
 
 			toolResultBlocks := c.executeTools(ctx, toolUses, toolRegistry, eventCh)
 			msgParams = append(msgParams, anthropic.NewUserMessage(toolResultBlocks...))
+
+			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
+				reducedMessages, reduction := reduceAnthropicContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, msgParams)
+				if !reduction.FitsBudget {
+					slog.Debug("Anthropic context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+					c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
+					return
+				}
+				msgParams = reducedMessages
+			}
 		}
 
 		c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, nil, oneShot)

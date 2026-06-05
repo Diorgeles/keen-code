@@ -53,13 +53,14 @@ func (s *sdkChatStream) Close() error {
 }
 
 type OpenAICompatibleClient struct {
-	provider       Provider
-	model          string
-	thinkingEffort string
-	maxRetries     int
-	client         openai.Client
-	streamImpl     streamFactory
-	pendingState   []openai.ChatCompletionMessageParamUnion
+	provider                Provider
+	model                   string
+	thinkingEffort          string
+	maxRetries              int
+	client                  openai.Client
+	streamImpl              streamFactory
+	pendingState            []openai.ChatCompletionMessageParamUnion
+	contextWindowTokenCount int
 }
 
 func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, error) {
@@ -78,11 +79,12 @@ func NewOpenAICompatibleClient(cfg *ClientConfig) (*OpenAICompatibleClient, erro
 	)
 
 	c := &OpenAICompatibleClient{
-		provider:       cfg.Provider,
-		model:          cfg.Model,
-		thinkingEffort: cfg.ThinkingEffort,
-		maxRetries:     retryCount(cfg.MaxRetries),
-		client:         client,
+		provider:                cfg.Provider,
+		model:                   cfg.Model,
+		thinkingEffort:          cfg.ThinkingEffort,
+		maxRetries:              retryCount(cfg.MaxRetries),
+		client:                  client,
+		contextWindowTokenCount: cfg.ContextWindowTokens,
 	}
 	c.streamImpl = func(ctx context.Context, params openai.ChatCompletionNewParams, opts ...option.RequestOption) chatStream {
 		return &sdkChatStream{stream: c.client.Chat.Completions.NewStreaming(ctx, params, opts...)}
@@ -455,6 +457,7 @@ func (c *OpenAICompatibleClient) StreamChat(
 		}
 		oaiTools := toOpenAITools(toolRegistry)
 		requestOpts := c.requestOptions(streamOpts)
+		lastInputTokenCount := 0
 
 		for range maxToolTurns {
 			params := c.buildChatParams(oaiMessages, oaiTools)
@@ -468,6 +471,9 @@ func (c *OpenAICompatibleClient) StreamChat(
 			if !hasChoice {
 				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil, oneShot)
 				return
+			}
+			if usage.PromptTokens > 0 {
+				lastInputTokenCount = int(usage.PromptTokens)
 			}
 			if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
 				eventCh <- StreamEvent{
@@ -496,6 +502,16 @@ func (c *OpenAICompatibleClient) StreamChat(
 			toolMsgs := c.executeTools(ctx, message.ToolCalls, toolRegistry, eventCh)
 			if len(toolMsgs) > 0 {
 				oaiMessages = append(oaiMessages, toolMsgs...)
+			}
+
+			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
+				reducedMessages, reduction := reduceOpenAIContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, oaiMessages)
+				if !reduction.FitsBudget {
+					slog.Debug("OpenAI context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+					c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
+					return
+				}
+				oaiMessages = reducedMessages
 			}
 		}
 

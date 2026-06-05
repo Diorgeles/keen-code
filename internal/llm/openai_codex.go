@@ -27,14 +27,15 @@ import (
 const openAICodexBaseURL = "https://chatgpt.com/backend-api/codex/"
 
 type OpenAICodexClient struct {
-	model              string
-	thinkingEffort     string
-	maxRetries         int
-	client             openai.Client
-	responseStreamImpl responseStreamFactory
-	authManager        *auth.OAuthManager
-	userAgent          string
-	pendingState       []responses.ResponseInputItemUnionParam
+	model                   string
+	thinkingEffort          string
+	maxRetries              int
+	client                  openai.Client
+	responseStreamImpl      responseStreamFactory
+	authManager             *auth.OAuthManager
+	userAgent               string
+	pendingState            []responses.ResponseInputItemUnionParam
+	contextWindowTokenCount int
 }
 
 func NewOpenAICodexClient(cfg *ClientConfig) (*OpenAICodexClient, error) {
@@ -43,12 +44,13 @@ func NewOpenAICodexClient(cfg *ClientConfig) (*OpenAICodexClient, error) {
 	}
 
 	c := &OpenAICodexClient{
-		model:          cfg.Model,
-		thinkingEffort: cfg.ThinkingEffort,
-		maxRetries:     retryCount(cfg.MaxRetries),
-		client:         openai.NewClient(option.WithBaseURL(openAICodexBaseURL), option.WithHTTPClient(newCodexHTTPClient())),
-		authManager:    auth.NewOAuthManager(nil),
-		userAgent:      fmt.Sprintf("keen-code (%s; %s)", runtime.GOOS, runtime.GOARCH),
+		model:                   cfg.Model,
+		thinkingEffort:          cfg.ThinkingEffort,
+		maxRetries:              retryCount(cfg.MaxRetries),
+		client:                  openai.NewClient(option.WithBaseURL(openAICodexBaseURL), option.WithHTTPClient(newCodexHTTPClient())),
+		contextWindowTokenCount: cfg.ContextWindowTokens,
+		authManager:             auth.NewOAuthManager(nil),
+		userAgent:               fmt.Sprintf("keen-code (%s; %s)", runtime.GOOS, runtime.GOARCH),
 	}
 	c.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
 		return &sdkResponseStream{stream: c.client.Responses.NewStreaming(ctx, params, opts...)}
@@ -83,6 +85,7 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 		}
 		turnStartLen := len(input)
 		responseTools := toOpenAIResponseTools(toolRegistry)
+		lastInputTokenCount := 0
 
 		for range maxToolTurns {
 			params := responses.ResponseNewParams{
@@ -112,6 +115,9 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 				return
 			}
 
+			if completed.Usage.InputTokens > 0 {
+				lastInputTokenCount = int(completed.Usage.InputTokens)
+			}
 			if completed.Usage.InputTokens > 0 || completed.Usage.OutputTokens > 0 {
 				eventCh <- StreamEvent{
 					Type: StreamEventTypeUsage,
@@ -133,6 +139,16 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 
 			input = append(input, responseOutputInputs(completed.Output, toolCalls, streamedContent)...)
 			input = append(input, c.executeTools(ctx, toolCalls, toolRegistry, eventCh)...)
+
+			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
+				reducedInput, reduction := reduceResponsesContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, input)
+				if !reduction.FitsBudget {
+					slog.Debug("OpenAI Codex context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+					c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
+					return
+				}
+				input = reducedInput
+			}
 		}
 
 		c.exitIncomplete(eventCh, input, turnStartLen, injectedPending, nil, oneShot)

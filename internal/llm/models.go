@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/user/keen-code/internal/config"
+	"github.com/user/keen-code/providers"
 )
 
 type Provider string
@@ -18,12 +19,13 @@ const (
 )
 
 type ClientConfig struct {
-	Provider       Provider
-	APIKey         string
-	Model          string
-	ThinkingEffort string
-	BaseURL        string
-	MaxRetries     int
+	Provider            Provider
+	APIKey              string
+	Model               string
+	ThinkingEffort      string
+	BaseURL             string
+	MaxRetries          int
+	ContextWindowTokens int
 }
 
 func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
@@ -34,73 +36,95 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 		return nil, fmt.Errorf("model is required")
 	}
 
+	contextWindowTokenCount := contextWindowForProviderModel(Provider(cfg.Provider), cfg.Model)
+
 	switch cfg.Provider {
 	case config.ProviderAnthropic:
 		return NewAnthropicClient(&ClientConfig{
-			Provider:       Provider(cfg.Provider),
-			APIKey:         cfg.APIKey,
-			Model:          cfg.Model,
-			ThinkingEffort: cfg.ThinkingEffort,
-			BaseURL:        cfg.BaseURL,
+			Provider:            Provider(cfg.Provider),
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			ThinkingEffort:      cfg.ThinkingEffort,
+			BaseURL:             cfg.BaseURL,
+			ContextWindowTokens: contextWindowTokenCount,
 		})
 	case config.ProviderMiniMax:
 		return NewAnthropicClient(&ClientConfig{
-			Provider: Provider(cfg.Provider),
-			APIKey:   cfg.APIKey,
-			Model:    cfg.Model,
-			BaseURL:  cfg.BaseURL,
+			Provider:            Provider(cfg.Provider),
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			BaseURL:             cfg.BaseURL,
+			ContextWindowTokens: contextWindowTokenCount,
 		})
 	case config.ProviderGoogleAI:
 		return NewGenkitClient(&ClientConfig{
-			Provider:       Provider(cfg.Provider),
-			APIKey:         cfg.APIKey,
-			Model:          cfg.Model,
-			ThinkingEffort: cfg.ThinkingEffort,
-			BaseURL:        cfg.BaseURL,
+			Provider:            Provider(cfg.Provider),
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			ThinkingEffort:      cfg.ThinkingEffort,
+			BaseURL:             cfg.BaseURL,
+			ContextWindowTokens: contextWindowTokenCount,
 		})
 	case config.ProviderOpenAI:
 		return NewOpenAIResponsesClient(&ClientConfig{
-			Provider:       Provider(cfg.Provider),
-			APIKey:         cfg.APIKey,
-			Model:          cfg.Model,
-			ThinkingEffort: cfg.ThinkingEffort,
-			BaseURL:        cfg.BaseURL,
+			Provider:            Provider(cfg.Provider),
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			ThinkingEffort:      cfg.ThinkingEffort,
+			BaseURL:             cfg.BaseURL,
+			ContextWindowTokens: contextWindowTokenCount,
 		})
 	case config.ProviderOpenAICodex:
 		return NewOpenAICodexClient(&ClientConfig{
-			Provider:       Provider(cfg.Provider),
-			Model:          cfg.Model,
-			ThinkingEffort: cfg.ThinkingEffort,
+			Provider:            Provider(cfg.Provider),
+			Model:               cfg.Model,
+			ThinkingEffort:      cfg.ThinkingEffort,
+			ContextWindowTokens: contextWindowTokenCount,
 		})
 	case config.ProviderDeepSeek,
 		config.ProviderMoonshotAI,
 		config.ProviderZAI:
 		return NewOpenAICompatibleClient(&ClientConfig{
-			Provider:       Provider(cfg.Provider),
-			APIKey:         cfg.APIKey,
-			Model:          cfg.Model,
-			ThinkingEffort: cfg.ThinkingEffort,
-			BaseURL:        cfg.BaseURL,
+			Provider:            Provider(cfg.Provider),
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			ThinkingEffort:      cfg.ThinkingEffort,
+			BaseURL:             cfg.BaseURL,
+			ContextWindowTokens: contextWindowTokenCount,
 		})
 	case config.ProviderOpenCodeGo:
 		if isOpenCodeGoAnthropicModel(cfg.Model) {
 			return NewAnthropicClient(&ClientConfig{
-				Provider: Provider(cfg.Provider),
-				APIKey:   cfg.APIKey,
-				Model:    cfg.Model,
-				BaseURL:  cfg.BaseURL,
+				Provider:            Provider(cfg.Provider),
+				APIKey:              cfg.APIKey,
+				Model:               cfg.Model,
+				BaseURL:             cfg.BaseURL,
+				ContextWindowTokens: contextWindowTokenCount,
 			})
 		}
 		return NewOpenAICompatibleClient(&ClientConfig{
-			Provider:       Provider(cfg.Provider),
-			APIKey:         cfg.APIKey,
-			Model:          cfg.Model,
-			ThinkingEffort: cfg.ThinkingEffort,
-			BaseURL:        cfg.BaseURL,
+			Provider:            Provider(cfg.Provider),
+			APIKey:              cfg.APIKey,
+			Model:               cfg.Model,
+			ThinkingEffort:      cfg.ThinkingEffort,
+			BaseURL:             cfg.BaseURL,
+			ContextWindowTokens: contextWindowTokenCount,
 		})
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", cfg.Provider)
 	}
+}
+
+func contextWindowForProviderModel(provider Provider, model string) int {
+	registry, err := providers.Load()
+	if err != nil {
+		return defaultContextWindowTokenCount
+	}
+	contextWindowTokenCount, ok := registry.GetModelContextWindow(string(provider), model)
+	if !ok {
+		return defaultContextWindowTokenCount
+	}
+	return contextWindowTokenCount
 }
 
 func isOpenCodeGoMiniMaxModel(model string) bool {

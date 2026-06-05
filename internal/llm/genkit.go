@@ -21,13 +21,14 @@ const maxToolTurns = 5000
 type streamFunc func(ctx context.Context, g *genkit.Genkit, opts ...ai.GenerateOption) iter.Seq2[*ai.ModelStreamValue, error]
 
 type GenkitClient struct {
-	g              *genkit.Genkit
-	provider       Provider
-	model          string
-	thinkingEffort string
-	maxRetries     int
-	streamImpl     streamFunc
-	pendingState   []*ai.Message
+	g                       *genkit.Genkit
+	provider                Provider
+	model                   string
+	thinkingEffort          string
+	maxRetries              int
+	streamImpl              streamFunc
+	pendingState            []*ai.Message
+	contextWindowTokenCount int
 }
 
 func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
@@ -51,12 +52,13 @@ func NewGenkitClient(cfg *ClientConfig) (*GenkitClient, error) {
 	}
 
 	return &GenkitClient{
-		g:              g,
-		provider:       cfg.Provider,
-		model:          modelName,
-		thinkingEffort: cfg.ThinkingEffort,
-		maxRetries:     retryCount(cfg.MaxRetries),
-		streamImpl:     genkit.GenerateStream,
+		g:                       g,
+		provider:                cfg.Provider,
+		model:                   modelName,
+		thinkingEffort:          cfg.ThinkingEffort,
+		maxRetries:              retryCount(cfg.MaxRetries),
+		contextWindowTokenCount: cfg.ContextWindowTokens,
+		streamImpl:              genkit.GenerateStream,
 	}, nil
 }
 
@@ -192,6 +194,8 @@ func (c *GenkitClient) StreamChat(
 			genkitTools = ToGenkitTools(toolRegistry)
 		}
 
+		lastInputTokenCount := 0
+
 		for range maxToolTurns {
 			opts := []ai.GenerateOption{
 				ai.WithModelName(c.model),
@@ -226,6 +230,9 @@ func (c *GenkitClient) StreamChat(
 				return
 			}
 
+			if modelResponse.Usage != nil && modelResponse.Usage.InputTokens > 0 {
+				lastInputTokenCount = modelResponse.Usage.InputTokens
+			}
 			if modelResponse.Usage != nil && (modelResponse.Usage.InputTokens > 0 || modelResponse.Usage.OutputTokens > 0) {
 				eventCh <- StreamEvent{
 					Type: StreamEventTypeUsage,
@@ -252,6 +259,16 @@ func (c *GenkitClient) StreamChat(
 					Content: toolResponseParts,
 				}
 				aiMessages = append(aiMessages, toolMsg)
+			}
+
+			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
+				reducedMessages, reduction := reduceGenkitContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, aiMessages)
+				if !reduction.FitsBudget {
+					slog.Debug("Genkit context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+					c.exitIncomplete(eventCh, aiMessages, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
+					return
+				}
+				aiMessages = reducedMessages
 			}
 		}
 
