@@ -816,7 +816,7 @@ func TestAnthropicClient_AnthropicProviderEnablesAutomaticPromptCaching(t *testi
 	}
 }
 
-func TestAnthropicClient_AutomaticPromptCachingDisabledForCompatibleProviders(t *testing.T) {
+func TestAnthropicClient_AutomaticPromptCachingEnabledForCompatibleProviders(t *testing.T) {
 	var capturedParams anthropic.MessageNewParams
 
 	c := &AnthropicClient{
@@ -838,8 +838,8 @@ func TestAnthropicClient_AutomaticPromptCachingDisabledForCompatibleProviders(t 
 	for range eventCh {
 	}
 
-	if string(capturedParams.CacheControl.Type) != "" {
-		t.Fatalf("expected no cache control for compatible provider, got %q", capturedParams.CacheControl.Type)
+	if string(capturedParams.CacheControl.Type) != "ephemeral" {
+		t.Fatalf("expected ephemeral cache control for compatible provider, got %q", capturedParams.CacheControl.Type)
 	}
 }
 

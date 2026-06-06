@@ -449,8 +449,11 @@ func (c *AnthropicClient) StreamChat(
 				Thinking:     thinking,
 				OutputConfig: outCfg,
 			}
-			if c.provider == Provider(config.ProviderAnthropic) && !oneShot {
+			if !oneShot {
 				params.CacheControl = anthropic.NewCacheControlEphemeralParam()
+				if len(systemBlocks) > 0 {
+					systemBlocks[len(systemBlocks)-1].CacheControl = anthropic.NewCacheControlEphemeralParam()
+				}
 			}
 			if len(systemBlocks) > 0 {
 				params.System = systemBlocks
