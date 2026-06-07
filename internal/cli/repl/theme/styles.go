@@ -66,6 +66,7 @@ var (
 
 	ErrorColor = compat.AdaptiveColor{Light: lipgloss.Color("#D32F2F"), Dark: lipgloss.Color("#EF5350")}
 	WhiteColor = compat.AdaptiveColor{Light: lipgloss.Color("#FFFFFF"), Dark: lipgloss.Color("#FFFFFF")}
+	BlackColor = compat.AdaptiveColor{Light: lipgloss.Color("#000000"), Dark: lipgloss.Color("#000000")}
 
 	DiffAddColor = compat.AdaptiveColor{
 		Light: lipgloss.Color("#2E7D32"),
@@ -104,6 +105,10 @@ var (
 			Bold(true).
 			Foreground(PrimaryColor).
 			MarginTop(2)
+	ShellPromptStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(AccentColor).
+				MarginTop(2)
 	InputRuleStyle        = lipgloss.NewStyle().Foreground(PrimaryColor)
 	InputRuleBlurredStyle = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
 	UserInputBlockStyle   = lipgloss.NewStyle().
@@ -139,7 +144,7 @@ var (
 
 	BashCommandStyle = lipgloss.NewStyle().Foreground(SecondaryColor)
 	BashOutputStyle  = lipgloss.NewStyle().Foreground(TextDimColor)
-	BashSummaryStyle = lipgloss.NewStyle().Foreground(MutedColor)
+	BashSummaryStyle = lipgloss.NewStyle().Foreground(MutedColor).Faint(true)
 
 	DiffAddStyle     = lipgloss.NewStyle().Foreground(DiffAddColor)
 	DiffRemoveStyle  = lipgloss.NewStyle().Foreground(DiffRemoveColor)
@@ -185,12 +190,14 @@ var (
 
 	BtwBorderStyle = lipgloss.NewStyle().Foreground(AccentColor)
 	BtwLabelStyle  = lipgloss.NewStyle().Foreground(TextPrimaryColor)
-	BtwChipStyle   = lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
+	BtwChipStyle   = lipgloss.NewStyle().Background(AccentColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
 
 	AdversaryBorderStyle = lipgloss.NewStyle().Foreground(SecondaryColor)
 	AdversaryLabelStyle  = lipgloss.NewStyle().Foreground(TextPrimaryColor)
-	AdversaryChipStyle   = lipgloss.NewStyle().Background(SecondaryColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
+	AdversaryChipStyle   = lipgloss.NewStyle().Background(SecondaryColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
 
-	ModeBuildChipStyle = lipgloss.NewStyle().Background(PrimaryColor).Foreground(lipgloss.Color("#FFFFFF")).Bold(true).Padding(0, 1)
-	ModePlanChipStyle  = lipgloss.NewStyle().Background(AccentColor).Foreground(lipgloss.Color("#000000")).Bold(true).Padding(0, 1)
+	ShellChipStyle = lipgloss.NewStyle().Background(AccentColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
+
+	ModeBuildChipStyle = lipgloss.NewStyle().Background(PrimaryColor).Foreground(WhiteColor).Bold(true).Padding(0, 1)
+	ModePlanChipStyle  = lipgloss.NewStyle().Background(AccentColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
 )

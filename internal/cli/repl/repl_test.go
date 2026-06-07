@@ -291,8 +291,8 @@ func TestInitialModel_DimsBlurredPromptGlyph(t *testing.T) {
 }
 
 func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
-	focusedWide := renderInputArea("▶ hello", 80, true)
-	blurredWide := renderInputArea("▶ hello", 80, false)
+	focusedWide := renderInputArea("▶ hello", 80, true, false)
+	blurredWide := renderInputArea("▶ hello", 80, false, false)
 	if focusedWide == blurredWide {
 		t.Fatal("expected focused and blurred input areas to render differently")
 	}
@@ -309,7 +309,7 @@ func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
 		t.Fatalf("expected wide input rules to match viewport width, got width %d", wideRuleWidth)
 	}
 
-	narrow := renderInputArea("▶ hi", 24, true)
+	narrow := renderInputArea("▶ hi", 24, true, false)
 	narrowLines := strings.Split(strings.TrimRight(narrow, "\n"), "\n")
 	if len(narrowLines) != 3 {
 		t.Fatalf("expected 3 narrow input-area lines, got %v", narrowLines)

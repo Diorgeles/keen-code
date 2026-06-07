@@ -261,6 +261,13 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return result, cmd
 	}
 
+	if strings.HasPrefix(input, "!") {
+		m.history.Push(input)
+		m.textarea.Reset()
+		result := m.handleBangCommand(input)
+		return result, nil
+	}
+
 	if m.streamHandler.IsActive() {
 		return *m, nil
 	}
@@ -639,8 +646,17 @@ func (m replModel) View() tea.View {
 			view.WriteString("\n")
 		}
 
+		shellMode := strings.HasPrefix(m.textarea.Value(), "!")
+		styles := m.textarea.Styles()
+		if shellMode {
+			styles.Focused.Prompt = repltheme.ShellPromptStyle
+		} else {
+			styles.Focused.Prompt = repltheme.PromptStyle
+		}
+		m.textarea.SetStyles(styles)
+
 		textareaView := m.inputSelection.renderWithColumnOffset(m.textarea.View(), m.textarea.Width()+inputPromptWidth, m.textarea.Height(), m.textarea.ScrollYOffset(), inputPromptWidth)
-		view.WriteString(renderInputArea(textareaView, m.width, m.textarea.Focused()))
+		view.WriteString(renderInputArea(textareaView, m.width, m.textarea.Focused(), shellMode))
 		view.WriteString("\n")
 		if m.suggestion.Visible() {
 			view.WriteString(m.suggestion.View(m.width))

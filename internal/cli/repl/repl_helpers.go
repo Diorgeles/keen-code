@@ -500,7 +500,18 @@ func formatModelSelectionCard(ms *replwidgets.Model, width int) string {
 	return sb.String()
 }
 
-func renderInputArea(content string, width int, focused bool) string {
+func renderShellRules(width int, ruleStyle lipgloss.Style, chipStyle lipgloss.Style) (topRule string, bottomRule string) {
+	chip := chipStyle.Render(" shell ")
+	chipWidth := lipgloss.Width(chip)
+	trailingDash := 3
+	leftDashLen := max(width-chipWidth-trailingDash, 0)
+	rightDashLen := max(width-leftDashLen-chipWidth, 0)
+	topRule = ruleStyle.Render(strings.Repeat("─", leftDashLen)) + chip + ruleStyle.Render(strings.Repeat("─", rightDashLen))
+	bottomRule = ruleStyle.Render(strings.Repeat("─", width))
+	return
+}
+
+func renderInputArea(content string, width int, focused bool, shellMode bool) string {
 	ruleWidth := defaultWidth
 	if width > 0 {
 		ruleWidth = width
@@ -512,7 +523,15 @@ func renderInputArea(content string, width int, focused bool) string {
 	ruleStyle := repltheme.InputRuleStyle
 	if !focused {
 		ruleStyle = repltheme.InputRuleBlurredStyle
+	} else if shellMode {
+		ruleStyle = repltheme.AccentStyle
 	}
+
+	if shellMode && focused {
+		topRule, bottomRule := renderShellRules(ruleWidth, ruleStyle, repltheme.ShellChipStyle)
+		return topRule + "\n" + content + "\n" + bottomRule
+	}
+
 	rule := ruleStyle.Render(strings.Repeat("─", ruleWidth))
 	return rule + "\n" + content + "\n" + rule
 }
