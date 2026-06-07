@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.5] - 2026-06-07
+
+### Changed
+- Enabled prompt caching for all providers using the Anthropic client, no longer restricted to the Anthropic provider.
+- Cached the last system block to improve hit rates on multi-turn conversations.
+
 ## [0.20.4] - 2026-06-05
 
 ### Added
@@ -421,7 +427,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.20.4...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.20.5...HEAD
+[0.20.5]: https://github.com/mochow13/keen-code/compare/v0.20.4...v0.20.5
 [0.20.4]: https://github.com/mochow13/keen-code/compare/v0.20.3...v0.20.4
 [0.20.3]: https://github.com/mochow13/keen-code/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/mochow13/keen-code/compare/v0.20.1...v0.20.2
