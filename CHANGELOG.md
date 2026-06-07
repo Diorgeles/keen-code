@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-06-08
+
+### Added
+- `!` prefix in the REPL input for direct shell command execution, bypassing the LLM.
+- Shell mode input styling: accent-colored rules with a ` shell ` chip and recolored prompt when `!` is typed.
+- Syntax-highlighted command output via the built-in markdown renderer with automatic language detection.
+
 ## [0.20.5] - 2026-06-07
 
 ### Changed
@@ -427,7 +434,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.20.5...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/mochow13/keen-code/compare/v0.20.5...v0.21.0
 [0.20.5]: https://github.com/mochow13/keen-code/compare/v0.20.4...v0.20.5
 [0.20.4]: https://github.com/mochow13/keen-code/compare/v0.20.3...v0.20.4
 [0.20.3]: https://github.com/mochow13/keen-code/compare/v0.20.2...v0.20.3
