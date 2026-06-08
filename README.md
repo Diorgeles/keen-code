@@ -12,7 +12,7 @@
 </div>
 
 <div align="center">
-<img src="./assets/keen-demo-2x-0-19-1.gif" alt="Keen Code demo" style="width: 100%; height: auto;"/>
+<img src="./assets/keen-demo.gif" alt="Keen Code demo" style="width: 100%; height: auto;"/>
 </div>
 
 **Keen Code** is a terminal-based AI coding agent like Claude Code or Codex CLI. Written in Go, it is simpler, lighter, minimalistic but useful coding agent for typical software engineering tasks.
