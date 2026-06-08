@@ -686,31 +686,41 @@ func (m replModel) inputMetaView() string {
 		}
 	}
 
-	modelText := repltheme.MetaLabelStyle.Render("◉") + " " + repltheme.HighlightStyle.Render(provider+"/"+model)
+	modelText := repltheme.MetaLabelStyle.Render("⚡") + repltheme.HighlightStyle.Render(provider+"/"+model)
+
+	thinkingText := ""
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
 		if modelMeta, ok := m.ctx.registry.GetModel(m.ctx.cfg.Provider, m.ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
 			effortValue := m.ctx.cfg.ThinkingEffort
 			if m.ctx.cfg.Provider == config.ProviderAnthropic {
 				effortValue += " (adaptive)"
 			}
-			modelText += " " + repltheme.MetaLabelStyle.Render("·") + " " + repltheme.MetaLabelStyle.Render("∴") + " " + repltheme.HighlightStyle.Render(effortValue)
+			thinkingText = repltheme.MetaLabelStyle.Render(" ⟁") + " " + repltheme.HighlightStyle.Render(effortValue)
 		}
 	}
+
 	contextText := renderContextStatus(m.contextStatus)
-	separator := repltheme.MetaLabelStyle.Render("·")
+
 	timerText := ""
 	if m.showSpinner {
-		timerText = repltheme.LoadingTimerStyle.Render("⏱ " + m.loadingElapsedText())
+		timerText = repltheme.LoadingTimerStyle.Render(" ⏱ " + m.loadingElapsedText())
 	}
+
 	chipStyle := repltheme.ModeBuildChipStyle
 	if m.currentMode() == llm.ModePlan {
 		chipStyle = repltheme.ModePlanChipStyle
 	}
-	modeText := chipStyle.Render(string(m.currentMode()))
-	left := modelText + " " + separator + " " + contextText + " " + separator + " " + modeText
-	if timerText != "" {
-		left += " " + separator + " " + timerText
+	modeText := repltheme.MetaLabelStyle.Render(" ◆") + " " + chipStyle.Render(string(m.currentMode()))
+
+	parts := []string{modelText}
+	if thinkingText != "" {
+		parts = append(parts, thinkingText)
 	}
+	parts = append(parts, contextText, modeText)
+	if timerText != "" {
+		parts = append(parts, timerText)
+	}
+	left := strings.Join(parts, " ")
 	right := ""
 	if m.contextStatus.ShouldSuggestCompaction() {
 		right = repltheme.CompactionSuggestionStyle.Render("Try /compact")

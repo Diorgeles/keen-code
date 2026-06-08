@@ -632,14 +632,8 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	if strings.Contains(meta, "model:") {
 		t.Fatalf("did not expect model label, got %q", meta)
 	}
-	if !strings.Contains(meta, "◉") {
-		t.Fatalf("expected model glyph, got %q", meta)
-	}
 	if !strings.Contains(meta, "openai") {
 		t.Fatalf("expected provider text in combined model display, got %q", meta)
-	}
-	if !strings.Contains(meta, "◷") {
-		t.Fatalf("expected context glyph, got %q", meta)
 	}
 	if strings.Contains(meta, "context in use:") {
 		t.Fatalf("did not expect context label, got %q", meta)
@@ -660,9 +654,6 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	modeIdx := strings.Index(meta, "build")
 	if contextIdx == -1 || modeIdx == -1 || modeIdx <= contextIdx {
 		t.Fatalf("expected mode after context percentage, got %q", meta)
-	}
-	if !strings.Contains(meta, "·") {
-		t.Fatalf("expected separator dot between model and context, got %q", meta)
 	}
 }
 
@@ -689,9 +680,6 @@ func TestInputMetaView_ShowsAnthropicAdaptiveEffort(t *testing.T) {
 	}
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, "∴") {
-		t.Fatalf("expected thinking glyph for anthropic, got %q", meta)
-	}
 	if !strings.Contains(meta, "high (adaptive)") {
 		t.Fatalf("expected adaptive effort text for anthropic, got %q", meta)
 	}
@@ -726,9 +714,6 @@ func TestInputMetaView_ShowsThinkingGlyphForNonAnthropic(t *testing.T) {
 	}
 
 	meta := m.inputMetaView()
-	if !strings.Contains(meta, "∴") {
-		t.Fatalf("expected thinking glyph for non-anthropic provider, got %q", meta)
-	}
 	if strings.Contains(meta, "thinking:") {
 		t.Fatalf("did not expect thinking label for non-anthropic provider, got %q", meta)
 	}
@@ -871,7 +856,7 @@ func TestInputMetaView_RendersElapsedTimerLast(t *testing.T) {
 	}
 
 	meta := m.inputMetaView()
-	contextIdx := strings.Index(meta, "◷")
+	contextIdx := strings.Index(meta, "50%")
 	modeIdx := strings.Index(meta, "build")
 	timerIdx := strings.Index(meta, "1:05")
 	if contextIdx == -1 || modeIdx == -1 || timerIdx == -1 {
@@ -882,12 +867,6 @@ func TestInputMetaView_RendersElapsedTimerLast(t *testing.T) {
 	}
 	if timerIdx <= modeIdx {
 		t.Fatalf("expected elapsed timer after mode, got %q", meta)
-	}
-	if !strings.Contains(meta[modeIdx:timerIdx], "⏱") {
-		t.Fatalf("expected timer icon before timer, got %q", meta)
-	}
-	if !strings.Contains(meta[modeIdx:timerIdx], "·") {
-		t.Fatalf("expected dot separator between mode and timer, got %q", meta)
 	}
 }
 

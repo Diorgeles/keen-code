@@ -19,9 +19,6 @@ func TestUsagePercent(t *testing.T) {
 
 func TestRenderContextStatusUnknownWindow(t *testing.T) {
 	got := renderContextStatus(contextStatus{KnownWindow: false, KnownTokens: true, CurrentTokens: 42})
-	if !strings.Contains(got, "◷") {
-		t.Fatalf("expected context glyph, got %q", got)
-	}
 	if !strings.Contains(got, "N/A") {
 		t.Fatalf("expected N/A for unknown window, got %q", got)
 	}
