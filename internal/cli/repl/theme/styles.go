@@ -199,5 +199,11 @@ var (
 	ShellChipStyle = lipgloss.NewStyle().Background(AccentColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
 
 	ModeBuildChipStyle = lipgloss.NewStyle().Background(PrimaryColor).Foreground(WhiteColor).Bold(true).Padding(0, 1)
-	ModePlanChipStyle  = lipgloss.NewStyle().Background(AccentColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
+	ModePlanChipStyle  = lipgloss.NewStyle().Background(SecondaryColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
+
+	InputRulePlanStyle = lipgloss.NewStyle().Foreground(SecondaryColor)
+	PromptPlanStyle    = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(SecondaryColor).
+				MarginTop(2)
 )

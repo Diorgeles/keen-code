@@ -650,13 +650,15 @@ func (m replModel) View() tea.View {
 		styles := m.textarea.Styles()
 		if shellMode {
 			styles.Focused.Prompt = repltheme.ShellPromptStyle
+		} else if m.currentMode() == llm.ModePlan {
+			styles.Focused.Prompt = repltheme.PromptPlanStyle
 		} else {
 			styles.Focused.Prompt = repltheme.PromptStyle
 		}
 		m.textarea.SetStyles(styles)
 
 		textareaView := m.inputSelection.renderWithColumnOffset(m.textarea.View(), m.textarea.Width()+inputPromptWidth, m.textarea.Height(), m.textarea.ScrollYOffset(), inputPromptWidth)
-		view.WriteString(renderInputArea(textareaView, m.width, m.textarea.Focused(), shellMode))
+		view.WriteString(renderInputArea(textareaView, m.width, m.textarea.Focused(), shellMode, m.currentMode()))
 		view.WriteString("\n")
 		if m.suggestion.Visible() {
 			view.WriteString(m.suggestion.View(m.width))
@@ -706,17 +708,11 @@ func (m replModel) inputMetaView() string {
 		timerText = repltheme.LoadingTimerStyle.Render(" ⏱ " + m.loadingElapsedText())
 	}
 
-	chipStyle := repltheme.ModeBuildChipStyle
-	if m.currentMode() == llm.ModePlan {
-		chipStyle = repltheme.ModePlanChipStyle
-	}
-	modeText := repltheme.MetaLabelStyle.Render(" ◆") + " " + chipStyle.Render(string(m.currentMode()))
-
 	parts := []string{modelText}
 	if thinkingText != "" {
 		parts = append(parts, thinkingText)
 	}
-	parts = append(parts, contextText, modeText)
+	parts = append(parts, contextText)
 	if timerText != "" {
 		parts = append(parts, timerText)
 	}

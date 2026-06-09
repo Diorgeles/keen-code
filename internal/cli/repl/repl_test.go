@@ -290,9 +290,20 @@ func TestInitialModel_DimsBlurredPromptGlyph(t *testing.T) {
 	}
 }
 
+func TestInitialModel_PlanModeSetsPromptStyle(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	m := initialModel(&replContext{version: "test", workingDir: t.TempDir(), cfg: &config.ResolvedConfig{}}, nil, false)
+	m.setMode(llm.ModePlan)
+	view := m.View().Content
+	secondarySeq := "\x1b[1;38;2;77;182;172m"
+	if !strings.Contains(view, secondarySeq) {
+		t.Fatalf("expected plan mode prompt to use secondary color, got %q", view)
+	}
+}
+
 func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
-	focusedWide := renderInputArea("▶ hello", 80, true, false)
-	blurredWide := renderInputArea("▶ hello", 80, false, false)
+	focusedWide := renderInputArea("▶ hello", 80, true, false, llm.ModeBuild)
+	blurredWide := renderInputArea("▶ hello", 80, false, false, llm.ModeBuild)
 	if focusedWide == blurredWide {
 		t.Fatal("expected focused and blurred input areas to render differently")
 	}
@@ -309,7 +320,7 @@ func TestRenderInputArea_UsesViewportWidthRules(t *testing.T) {
 		t.Fatalf("expected wide input rules to match viewport width, got width %d", wideRuleWidth)
 	}
 
-	narrow := renderInputArea("▶ hi", 24, true, false)
+	narrow := renderInputArea("▶ hi", 24, true, false, llm.ModeBuild)
 	narrowLines := strings.Split(strings.TrimRight(narrow, "\n"), "\n")
 	if len(narrowLines) != 3 {
 		t.Fatalf("expected 3 narrow input-area lines, got %v", narrowLines)
@@ -644,16 +655,8 @@ func TestInputMetaView_ShowsContextPercent(t *testing.T) {
 	if !strings.Contains(meta, repltheme.HighlightStyle.Render("openai/gpt-5.4")) {
 		t.Fatalf("expected provider/model to use the same highlight style, got %q", meta)
 	}
-	if !strings.Contains(meta, repltheme.ModeBuildChipStyle.Render("build")) {
-		t.Fatalf("expected build mode chip style, got %q", meta)
-	}
 	if strings.Contains(meta, "Mode:") {
 		t.Fatalf("did not expect mode label, got %q", meta)
-	}
-	contextIdx := strings.Index(meta, "50%")
-	modeIdx := strings.Index(meta, "build")
-	if contextIdx == -1 || modeIdx == -1 || modeIdx <= contextIdx {
-		t.Fatalf("expected mode after context percentage, got %q", meta)
 	}
 }
 
@@ -722,14 +725,29 @@ func TestInputMetaView_ShowsThinkingGlyphForNonAnthropic(t *testing.T) {
 	}
 }
 
-func TestInputMetaView_UsesAccentStyleForPlanMode(t *testing.T) {
-	m := newTestModel()
-	m.mode = llm.ModePlan
-	m.width = 120
+func TestRenderInputArea_UsesSecondaryStyleForPlanMode(t *testing.T) {
+	area := renderInputArea("▶ hello", 80, true, false, llm.ModePlan)
+	lines := strings.Split(strings.TrimRight(area, "\n"), "\n")
+	if len(lines) < 1 {
+		t.Fatalf("expected at least 1 line, got %v", lines)
+	}
+	if !strings.Contains(lines[0], repltheme.ModePlanChipStyle.Render("plan")) {
+		t.Fatalf("expected plan mode chip in top rule, got %q", lines[0])
+	}
+	secondarySeq := "\x1b[38;2;77;182;172m"
+	if !strings.Contains(lines[0], secondarySeq) {
+		t.Fatalf("expected plan mode rule to use secondary color, got %q", lines[0])
+	}
+}
 
-	meta := m.inputMetaView()
-	if !strings.Contains(meta, repltheme.ModePlanChipStyle.Render("plan")) {
-		t.Fatalf("expected plan mode chip style, got %q", meta)
+func TestRenderInputArea_UsesPrimaryStyleForBuildMode(t *testing.T) {
+	area := renderInputArea("▶ hello", 80, true, false, llm.ModeBuild)
+	lines := strings.Split(strings.TrimRight(area, "\n"), "\n")
+	if len(lines) < 1 {
+		t.Fatalf("expected at least 1 line, got %v", lines)
+	}
+	if !strings.Contains(lines[0], repltheme.ModeBuildChipStyle.Render("build")) {
+		t.Fatalf("expected build mode chip in top rule, got %q", lines[0])
 	}
 }
 
@@ -857,16 +875,9 @@ func TestInputMetaView_RendersElapsedTimerLast(t *testing.T) {
 
 	meta := m.inputMetaView()
 	contextIdx := strings.Index(meta, "50%")
-	modeIdx := strings.Index(meta, "build")
 	timerIdx := strings.Index(meta, "1:05")
-	if contextIdx == -1 || modeIdx == -1 || timerIdx == -1 {
-		t.Fatalf("expected context status, mode, and elapsed timer in meta, got %q", meta)
-	}
-	if modeIdx <= contextIdx {
-		t.Fatalf("expected mode after context status, got %q", meta)
-	}
-	if timerIdx <= modeIdx {
-		t.Fatalf("expected elapsed timer after mode, got %q", meta)
+	if contextIdx == -1 || timerIdx == -1 {
+		t.Fatalf("expected context status and elapsed timer in meta, got %q", meta)
 	}
 }
 

@@ -500,8 +500,8 @@ func formatModelSelectionCard(ms *replwidgets.Model, width int) string {
 	return sb.String()
 }
 
-func renderShellRules(width int, ruleStyle lipgloss.Style, chipStyle lipgloss.Style) (topRule string, bottomRule string) {
-	chip := chipStyle.Render(" shell ")
+func renderRulesWithChip(width int, ruleStyle lipgloss.Style, chipText string, chipStyle lipgloss.Style) (topRule string, bottomRule string) {
+	chip := chipStyle.Render(chipText)
 	chipWidth := lipgloss.Width(chip)
 	trailingDash := 3
 	leftDashLen := max(width-chipWidth-trailingDash, 0)
@@ -511,7 +511,7 @@ func renderShellRules(width int, ruleStyle lipgloss.Style, chipStyle lipgloss.St
 	return
 }
 
-func renderInputArea(content string, width int, focused bool, shellMode bool) string {
+func renderInputArea(content string, width int, focused bool, shellMode bool, mode llm.AgentMode) string {
 	ruleWidth := defaultWidth
 	if width > 0 {
 		ruleWidth = width
@@ -525,15 +525,21 @@ func renderInputArea(content string, width int, focused bool, shellMode bool) st
 		ruleStyle = repltheme.InputRuleBlurredStyle
 	} else if shellMode {
 		ruleStyle = repltheme.AccentStyle
+	} else if mode == llm.ModePlan {
+		ruleStyle = repltheme.InputRulePlanStyle
 	}
 
 	if shellMode && focused {
-		topRule, bottomRule := renderShellRules(ruleWidth, ruleStyle, repltheme.ShellChipStyle)
+		topRule, bottomRule := renderRulesWithChip(ruleWidth, ruleStyle, "shell", repltheme.ShellChipStyle)
 		return topRule + "\n" + content + "\n" + bottomRule
 	}
 
-	rule := ruleStyle.Render(strings.Repeat("─", ruleWidth))
-	return rule + "\n" + content + "\n" + rule
+	chipStyle := repltheme.ModeBuildChipStyle
+	if mode == llm.ModePlan {
+		chipStyle = repltheme.ModePlanChipStyle
+	}
+	topRule, bottomRule := renderRulesWithChip(ruleWidth, ruleStyle, string(mode), chipStyle)
+	return topRule + "\n" + content + "\n" + bottomRule
 }
 
 func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpermissions.Request, diffCh <-chan repltooling.DiffRequest) tea.Cmd {
