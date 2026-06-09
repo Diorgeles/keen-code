@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-06-09
+
+### Changed
+- Refreshed status bar glyphs and layout.
+- Moved mode chip to input border with plan mode styling.
+- Consolidated demo GIF and removed unused assets.
+- Added cast to GIF conversion command to the agent release skill.
+
 ## [0.21.0] - 2026-06-08
 
 ### Added
@@ -434,7 +442,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.21.1...HEAD
+[0.21.1]: https://github.com/mochow13/keen-code/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/mochow13/keen-code/compare/v0.20.5...v0.21.0
 [0.20.5]: https://github.com/mochow13/keen-code/compare/v0.20.4...v0.20.5
 [0.20.4]: https://github.com/mochow13/keen-code/compare/v0.20.3...v0.20.4
