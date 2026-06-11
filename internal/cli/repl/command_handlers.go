@@ -844,7 +844,7 @@ func (m *replModel) handleAdversaryCommand(input string) (replModel, tea.Cmd) {
 	}
 
 	if m.ctx.globalCfg.AdversaryProvider == "" || m.ctx.globalCfg.AdversaryModel == "" {
-		m.output.AddStyledLine("  Run /adversary model to configure an adversary model", repltheme.MutedStyle)
+		m.output.AddStyledLine("  Run `/adversary model` to configure an adversary model", repltheme.HighlightStyle)
 		m.output.AddEmptyLine()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
