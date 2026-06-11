@@ -289,6 +289,21 @@ func isSelectionCopyKey(msg tea.KeyPressMsg) bool {
 		msg.Mod.Contains(tea.ModMeta)
 }
 
+func (m *replModel) openURLAtMouse(x, y int) tea.Cmd {
+	lineIndex := m.viewport.YOffset() + y
+	if lineIndex < 0 || lineIndex >= len(m.selection.lines) {
+		return nil
+	}
+	url := urlAtDisplayColumn(m.selection.lines[lineIndex], max(x, 0))
+	if url == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		_ = openURL(url)
+		return nil
+	}
+}
+
 func (m *replModel) handleSelectionMouseDown(msg tea.MouseClickMsg) (bool, tea.Cmd) {
 	mouse := msg.Mouse()
 	if mouse.Button != tea.MouseLeft {
@@ -299,6 +314,12 @@ func (m *replModel) handleSelectionMouseDown(msg tea.MouseClickMsg) (bool, tea.C
 			m.selection.clear()
 		}
 		return false, nil
+	}
+
+	if mouse.Mod&(tea.ModSuper|tea.ModAlt|tea.ModCtrl) != 0 {
+		if cmd := m.openURLAtMouse(mouse.X, mouse.Y); cmd != nil {
+			return true, cmd
+		}
 	}
 
 	m.blurInput()

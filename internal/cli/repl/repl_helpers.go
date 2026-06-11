@@ -51,6 +51,7 @@ var loadingTexts = []string{
 	"`/skills list` shows everything",
 	"`Tab` swaps input ↔ viewport focus",
 	"`/mcp connect` takes tool names too",
+	"`Alt`/`Option`+click opens a link",
 }
 
 var keenSparkleSpinner = spinner.Spinner{

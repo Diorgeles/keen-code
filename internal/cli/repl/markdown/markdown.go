@@ -55,7 +55,7 @@ func (r *Renderer) Render(markdown string) string {
 	if err != nil {
 		return markdown
 	}
-	return addTableOuterBorders(rendered, tables)
+	return makeURLsClickable(addTableOuterBorders(rendered, tables))
 }
 
 func (r *Renderer) UpdateWidth(width int) error {

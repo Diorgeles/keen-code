@@ -337,5 +337,6 @@ Keen supports mouse selection in the output and input areas:
 | Click and drag | Select text |
 | Double-click | Select word |
 | Triple-click | Select line |
+| `Alt`/`Ctrl` + click on a link | Open the URL in your browser |
 | `Ctrl+C` / `Cmd+C` with a selection | Copy selected text |
 | `Esc` | Clear selection |

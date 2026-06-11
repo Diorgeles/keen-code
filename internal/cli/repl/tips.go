@@ -28,6 +28,7 @@ var tips = []string{
 	"Press Tab to move focus between the input box and the output viewport for keyboard scrolling.",
 	"Double-click selects a word and triple-click selects a line in the output; Ctrl+C / Cmd+C copies the selection.",
 	"`/mcp connect` also accepts a tool name instead of a server name, useful if you remember the tool but not the server.",
+	"Alt/Option+click or Ctrl+click a link in the output to open it in your browser.",
 }
 
 func randomTip() string {
