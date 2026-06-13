@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -10,7 +11,8 @@ import (
 )
 
 type mockMCPRuntime struct {
-	callToolFn func(ctx context.Context, server, tool string, arguments map[string]any) (*keenmcp.ToolResult, error)
+	callToolFn  func(ctx context.Context, server, tool string, arguments map[string]any) (*keenmcp.ToolResult, error)
+	listToolsFn func(ctx context.Context, server string) ([]keenmcp.Tool, error)
 }
 
 func (m *mockMCPRuntime) Start(ctx context.Context) error { return nil }
@@ -21,6 +23,9 @@ func (m *mockMCPRuntime) Status(string) keenmcp.ServerStatus {
 }
 func (m *mockMCPRuntime) WaitInitialScan(ctx context.Context) error { return nil }
 func (m *mockMCPRuntime) ListTools(ctx context.Context, server string) ([]keenmcp.Tool, error) {
+	if m.listToolsFn != nil {
+		return m.listToolsFn(ctx, server)
+	}
 	return nil, nil
 }
 func (m *mockMCPRuntime) Refresh(ctx context.Context, server string, opts ...keenmcp.RefreshOption) error {
@@ -68,6 +73,52 @@ func TestCallMCPTool_ExecuteSuccess(t *testing.T) {
 	}
 	if m["content"] != "issue #1" {
 		t.Errorf("content = %q, want %q", m["content"], "issue #1")
+	}
+}
+
+func TestCallMCPTool_RejectsMissingRequiredArguments(t *testing.T) {
+	runtime := &mockMCPRuntime{
+		listToolsFn: func(_ context.Context, server string) ([]keenmcp.Tool, error) {
+			if server != "context7" {
+				t.Fatalf("unexpected list tools server=%q", server)
+			}
+			return []keenmcp.Tool{
+				{
+					Name: "resolve-library-id",
+					InputSchema: map[string]any{
+						"type":     "object",
+						"required": []string{"libraryName"},
+						"properties": map[string]any{
+							"libraryName": map[string]any{"type": "string"},
+						},
+					},
+				},
+			}, nil
+		},
+		callToolFn: func(_ context.Context, _, _ string, _ map[string]any) (*keenmcp.ToolResult, error) {
+			t.Fatal("CallTool should not be called with missing required arguments")
+			return nil, nil
+		},
+	}
+	permissions := &mockPermissionRequester{allow: true}
+	callTool := NewCallMCPTool(runtime, permissions)
+
+	_, err := callTool.Execute(context.Background(), map[string]any{
+		"server":    "context7",
+		"tool":      "resolve-library-id",
+		"arguments": map[string]any{},
+	})
+	if err == nil {
+		t.Fatal("Execute() expected error for missing required arguments")
+	}
+	if !strings.Contains(err.Error(), "libraryName") {
+		t.Fatalf("Execute() error = %v, want missing field name", err)
+	}
+	if !strings.Contains(err.Error(), "~/.keen/skills/mcp:context7/schemas/resolve-library-id.json") {
+		t.Fatalf("Execute() error = %v, want schema path", err)
+	}
+	if permissions.called {
+		t.Fatal("permission should not be requested for invalid MCP arguments")
 	}
 }
 

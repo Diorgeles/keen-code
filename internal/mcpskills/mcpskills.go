@@ -163,6 +163,9 @@ func buildSkillMD(server, description string, tools []keenmcp.Tool) string {
 		sb.Write(frontmatterData)
 	}
 	sb.WriteString("---\n")
+	sb.WriteString("## Calling tools\n")
+	sb.WriteString("Before calling `call_mcp_tool`, always read the selected tool's schema file: `schemas/<tool>.json`.\n")
+	sb.WriteString("Strictly follow the schema to pass the correct arguments to the tool.\n\n")
 	sb.WriteString("## Available tools\n")
 	sb.WriteString("| Tool | Description |\n")
 	sb.WriteString("|------|-------------|\n")
