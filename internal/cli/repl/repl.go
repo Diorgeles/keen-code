@@ -262,6 +262,9 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	if strings.HasPrefix(input, "!") {
+		if m.streamHandler.IsActive() {
+			return *m, nil
+		}
 		m.history.Push(input)
 		m.textarea.Reset()
 		result := m.handleBangCommand(input)

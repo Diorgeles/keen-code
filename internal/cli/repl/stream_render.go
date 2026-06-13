@@ -241,7 +241,11 @@ func (sh *StreamHandler) renderBashSegment(seg *streamSegment, width int) []stri
 
 	lines = append(lines, "")
 	lines = append(lines, rule)
-	lines = append(lines, repltheme.BashCommandStyle.Render("  $ "+seg.command))
+	if width > 0 {
+		lines = append(lines, wrapAndIndent(repltheme.BashCommandStyle.Render("$ "+seg.command), width-4)...)
+	} else {
+		lines = append(lines, repltheme.BashCommandStyle.Render("  $ "+seg.command))
+	}
 
 	if seg.summary != "" {
 		lines = append(lines, repltheme.BashSummaryStyle.Render("  › "+seg.summary))

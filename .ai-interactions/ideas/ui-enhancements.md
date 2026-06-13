@@ -10,23 +10,14 @@ Tighten the banner; expand the orientation. The ASCII logo is nice but the tips 
 
 - ✅ Show **last session summary** ("Resuming? Last session: 'fix auth tests' • 2h ago • `/resume`") so the user can continue without remembering the command.
 - ✅ Replace static tips with a **rotating "Did you know"** line — one tip per launch keeps it fresh and surfaces lesser-known features (`@`-mention, Shift+Tab, `/adversary`).
-- Add a **health check line**: API key validated, working dir is git-clean / has uncommitted changes, model reachable. Catches misconfig before the first prompt.
-- Compact the working-dir/provider/model block into one line: `~/stuff/ai/keen-code (main, +3) · anthropic/opus-4.7 · build`.
 
-## 2. Persistent Header Bar
+## 2. Input Area
 
-Right now scrolling up hides all session context. Add a **single-line sticky header** above the viewport showing: session name · branch · model · mode. This is the single highest-value change — it costs one line and removes "where am I?" friction permanently.
-
-## 3. Input Area
-
-- **Semantic prompt indicator**: change the `▶` color/shape based on mode (e.g. `▶` build, `◆` plan, `⚠` waiting on permission). Mode is currently only in the footer chip, easy to miss.
-- **Inline ghost-text completion** for slash commands: as you type `/com`, render `pact` faintly in-place; Tab accepts. Less visually heavy than the popup for common commands.
-- **`@`-mention preview**: when you `@`-mention a file, show a faint inline `(124 lines, 4.2KB)` so you don't accidentally attach a 10MB file.
-- **Soft input cap warning**: if input >500 lines, show a faint counter — currently no feedback for accidentally pasted huge blobs.
+- ✅ **Semantic prompt indicator**: change the `▶` color/shape based on mode (e.g. `▶` build, `◆` plan, `⚠` waiting on permission). Mode is currently only in the footer chip, easy to miss.
 
 ## 4. Streaming Feedback (biggest UX win)
 
-The Harry Potter spell names are charming but uninformative. Replace with **structured activity status**:
+✅ The Harry Potter spell names are charming but uninformative. Replace with **structured activity status**:
 
 ```
 ⠋ Reading internal/cli/repl/repl.go (1.2k lines)
@@ -34,9 +25,7 @@ The Harry Potter spell names are charming but uninformative. Replace with **stru
 ⠋ Thinking (243 tokens)
 ```
 
-The data already exists in tool-start events — just surface the tool name + key arg in the spinner line instead of "Lumos". Keep one whimsical spell as fallback when the model is purely thinking.
-
-Also add a **turn-level progress hint**: `[tool 3/?]` next to the spinner during multi-tool turns.
+**Edit**: Replaced with Keen Code usage tips.
 
 ## 5. Tool Call Rendering
 
