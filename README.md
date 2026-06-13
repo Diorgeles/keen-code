@@ -44,7 +44,7 @@ Keen Code is also an experiment to play with the *new way of working* where engi
 
 ## Features
 
-- **Multi-provider** — Anthropic, OpenAI, Codex (via OAuth), Gemini, DeepSeek, Kimi, GLM, MiniMax, and OpenCode Go. Switch with `/model`. More providers will be added in the future.
+- **Multi-provider** — Anthropic, OpenAI, Codex (via OAuth), Gemini, DeepSeek, Kimi, GLM, MiniMax, OpenCode Go, and Amazon Bedrock. Switch with `/model`. More providers will be added in the future.
 - **6 minimal tools** — `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `bash`. Deliberately lean.
 - **Skills system** — Specialized workflows for planning, debugging, refactoring, code review, and more.
 - **Thinking mode** — Extended reasoning for complex tasks. Use `/thinking` to change the thinking effort level for the current model. All models that support thinking can be configured.
@@ -159,6 +159,7 @@ keen
 - Z.ai (GLM)
 - MiniMax
 - OpenCode Go
+- Amazon Bedrock
 
 > Use `/model` to switch providers. The ChatGPT/Codex option opens a browser-based OpenAI sign-in flow and stores OAuth credentials in `~/.keen/auth.json`.
 

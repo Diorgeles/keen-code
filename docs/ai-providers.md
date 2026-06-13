@@ -12,7 +12,7 @@ Keen Code supports multiple AI providers through a plugin-like architecture. The
 | Google AI | `googleai` | API Key | Gemini 3.1 Pro, 3.1 Flash-Lite, 3 Flash |
 | Moonshot AI | `moonshotai` | API Key | Kimi K2.6, K2.5, K2 Thinking, K2 Thinking Turbo |
 | DeepSeek | `deepseek` | API Key | DeepSeek V4 Flash, V4 Pro |
-| Z.ai | `zai` | API Key | GLM-5.1, GLM-5, GLM-5 Turbo |
+| Amazon Bedrock | `amazon-bedrock` | AWS credentials | Claude Opus 4.8, Opus 4.6, Sonnet 4.6, Haiku 4.5 |
 | MiniMax | `minimax` | API Key | MiniMax M2.7, M2.5 |
 | OpenCode Go | `opencode-go` | API Key | GLM-5.1, GLM-5, Kimi K2.6, Kimi K2.5, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2, MiniMax M2.7/M2.5, Qwen3 Plus/Max |
 
@@ -111,6 +111,19 @@ Flow:
 
 Token refresh is automatic when the access token expires.
 
+### AWS Authentication (Amazon Bedrock)
+
+Amazon Bedrock uses AWS credential authentication via the AWS SDK:
+
+```go
+// internal/config/config.go
+const AuthModeAWS = "aws"
+```
+
+Credentials are loaded from the standard AWS credential chain (`~/.aws/credentials`, environment variables, IAM roles, etc.). No API key is stored in Keen's global config. An optional custom `base_url` can be configured to override the Bedrock endpoint.
+
+The default AWS region is `us-east-1` if none is configured in the environment.
+
 ## LLM Client Architecture
 
 ```go
@@ -132,6 +145,15 @@ Direct integration with Anthropic SDK:
 - Cached token tracking
 - MiniMax models (`MiniMax-M2.7`, `MiniMax-M2.5`) through MiniMax's Anthropic-compatible `/messages` endpoint
 - OpenCode Go MiniMax models (`minimax-m2.*`) and `qwen3.7-max` through the Anthropic-compatible `/messages` endpoint
+
+### BedrockClient (`internal/llm/bedrock.go`)
+
+AWS SDK integration for Amazon Bedrock:
+- Streaming via `bedrockruntime.ConverseStream`
+- Tool conversion to Bedrock tool format
+- Reasoning content support (thinking text, signatures, redacted content)
+- Prompt caching with cache points on system prompts, tools, and messages
+- Cached token tracking
 
 ### OpenAIResponsesClient (`internal/llm/openai_responses.go`)
 
@@ -188,6 +210,7 @@ Models support different thinking effort levels:
 | OpenAI | none, low, medium, high, xhigh |
 | Google AI | low, medium, high, minimal |
 | DeepSeek | off, high, max |
+| Amazon Bedrock | low, medium, high, max |
 | Z.ai | enabled, disabled |
 | OpenCode Go DeepSeek | off, high, max |
 | OpenCode Go GLM/Kimi/OpenAI-compatible Qwen | enabled, disabled |

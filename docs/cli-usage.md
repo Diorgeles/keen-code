@@ -83,7 +83,7 @@ Displays a formatted list of built-in slash commands with descriptions.
 
 Opens an interactive model selector to change the AI provider and model. Use this command when you want to:
 
-- Switch between providers (Anthropic, OpenAI, Google AI, etc.)
+- Switch between providers (Anthropic, OpenAI, Google AI, Amazon Bedrock, etc.)
 - Change to a different model within the same provider
 - Configure API keys for a provider
 - Configure an optional custom base URL for API-key providers that support it
@@ -144,7 +144,7 @@ Common supported efforts include:
 | Google AI Gemini Pro | `low`, `medium`, `high` |
 | Google AI Gemini Flash / Flash-Lite | `minimal`, `low`, `medium`, `high` |
 | DeepSeek V4 | `off`, `high`, `max` |
-| Z.ai GLM | `enabled`, `disabled` |
+| Amazon Bedrock Claude | `low`, `medium`, `high`, `max` |
 | OpenCode Go selected models | varies by model, including `enabled`/`disabled` or `off`/`high`/`max` |
 
 ```text

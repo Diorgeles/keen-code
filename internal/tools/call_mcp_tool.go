@@ -29,7 +29,7 @@ func (t *CallMCPTool) Name() string {
 func (t *CallMCPTool) Description() string {
 	return `Call a tool on a connected MCP (Model Context Protocol) server.
 
-Before calling, read the server's skill file to discover available tools, then read
+Before calling, you must read the server's skill file to discover available tools, then you must read
 the tool's schema file to understand the required arguments:
 - Skill file:   ~/.keen/skills/mcp:<server>/SKILL.md
 - Schema file:  ~/.keen/skills/mcp:<server>/schemas/<tool>.json
