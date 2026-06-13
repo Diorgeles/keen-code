@@ -19,6 +19,7 @@ const (
 	ProviderZAI         = "zai"
 	ProviderMiniMax     = "minimax"
 	ProviderOpenCodeGo  = "opencode-go"
+	ProviderBedrock     = "amazon-bedrock"
 )
 
 type GlobalConfig struct {
@@ -59,6 +60,7 @@ type ResolvedConfig struct {
 const (
 	AuthModeAPIKey = "api_key"
 	AuthModeOAuth  = "oauth"
+	AuthModeAWS    = "aws"
 )
 
 func (g *GlobalConfig) GetProviderConfig(provider string) (ProviderConfig, bool) {
@@ -141,6 +143,9 @@ func RequiresAPIKey(provider string) bool {
 }
 
 func AuthModeForProvider(provider string) string {
+	if provider == ProviderBedrock {
+		return AuthModeAWS
+	}
 	if provider == ProviderOpenAICodex {
 		return AuthModeOAuth
 	}

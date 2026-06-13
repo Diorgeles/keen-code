@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"sort"
 )
 
 type Tool interface {
@@ -50,6 +51,9 @@ func (r *Registry) All() []Tool {
 	for _, t := range r.tools {
 		all = append(all, t)
 	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].Name() < all[j].Name()
+	})
 	return all
 }
 

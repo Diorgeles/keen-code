@@ -21,6 +21,24 @@ providers:
         name: Claude Haiku 4.5
         context_window: 200000
 
+  - id: amazon-bedrock
+    name: Amazon Bedrock
+    models:
+      - id: global.anthropic.claude-opus-4-8
+        name: Claude Opus 4.8
+        context_window: 1000000
+      - id: global.anthropic.claude-opus-4-6-v1
+        name: Claude Opus 4.6
+        context_window: 1000000
+        thinking_efforts: ["low", "medium", "high", "max"]
+      - id: global.anthropic.claude-sonnet-4-6
+        name: Claude Sonnet 4.6
+        context_window: 1000000
+        thinking_efforts: ["low", "medium", "high", "max"]
+      - id: global.anthropic.claude-haiku-4-5-20251001-v1:0
+        name: Claude Haiku 4.5
+        context_window: 200000
+
   - id: openai
     name: OpenAI
     models:

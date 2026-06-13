@@ -33,6 +33,26 @@ func TestRegistryWithout_RemovesNamedToolsFromCopy(t *testing.T) {
 	}
 }
 
+func TestRegistryAll_ReturnsToolsSortedByName(t *testing.T) {
+	registry := NewRegistry()
+	for _, name := range []string{"write_file", "bash", "read_file", "edit_file"} {
+		if err := registry.Register(&dummyRegistryTool{name: name}); err != nil {
+			t.Fatalf("register %s: %v", name, err)
+		}
+	}
+
+	got := registry.All()
+	want := []string{"bash", "edit_file", "read_file", "write_file"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d tools, got %d", len(want), len(got))
+	}
+	for i, tool := range got {
+		if tool.Name() != want[i] {
+			t.Fatalf("tool %d: expected %q, got %q", i, want[i], tool.Name())
+		}
+	}
+}
+
 type dummyRegistryTool struct {
 	name        string
 	description string

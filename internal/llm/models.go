@@ -81,6 +81,14 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 			ThinkingEffort:      cfg.ThinkingEffort,
 			ContextWindowTokens: contextWindowTokenCount,
 		})
+	case config.ProviderBedrock:
+		return NewBedrockClient(&ClientConfig{
+			Provider:            Provider(cfg.Provider),
+			Model:               cfg.Model,
+			BaseURL:             cfg.BaseURL,
+			ThinkingEffort:      cfg.ThinkingEffort,
+			ContextWindowTokens: contextWindowTokenCount,
+		})
 	case config.ProviderDeepSeek,
 		config.ProviderMoonshotAI,
 		config.ProviderZAI:

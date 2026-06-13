@@ -504,7 +504,6 @@ func (m *replModel) registeredToolNames() []string {
 	for _, t := range all {
 		names = append(names, t.Name())
 	}
-	slices.Sort(names)
 	return names
 }
 

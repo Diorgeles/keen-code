@@ -54,6 +54,13 @@ var loadingTexts = []string{
 	"`Alt`/`Option`+click opens a link",
 }
 
+func displayModelName(providerID, modelID string) string {
+	if providerID == config.ProviderBedrock {
+		return strings.TrimPrefix(modelID, "global.")
+	}
+	return modelID
+}
+
 var keenSparkleSpinner = spinner.Spinner{
 	Frames: []string{"·", "✦", "✧", "✫", "✧", "✦"},
 	FPS:    time.Second / 8,
@@ -405,9 +412,10 @@ func buildInitialScreen(ctx *replContext, lastSession *session.Summary, width in
 	lines = append(lines, "")
 
 	displayDir := abbreviateHome(ctx.workingDir)
+	modelName := displayModelName(ctx.cfg.Provider, ctx.cfg.Model)
 	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Directory:")+" "+repltheme.InfoValueStyle.Render(displayDir))
 	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Provider:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.Provider))
-	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Model:")+" "+repltheme.ModelChipStyle.Render(ctx.cfg.Model))
+	lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Model:")+" "+repltheme.ModelChipStyle.Render(modelName))
 	if ctx.cfg.ThinkingEffort != "" && ctx.registry != nil {
 		if modelMeta, ok := ctx.registry.GetModel(ctx.cfg.Provider, ctx.cfg.Model); ok && modelMeta.SupportsThinkingEffort() {
 			lines = append(lines, "  "+repltheme.InfoLabelStyle.Render("Thinking:")+" "+repltheme.InfoValueStyle.Render(ctx.cfg.ThinkingEffort))

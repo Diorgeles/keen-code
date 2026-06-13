@@ -549,7 +549,8 @@ func (m replModel) consumeModelSelectionResult(msg tea.Msg) (replModel, tea.Cmd,
 	}
 
 	if replwidgets.IsComplete(msg) {
-		successMsg := "✓ Updated to " + m.modelSelection.SelectedProvider + " / " + m.modelSelection.SelectedModel
+		modelName := displayModelName(m.modelSelection.SelectedProvider, m.modelSelection.SelectedModel)
+		successMsg := "✓ Updated to " + m.modelSelection.SelectedProvider + " / " + modelName
 		m.output.AddStyledLine("  "+successMsg, repltheme.HighlightStyle)
 		m.output.AddEmptyLine()
 		m.modelSelection = nil
@@ -578,7 +579,8 @@ func (m replModel) consumeAdversaryModelSelectionResult(msg tea.Msg) (replModel,
 	}
 
 	if replwidgets.IsComplete(msg) {
-		successMsg := "✓ Adversary set to " + m.adversary.modelSelection.SelectedProvider + " / " + m.adversary.modelSelection.SelectedModel
+		modelName := displayModelName(m.adversary.modelSelection.SelectedProvider, m.adversary.modelSelection.SelectedModel)
+		successMsg := "✓ Adversary set to " + m.adversary.modelSelection.SelectedProvider + " / " + modelName
 		m.output.AddStyledLine("  "+successMsg, repltheme.HighlightStyle)
 		m.output.AddEmptyLine()
 		m.adversary.modelSelection = nil
@@ -684,7 +686,7 @@ func (m replModel) inputMetaView() string {
 			provider = m.ctx.cfg.Provider
 		}
 		if m.ctx.cfg.Model != "" {
-			model = m.ctx.cfg.Model
+			model = displayModelName(m.ctx.cfg.Provider, m.ctx.cfg.Model)
 		}
 	}
 
