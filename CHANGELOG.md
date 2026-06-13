@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-06-14
+
+### Added
+- Optional API key support for the Amazon Bedrock provider, enabling usage with temporary credentials or cross-account authentication.
+- Bearer token authentication for Bedrock models.
+- Config helpers to detect optional vs required API key configuration.
+
+### Changed
+- Updated model selection UI to show hints for optional vs required API keys.
+
 ## [0.22.0] - 2026-06-13
 
 ### Added
@@ -458,7 +468,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.22.1...HEAD
+[0.22.1]: https://github.com/mochow13/keen-code/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/mochow13/keen-code/compare/v0.21.2...v0.22.0
 [0.21.2]: https://github.com/mochow13/keen-code/compare/v0.21.1...v0.21.2
 [0.21.1]: https://github.com/mochow13/keen-code/compare/v0.21.0...v0.21.1
