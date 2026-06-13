@@ -476,6 +476,14 @@ func (c *OpenAICompatibleClient) StreamChat(
 				lastInputTokenCount = int(usage.PromptTokens)
 			}
 			if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
+				slog.Debug(
+					"OpenAI usage",
+					"prompt_tokens", usage.PromptTokens,
+					"completion_tokens", usage.CompletionTokens,
+					"total_tokens", usage.TotalTokens,
+					"cached_tokens", usage.PromptTokensDetails.CachedTokens,
+					"reasoning_tokens", usage.CompletionTokensDetails.ReasoningTokens,
+				)
 				eventCh <- StreamEvent{
 					Type: StreamEventTypeUsage,
 					Usage: &TokenUsage{

@@ -119,6 +119,14 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 				lastInputTokenCount = int(completed.Usage.InputTokens)
 			}
 			if completed.Usage.InputTokens > 0 || completed.Usage.OutputTokens > 0 {
+				slog.Debug(
+					"OpenAI Codex usage",
+					"input_tokens", completed.Usage.InputTokens,
+					"output_tokens", completed.Usage.OutputTokens,
+					"total_tokens", completed.Usage.TotalTokens,
+					"reasoning_tokens", completed.Usage.OutputTokensDetails.ReasoningTokens,
+					"cached_tokens", completed.Usage.InputTokensDetails.CachedTokens,
+				)
 				eventCh <- StreamEvent{
 					Type: StreamEventTypeUsage,
 					Usage: &TokenUsage{
