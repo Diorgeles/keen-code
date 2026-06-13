@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	brtypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	"github.com/aws/smithy-go/auth/bearer"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -52,6 +53,12 @@ func NewBedrockClient(cfg *ClientConfig) (*BedrockClient, error) {
 	}
 	if awsCfg.Region == "" {
 		awsCfg.Region = "us-east-1"
+	}
+	if cfg.APIKey != "" {
+		awsCfg.BearerAuthTokenProvider = bearer.StaticTokenProvider{
+			Token: bearer.Token{Value: cfg.APIKey},
+		}
+		awsCfg.AuthSchemePreference = []string{"httpBearerAuth"}
 	}
 
 	client := bedrockruntime.NewFromConfig(awsCfg, func(o *bedrockruntime.Options) {

@@ -142,6 +142,10 @@ func RequiresAPIKey(provider string) bool {
 	return AuthModeForProvider(provider) == AuthModeAPIKey
 }
 
+func SupportsAPIKey(provider string) bool {
+	return RequiresAPIKey(provider) || provider == ProviderBedrock
+}
+
 func AuthModeForProvider(provider string) string {
 	if provider == ProviderBedrock {
 		return AuthModeAWS

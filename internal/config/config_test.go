@@ -200,6 +200,30 @@ func TestResolve_BedrockAllowsMissingAPIKey(t *testing.T) {
 	}
 }
 
+func TestResolve_BedrockAllowsConfiguredAPIKey(t *testing.T) {
+	global := &GlobalConfig{
+		ActiveProvider: ProviderBedrock,
+		ActiveModel:    "global.anthropic.claude-sonnet-4-6",
+		Providers: map[string]ProviderConfig{
+			ProviderBedrock: {
+				Models: []string{"global.anthropic.claude-sonnet-4-6"},
+				APIKey: "bedrock-key",
+			},
+		},
+	}
+
+	resolved, err := Resolve(global, &SessionConfig{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved.APIKey != "bedrock-key" {
+		t.Fatalf("expected configured API key, got %q", resolved.APIKey)
+	}
+	if resolved.AuthMode != AuthModeAWS {
+		t.Fatalf("expected aws auth mode, got %q", resolved.AuthMode)
+	}
+}
+
 func TestResolve_WithSessionOverrides(t *testing.T) {
 	global := &GlobalConfig{
 		ActiveProvider: ProviderAnthropic,

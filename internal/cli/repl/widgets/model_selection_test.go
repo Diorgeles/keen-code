@@ -116,6 +116,52 @@ func TestModelSelection_OpenAICodexSkipsAPIKey(t *testing.T) {
 	}
 }
 
+func TestModelSelection_BedrockAPIKeyCanBeSkipped(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	registry := &providers.Registry{
+		Providers: []providers.Provider{
+			{
+				ID:   config.ProviderBedrock,
+				Name: "Amazon Bedrock",
+				Models: []providers.Model{
+					{ID: "global.anthropic.claude-sonnet-4-6", Name: "Claude Sonnet 4.6"},
+				},
+			},
+		},
+	}
+	global := config.DefaultGlobalConfig()
+	resolved := &config.ResolvedConfig{}
+
+	completed := false
+	m := New(registry, global, config.NewLoader(), resolved, func(provider, model, apiKey string) error {
+		completed = true
+		if apiKey != "" {
+			t.Fatalf("expected empty Bedrock API key for AWS auth fallback, got %q", apiKey)
+		}
+		return nil
+	})
+	var cmd tea.Cmd
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.Step != StepAPIKey {
+		t.Fatalf("expected optional StepAPIKey, got %v", m.Step)
+	}
+	m, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !completed {
+		t.Fatal("expected completion without API key")
+	}
+	if cmd == nil {
+		t.Fatal("expected completion command")
+	}
+	if resolved.APIKey != "" {
+		t.Fatalf("expected empty resolved API key, got %q", resolved.APIKey)
+	}
+	if resolved.AuthMode != config.AuthModeAWS {
+		t.Fatalf("expected AWS auth mode, got %q", resolved.AuthMode)
+	}
+}
+
 func TestModelSelection_LongModelListScrollsWithCursor(t *testing.T) {
 	models := make([]providers.Model, 14)
 	for i := range models {

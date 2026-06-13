@@ -19,6 +19,10 @@ func supportsBaseURL(providerID string) bool {
 	return providerID != config.ProviderGoogleAI && config.RequiresAPIKey(providerID)
 }
 
+func promptsForAPIKey(providerID string) bool {
+	return config.SupportsAPIKey(providerID)
+}
+
 type Step int
 
 const (
@@ -130,7 +134,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.ThinkingOptions = modelMeta.ThinkingEfforts
 				m.ThinkingCursor = m.resolveThinkingCursor(m.ThinkingOptions)
 				m.Step = StepThinking
-			} else if !config.RequiresAPIKey(m.SelectedProvider) {
+			} else if !promptsForAPIKey(m.SelectedProvider) {
 				return m.complete()
 			} else if supportsBaseURL(m.SelectedProvider) {
 				m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
@@ -150,7 +154,7 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.ThinkingCursor = (m.ThinkingCursor + 1) % len(m.ThinkingOptions)
 		case "enter":
 			m.SelectedThinking = m.ThinkingOptions[m.ThinkingCursor]
-			if !config.RequiresAPIKey(m.SelectedProvider) {
+			if !promptsForAPIKey(m.SelectedProvider) {
 				return m.complete()
 			}
 			if supportsBaseURL(m.SelectedProvider) {
@@ -325,7 +329,7 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 		APIKey: apiKey,
 		Models: []string{m.SelectedModel},
 	}
-	if config.RequiresAPIKey(m.SelectedProvider) {
+	if supportsBaseURL(m.SelectedProvider) {
 		providerCfg.BaseURL = m.BaseURLInput
 	}
 	m.globalCfg.SetProviderConfig(m.SelectedProvider, providerCfg)
@@ -423,8 +427,15 @@ func (m *Model) renderAPIKeyInput() string {
 	existingKey := m.getExistingAPIKey(m.SelectedProvider)
 
 	title := fmt.Sprintf("Enter API key for %s", providerName)
+	hint := ""
 	if existingKey != "" {
-		title += "\n" + repltheme.HintStyle.Render("(press Enter to keep existing key)")
+		hint = "Press enter to keep existing key"
+	} else if !config.RequiresAPIKey(m.SelectedProvider) {
+		title = fmt.Sprintf("API key for %s (optional)", providerName)
+		hint = "Press enter to skip and use locally configured AWS credentials"
+	}
+	if hint != "" {
+		title += "\n" + repltheme.HintStyle.Render("("+hint+")")
 	}
 	view.WriteString(repltheme.UserPromptStyle.Render(title))
 	view.WriteString("\n\n")

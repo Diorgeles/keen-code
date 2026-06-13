@@ -690,7 +690,7 @@ func (m replModel) inputMetaView() string {
 		}
 	}
 
-	modelText := repltheme.MetaLabelStyle.Render("⚡") + repltheme.HighlightStyle.Render(provider+"/"+model)
+	modelText := repltheme.MetaLabelStyle.Render("⚡ ") + repltheme.HighlightStyle.Render(provider+"/"+model)
 
 	thinkingText := ""
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {

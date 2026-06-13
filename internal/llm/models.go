@@ -84,6 +84,7 @@ func NewClient(cfg *config.ResolvedConfig) (LLMClient, error) {
 	case config.ProviderBedrock:
 		return NewBedrockClient(&ClientConfig{
 			Provider:            Provider(cfg.Provider),
+			APIKey:              cfg.APIKey,
 			Model:               cfg.Model,
 			BaseURL:             cfg.BaseURL,
 			ThinkingEffort:      cfg.ThinkingEffort,
