@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.2] - 2026-06-15
+
+### Added
+- Input/output token accumulation and display in the REPL status bar.
+- Session-level token totals that reset on `/clear`, `/new`, and `/resume`.
+- Compact token formatting (e.g. `1.2k`, `3.4M`) in the meta status view.
+
 ## [0.22.1] - 2026-06-14
 
 ### Added
@@ -468,7 +475,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.22.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.22.2...HEAD
+[0.22.2]: https://github.com/mochow13/keen-code/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/mochow13/keen-code/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/mochow13/keen-code/compare/v0.21.2...v0.22.0
 [0.21.2]: https://github.com/mochow13/keen-code/compare/v0.21.1...v0.21.2
