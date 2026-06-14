@@ -277,16 +277,21 @@ func copySelectedTextCmd(text string) tea.Cmd {
 	)
 }
 
-func isSelectionCopyKey(msg tea.KeyPressMsg) bool {
-	if msg.String() == keyCtrlC || msg.String() == keyCmdC {
-		return true
+func clearCopyNotificationCmd(expiresAt time.Time) tea.Cmd {
+	return tea.Tick(time.Until(expiresAt), func(time.Time) tea.Msg {
+		return copyNotificationExpiredMsg{expiresAt: expiresAt.UnixNano()}
+	})
+}
+
+func (m *replModel) copySelectedTextCmd(text string) tea.Cmd {
+	cmd := copySelectedTextCmd(text)
+	if cmd == nil {
+		return nil
 	}
-	if msg.Code != 'c' && msg.Code != 'C' {
-		return false
-	}
-	return msg.Mod.Contains(tea.ModCtrl) ||
-		msg.Mod.Contains(tea.ModSuper) ||
-		msg.Mod.Contains(tea.ModMeta)
+	expiresAt := time.Now().Add(copyNotificationTimeout)
+	m.copyNotification = copyNotificationMessage
+	m.copyNotificationExpiresAt = expiresAt
+	return tea.Batch(cmd, clearCopyNotificationCmd(expiresAt))
 }
 
 func (m *replModel) openURLAtMouse(x, y int) tea.Cmd {
@@ -415,14 +420,14 @@ func (m *replModel) handleSelectionMouseUp() (bool, tea.Cmd) {
 	if !m.selection.release() {
 		return false, nil
 	}
-	return true, nil
+	return true, m.copySelectedTextCmd(m.selection.selectedText())
 }
 
 func (m *replModel) handleInputSelectionMouseUp() (bool, tea.Cmd) {
 	if !m.inputSelection.release() {
 		return false, nil
 	}
-	return true, nil
+	return true, m.copySelectedTextCmd(m.inputSelection.selectedText())
 }
 
 func (m *replModel) handleMouseDown(msg tea.MouseClickMsg) (bool, tea.Cmd) {

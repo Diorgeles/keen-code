@@ -50,6 +50,7 @@ var loadingTexts = []string{
 	"`/mode build` exits plan-only mode",
 	"`/skills list` shows everything",
 	"`Tab` swaps input ↔ viewport focus",
+	"Drag selection copies on release",
 	"`/mcp connect` takes tool names too",
 	"`Alt`/`Option`+click opens a link",
 }

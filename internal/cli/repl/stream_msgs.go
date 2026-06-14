@@ -51,6 +51,10 @@ type mcpConnectDoneMsg struct {
 	Err    error
 }
 
+type copyNotificationExpiredMsg struct {
+	expiresAt int64
+}
+
 type btwChunkMsg string
 type btwDoneMsg struct{}
 type btwErrorMsg struct {

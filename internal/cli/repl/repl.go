@@ -33,9 +33,11 @@ import (
 )
 
 const (
-	defaultWidth   = 120
-	inputMinHeight = 1
-	inputMaxHeight = 15
+	defaultWidth            = 120
+	inputMinHeight          = 1
+	inputMaxHeight          = 15
+	copyNotificationTimeout = 2 * time.Second
+	copyNotificationMessage = "Copied to clipboard"
 )
 
 type replContext struct {
@@ -49,49 +51,51 @@ type replContext struct {
 }
 
 type replModel struct {
-	textarea            textarea.Model
-	viewport            viewport.Model
-	ctx                 *replContext
-	mode                llm.AgentMode
-	appState            *replappstate.AppState
-	output              *reploutput.OutputBuilder
-	modelSelection      *replwidgets.Model
-	permissionRequester *replpermissions.Requester
-	projectPerms        *config.ProjectPermissions
-	diffEmitter         *repltooling.DiffEmitter
-	sessions            *replSessionState
-	sessionPicker       *replwidgets.SessionPicker
-	suggestion          replwidgets.SuggestionModel
-	fileSearcher        *replfilesearch.FileSearcher
-	quitting            bool
-	streamHandler       *StreamHandler
-	mdRenderer          *replmarkdown.Renderer
-	width               int
-	height              int
-	spinner             spinner.Model
-	showSpinner         bool
-	loadingText         string
-	loadingStartedAt    time.Time
-	userScrolled        bool
-	streamCancel        context.CancelFunc
-	turnMemory          *turnMemoryAccumulator
-	isCompacting        bool
-	compactionCancel    context.CancelFunc
-	contextStatus       contextStatus
-	showThinking        bool
-	history             replhistory.InputHistory
-	selection           viewportSelection
-	inputSelection      viewportSelection
-	btwLines            []string
-	btwQuestion         string
-	btwStreamHandler    *StreamHandler
-	btwStreamCancel     context.CancelFunc
-	btwShowSpinner      bool
-	btwSpinner          spinner.Model
-	adversary           adversaryState
-	lastSession         *session.Summary
-	projectPermsErr     error
-	initialScreenDone   bool
+	textarea                  textarea.Model
+	viewport                  viewport.Model
+	ctx                       *replContext
+	mode                      llm.AgentMode
+	appState                  *replappstate.AppState
+	output                    *reploutput.OutputBuilder
+	modelSelection            *replwidgets.Model
+	permissionRequester       *replpermissions.Requester
+	projectPerms              *config.ProjectPermissions
+	diffEmitter               *repltooling.DiffEmitter
+	sessions                  *replSessionState
+	sessionPicker             *replwidgets.SessionPicker
+	suggestion                replwidgets.SuggestionModel
+	fileSearcher              *replfilesearch.FileSearcher
+	quitting                  bool
+	streamHandler             *StreamHandler
+	mdRenderer                *replmarkdown.Renderer
+	width                     int
+	height                    int
+	spinner                   spinner.Model
+	showSpinner               bool
+	loadingText               string
+	loadingStartedAt          time.Time
+	userScrolled              bool
+	streamCancel              context.CancelFunc
+	turnMemory                *turnMemoryAccumulator
+	isCompacting              bool
+	compactionCancel          context.CancelFunc
+	contextStatus             contextStatus
+	showThinking              bool
+	history                   replhistory.InputHistory
+	selection                 viewportSelection
+	inputSelection            viewportSelection
+	btwLines                  []string
+	btwQuestion               string
+	btwStreamHandler          *StreamHandler
+	btwStreamCancel           context.CancelFunc
+	btwShowSpinner            bool
+	btwSpinner                spinner.Model
+	adversary                 adversaryState
+	lastSession               *session.Summary
+	projectPermsErr           error
+	initialScreenDone         bool
+	copyNotification          string
+	copyNotificationExpiresAt time.Time
 }
 
 type adversaryState struct {
@@ -469,6 +473,12 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 	case mcpConnectDoneMsg:
 		m.handleMCPConnectDone(msg)
 		return m, nil
+	case copyNotificationExpiredMsg:
+		if m.copyNotificationExpiresAt.UnixNano() == msg.expiresAt {
+			m.copyNotification = ""
+			m.copyNotificationExpiresAt = time.Time{}
+		}
+		return m, nil
 	case diffReadyMsg:
 		m.streamHandler.HandleDiff(msg.req.Lines)
 		close(msg.req.Done)
@@ -493,9 +503,6 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		if m.inputSelection.hasSelection() {
-			if isSelectionCopyKey(msg) {
-				return m, copySelectedTextCmd(m.inputSelection.selectedText())
-			}
 			if msg.String() == keyEsc {
 				m.inputSelection.clear()
 				return m, nil
@@ -503,9 +510,6 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 			m.inputSelection.clear()
 		}
 		if m.selection.hasSelection() {
-			if isSelectionCopyKey(msg) {
-				return m, copySelectedTextCmd(m.selection.selectedText())
-			}
 			if msg.String() == keyEsc {
 				m.selection.clear()
 				return m, nil
@@ -708,6 +712,11 @@ func (m replModel) inputMetaView() string {
 
 	contextText := renderContextStatus(m.contextStatus)
 
+	copyText := ""
+	if m.copyNotification != "" {
+		copyText = repltheme.AccentStyle.Render(m.copyNotification)
+	}
+
 	timerText := ""
 	if m.showSpinner {
 		timerText = repltheme.LoadingTimerStyle.Render("⏱ " + m.loadingElapsedText())
@@ -718,6 +727,9 @@ func (m replModel) inputMetaView() string {
 		parts = append(parts, thinkingText)
 	}
 	parts = append(parts, contextText)
+	if copyText != "" {
+		parts = append(parts, copyText)
+	}
 	if timerText != "" {
 		parts = append(parts, timerText)
 	}

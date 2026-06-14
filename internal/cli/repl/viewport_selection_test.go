@@ -3,6 +3,7 @@ package repl
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -46,7 +47,7 @@ func TestViewportSelection_RenderHighlightsVisibleSelection(t *testing.T) {
 	}
 }
 
-func TestReplSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
+func TestReplSelectionMouseDragCopiesOnRelease(t *testing.T) {
 	m := newTestModel()
 	m.output.AddLine("hello world")
 	m.updateViewportContent()
@@ -61,8 +62,11 @@ func TestReplSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
 		t.Fatal("expected no command while dragging")
 	}
 	updated, cmd = updated.updateNormalMode(tea.MouseReleaseMsg(tea.Mouse{X: 5, Y: 0, Button: tea.MouseLeft}))
-	if cmd != nil {
-		t.Fatal("expected no copy command on mouse release")
+	if cmd == nil {
+		t.Fatal("expected copy command on mouse release")
+	}
+	if updated.copyNotification != copyNotificationMessage {
+		t.Fatalf("expected copy notification, got %q", updated.copyNotification)
 	}
 	if got := updated.selection.selectedText(); got != "hello" {
 		t.Fatalf("expected selected text to remain available, got %q", got)
@@ -83,7 +87,7 @@ func TestReplSelectionMouseClickFocusesViewport(t *testing.T) {
 	}
 }
 
-func TestReplSelectionCtrlCCopiesSelection(t *testing.T) {
+func TestReplSelectionCtrlCDoesNotCopySelection(t *testing.T) {
 	m := newTestModel()
 	m.output.AddLine("hello world")
 	m.updateViewportContent()
@@ -92,17 +96,14 @@ func TestReplSelectionCtrlCCopiesSelection(t *testing.T) {
 
 	updated, cmd := m.updateNormalMode(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
-		t.Fatal("expected copy command for ctrl+c with active selection")
+		t.Fatal("expected ctrl+c to keep normal quit behavior")
 	}
-	if updated.quitting {
-		t.Fatal("expected ctrl+c with selection not to quit")
-	}
-	if got := updated.selection.selectedText(); got != "hello" {
-		t.Fatalf("expected selection to remain, got %q", got)
+	if !updated.quitting {
+		t.Fatal("expected ctrl+c with selection to quit")
 	}
 }
 
-func TestReplSelectionCmdCCopiesSelection(t *testing.T) {
+func TestReplSelectionCmdCDoesNotCopySelection(t *testing.T) {
 	m := newTestModel()
 	m.output.AddLine("hello world")
 	m.updateViewportContent()
@@ -110,15 +111,15 @@ func TestReplSelectionCmdCCopiesSelection(t *testing.T) {
 	m.selection.drag(5, 0, 0)
 
 	updated, cmd := m.updateNormalMode(tea.KeyPressMsg{Code: 'c', Mod: tea.ModSuper})
-	if cmd == nil {
-		t.Fatal("expected copy command for cmd+c with active selection")
+	if cmd != nil {
+		t.Fatal("expected no copy command for cmd+c with active selection")
 	}
 	if updated.quitting {
-		t.Fatal("expected cmd+c with selection not to quit")
+		t.Fatal("expected cmd+c not to quit")
 	}
 }
 
-func TestReplInputSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
+func TestReplInputSelectionMouseDragCopiesOnRelease(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("hello world")
 	m.blurInput()
@@ -133,8 +134,11 @@ func TestReplInputSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
 		t.Fatal("expected no command while dragging input selection")
 	}
 	updated, cmd = updated.updateNormalMode(tea.MouseReleaseMsg(tea.Mouse{X: inputPromptWidth + 5, Y: textY, Button: tea.MouseLeft}))
-	if cmd != nil {
-		t.Fatal("expected no copy command on input mouse release")
+	if cmd == nil {
+		t.Fatal("expected copy command on input mouse release")
+	}
+	if updated.copyNotification != copyNotificationMessage {
+		t.Fatalf("expected copy notification, got %q", updated.copyNotification)
 	}
 	if got := updated.inputSelection.selectedText(); got != "hello" {
 		t.Fatalf("expected input selection to remain, got %q", got)
@@ -147,7 +151,7 @@ func TestReplInputSelectionMouseDragSelectsWithoutCopying(t *testing.T) {
 	}
 }
 
-func TestReplInputSelectionCtrlCCopiesSelection(t *testing.T) {
+func TestReplInputSelectionCtrlCDoesNotCopySelection(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("hello world")
 	m.inputSelection.setContent(m.textarea.Value())
@@ -155,14 +159,14 @@ func TestReplInputSelectionCtrlCCopiesSelection(t *testing.T) {
 	m.inputSelection.drag(5, 0, 0)
 
 	updated, cmd := m.updateNormalMode(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	if cmd == nil {
-		t.Fatal("expected copy command for ctrl+c with active input selection")
+	if cmd != nil {
+		t.Fatal("expected ctrl+c to clear input without copying")
 	}
 	if updated.quitting {
-		t.Fatal("expected ctrl+c with input selection not to quit")
+		t.Fatal("expected ctrl+c with input value not to quit")
 	}
-	if got := updated.inputSelection.selectedText(); got != "hello" {
-		t.Fatalf("expected input selection to remain, got %q", got)
+	if got := updated.textarea.Value(); got != "" {
+		t.Fatalf("expected ctrl+c to clear input, got %q", got)
 	}
 }
 
@@ -182,6 +186,43 @@ func TestView_RendersInputSelection(t *testing.T) {
 	withoutSelection.textarea.SetValue("hello world")
 	if view == withoutSelection.View().Content {
 		t.Fatal("expected input selection to affect rendered view")
+	}
+}
+
+func TestView_ShowsCopyNotification(t *testing.T) {
+	m := newTestModel()
+	m.copyNotification = copyNotificationMessage
+
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, copyNotificationMessage) {
+		t.Fatalf("expected copy notification in view, got %q", view)
+	}
+}
+
+func TestReplCopyNotificationExpires(t *testing.T) {
+	m := newTestModel()
+	expiresAt := time.Now().Add(copyNotificationTimeout)
+	m.copyNotification = copyNotificationMessage
+	m.copyNotificationExpiresAt = expiresAt
+
+	updated, cmd := m.updateNormalMode(copyNotificationExpiredMsg{expiresAt: expiresAt.UnixNano()})
+	if cmd != nil {
+		t.Fatal("expected no command for copy notification expiry")
+	}
+	if updated.copyNotification != "" {
+		t.Fatalf("expected copy notification to clear, got %q", updated.copyNotification)
+	}
+}
+
+func TestReplCopyNotificationIgnoresStaleExpiry(t *testing.T) {
+	m := newTestModel()
+	expiresAt := time.Now().Add(copyNotificationTimeout)
+	m.copyNotification = copyNotificationMessage
+	m.copyNotificationExpiresAt = expiresAt
+
+	updated, _ := m.updateNormalMode(copyNotificationExpiredMsg{expiresAt: expiresAt.Add(-time.Second).UnixNano()})
+	if updated.copyNotification != copyNotificationMessage {
+		t.Fatalf("expected copy notification to remain, got %q", updated.copyNotification)
 	}
 }
 
