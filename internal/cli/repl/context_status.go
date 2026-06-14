@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
+	"github.com/user/keen-code/internal/llm"
 )
 
 const (
@@ -13,11 +14,26 @@ const (
 )
 
 type contextStatus struct {
-	CurrentTokens int
-	ContextWindow int
-	Percent       float64
-	KnownWindow   bool
-	KnownTokens   bool
+	CurrentTokens     int
+	ContextWindow     int
+	Percent           float64
+	KnownWindow       bool
+	KnownTokens       bool
+	TotalInputTokens  int
+	TotalOutputTokens int
+}
+
+func (s *contextStatus) AddUsage(usage *llm.TokenUsage) {
+	if usage == nil {
+		return
+	}
+	s.TotalInputTokens += usage.InputTokens
+	s.TotalOutputTokens += usage.OutputTokens
+}
+
+func (s *contextStatus) ResetTotals() {
+	s.TotalInputTokens = 0
+	s.TotalOutputTokens = 0
 }
 
 func (s contextStatus) ShouldSuggestCompaction() bool {
@@ -61,10 +77,12 @@ func (m replModel) computeContextStatus() contextStatus {
 	}
 
 	status := contextStatus{
-		CurrentTokens: currentTokens,
-		ContextWindow: contextWindow,
-		KnownWindow:   knownWindow,
-		KnownTokens:   knownTokens,
+		CurrentTokens:     currentTokens,
+		ContextWindow:     contextWindow,
+		KnownWindow:       knownWindow,
+		KnownTokens:       knownTokens,
+		TotalInputTokens:  m.contextStatus.TotalInputTokens,
+		TotalOutputTokens: m.contextStatus.TotalOutputTokens,
 	}
 	if knownWindow && knownTokens {
 		status.Percent = usagePercent(currentTokens, contextWindow)
@@ -96,15 +114,42 @@ func contextPercentStyle(percent float64) lipgloss.Style {
 	return repltheme.ContextStatusPercentStyle
 }
 
+func formatCompactTokens(n int) string {
+	if n < 1000 {
+		return strconv.Itoa(n)
+	}
+	if n < 1_000_000 {
+		v := float64(n) / 1000.0
+		if v >= 999.95 {
+			return formatCompactFloat(v/1000.0) + "M"
+		}
+		return formatCompactFloat(v) + "k"
+	}
+	return formatCompactFloat(float64(n)/1_000_000.0) + "M"
+}
+
+func formatCompactFloat(f float64) string {
+	s := strconv.FormatFloat(f, 'f', 1, 64)
+	s = strings.TrimRight(s, "0")
+	s = strings.TrimRight(s, ".")
+	return s
+}
+
 func renderContextStatus(status contextStatus) string {
-	label := repltheme.ContextStatusLabelStyle.Render(" ◒")
 	if !status.KnownWindow || status.ContextWindow <= 0 {
-		return label + " " + repltheme.ContextStatusUnknownStyle.Render("N/A")
+		return repltheme.ContextStatusUnknownStyle.Render("N/A")
 	}
 	if !status.KnownTokens {
-		return label + " " + repltheme.ContextStatusPercentStyle.Render("0.0%")
+		return repltheme.MetaLabelStyle.Render("context:") + " " + repltheme.ContextStatusPercentStyle.Render("0.0%") + " • " + repltheme.MetaLabelStyle.Render("0 in / 0 out")
 	}
 
 	percent := contextPercentStyle(status.Percent).Render(formatPercent(status.Percent))
-	return label + " " + percent
+	result := repltheme.MetaLabelStyle.Render("context:") + " " + percent
+
+	if status.TotalInputTokens > 0 || status.TotalOutputTokens > 0 {
+		tokensText := formatCompactTokens(status.TotalInputTokens) + " in / " + formatCompactTokens(status.TotalOutputTokens) + " out"
+		result += " • " + repltheme.MetaLabelStyle.Render(tokensText)
+	}
+
+	return result
 }

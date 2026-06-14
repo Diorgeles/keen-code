@@ -34,6 +34,7 @@ const (
 func (m *replModel) handleLLMUsage(usage *llm.TokenUsage) (replModel, tea.Cmd) {
 	if m.appState != nil && usage != nil {
 		m.appState.SetLastUsage(usage)
+		m.contextStatus.AddUsage(usage)
 		m.refreshContextStatus()
 	}
 	return *m, m.waitForAsyncEvent()

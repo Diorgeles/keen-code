@@ -177,7 +177,7 @@ var (
 					Background(PrimaryColor).
 					PaddingLeft(2)
 
-	MetaLabelStyle                    = lipgloss.NewStyle().Foreground(TextDimColor)
+	MetaLabelStyle                    = lipgloss.NewStyle().Foreground(TextDimColor).Faint(true)
 	ContextStatusLabelStyle           = lipgloss.NewStyle().Foreground(TextDimColor)
 	ContextStatusPercentStyle         = lipgloss.NewStyle().Foreground(SecondaryColor)
 	ContextStatusPercentWarnStyle     = lipgloss.NewStyle().Foreground(AccentColor)

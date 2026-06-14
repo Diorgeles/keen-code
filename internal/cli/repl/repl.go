@@ -693,7 +693,7 @@ func (m replModel) inputMetaView() string {
 		}
 	}
 
-	modelText := repltheme.MetaLabelStyle.Render("⚡ ") + repltheme.HighlightStyle.Render(provider+"/"+model)
+	modelText := repltheme.MetaLabelStyle.Render(" ") + repltheme.HighlightStyle.Render(provider+"/"+model)
 
 	thinkingText := ""
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
@@ -702,7 +702,7 @@ func (m replModel) inputMetaView() string {
 			if m.ctx.cfg.Provider == config.ProviderAnthropic {
 				effortValue += " (adaptive)"
 			}
-			thinkingText = repltheme.MetaLabelStyle.Render(" ⟁") + " " + repltheme.HighlightStyle.Render(effortValue)
+			thinkingText = repltheme.MetaLabelStyle.Render("thinking:") + " " + repltheme.HighlightStyle.Render(effortValue)
 		}
 	}
 
@@ -710,7 +710,7 @@ func (m replModel) inputMetaView() string {
 
 	timerText := ""
 	if m.showSpinner {
-		timerText = repltheme.LoadingTimerStyle.Render(" ⏱ " + m.loadingElapsedText())
+		timerText = repltheme.LoadingTimerStyle.Render("⏱ " + m.loadingElapsedText())
 	}
 
 	parts := []string{modelText}
@@ -721,7 +721,7 @@ func (m replModel) inputMetaView() string {
 	if timerText != "" {
 		parts = append(parts, timerText)
 	}
-	left := strings.Join(parts, " ")
+	left := strings.Join(parts, " • ")
 	right := ""
 	if m.contextStatus.ShouldSuggestCompaction() {
 		right = repltheme.CompactionSuggestionStyle.Render("Try /compact")
@@ -775,6 +775,7 @@ func (m *replModel) replayLoadedSession(loaded *session.LoadedSession) {
 	m.appState.ReplaceMessages(session.BuildConversation(loaded.Events))
 	m.history.Reset()
 	m.sessionPicker = nil
+	m.contextStatus.ResetTotals()
 	m.refreshContextStatus()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()

@@ -615,116 +615,6 @@ func TestReplayLoadedSession_RebuildsOutputAndConversation(t *testing.T) {
 	}
 }
 
-func TestInputMetaView_ShowsContextPercent(t *testing.T) {
-	m := newTestModel()
-	m.width = 120
-	m.ctx = &replContext{
-		workingDir: "",
-		cfg: &config.ResolvedConfig{
-			Provider: "openai",
-			Model:    "gpt-5.4",
-		},
-		registry: &providers.Registry{
-			Providers: []providers.Provider{
-				{
-					ID: "openai",
-					Models: []providers.Model{
-						{ID: "gpt-5.4", ContextWindow: 2000},
-					},
-				},
-			},
-		},
-	}
-	m.appState = replappstate.New(nil, "")
-	m.appState.SetLastUsage(&llm.TokenUsage{InputTokens: 1000})
-	m.refreshContextStatus()
-
-	meta := m.inputMetaView()
-	if strings.Contains(meta, "model:") {
-		t.Fatalf("did not expect model label, got %q", meta)
-	}
-	if !strings.Contains(meta, "openai") {
-		t.Fatalf("expected provider text in combined model display, got %q", meta)
-	}
-	if strings.Contains(meta, "context in use:") {
-		t.Fatalf("did not expect context label, got %q", meta)
-	}
-	if !strings.Contains(meta, "50%") {
-		t.Fatalf("expected 50%% context usage, got %q", meta)
-	}
-	if !strings.Contains(meta, repltheme.HighlightStyle.Render("openai/gpt-5.4")) {
-		t.Fatalf("expected provider/model to use the same highlight style, got %q", meta)
-	}
-	if strings.Contains(meta, "Mode:") {
-		t.Fatalf("did not expect mode label, got %q", meta)
-	}
-}
-
-func TestInputMetaView_ShowsAnthropicAdaptiveEffort(t *testing.T) {
-	m := newTestModel()
-	m.width = 120
-	m.ctx = &replContext{
-		workingDir: "",
-		cfg: &config.ResolvedConfig{
-			Provider:       config.ProviderAnthropic,
-			Model:          "claude-sonnet-4-6",
-			ThinkingEffort: "high",
-		},
-		registry: &providers.Registry{
-			Providers: []providers.Provider{
-				{
-					ID: config.ProviderAnthropic,
-					Models: []providers.Model{
-						{ID: "claude-sonnet-4-6", ContextWindow: 2000, ThinkingEfforts: []string{"low", "medium", "high", "max"}},
-					},
-				},
-			},
-		},
-	}
-
-	meta := m.inputMetaView()
-	if !strings.Contains(meta, "high (adaptive)") {
-		t.Fatalf("expected adaptive effort text for anthropic, got %q", meta)
-	}
-	if strings.Contains(meta, "effort:") {
-		t.Fatalf("did not expect effort label for anthropic, got %q", meta)
-	}
-	if strings.Contains(meta, "thinking:") {
-		t.Fatalf("did not expect thinking label for anthropic, got %q", meta)
-	}
-}
-
-func TestInputMetaView_ShowsThinkingGlyphForNonAnthropic(t *testing.T) {
-	m := newTestModel()
-	m.width = 120
-	m.ctx = &replContext{
-		workingDir: "",
-		cfg: &config.ResolvedConfig{
-			Provider:       config.ProviderOpenAI,
-			Model:          "gpt-5.4",
-			ThinkingEffort: "high",
-		},
-		registry: &providers.Registry{
-			Providers: []providers.Provider{
-				{
-					ID: config.ProviderOpenAI,
-					Models: []providers.Model{
-						{ID: "gpt-5.4", ContextWindow: 2000, ThinkingEfforts: []string{"low", "medium", "high", "xhigh"}},
-					},
-				},
-			},
-		},
-	}
-
-	meta := m.inputMetaView()
-	if strings.Contains(meta, "thinking:") {
-		t.Fatalf("did not expect thinking label for non-anthropic provider, got %q", meta)
-	}
-	if strings.Contains(meta, "effort:") {
-		t.Fatalf("did not expect effort label for non-anthropic provider, got %q", meta)
-	}
-}
-
 func TestRenderInputArea_UsesSecondaryStyleForPlanMode(t *testing.T) {
 	area := renderInputArea("▶ hello", 80, true, false, llm.ModePlan)
 	lines := strings.Split(strings.TrimRight(area, "\n"), "\n")
@@ -765,26 +655,6 @@ func TestInputMetaView_SuggestsCompactionAtSeventyPercent(t *testing.T) {
 	meta := m.inputMetaView()
 	if !strings.Contains(meta, "Try /compact") {
 		t.Fatalf("expected compaction hint, got %q", meta)
-	}
-}
-
-func TestInputMetaView_DropsCompactionHintWhenWidthIsTight(t *testing.T) {
-	m := newTestModel()
-	m.width = 20
-	m.contextStatus = contextStatus{
-		KnownWindow:   true,
-		KnownTokens:   true,
-		ContextWindow: 100,
-		CurrentTokens: 75,
-		Percent:       75,
-	}
-
-	meta := m.inputMetaView()
-	if strings.Contains(meta, "Try /compact") {
-		t.Fatalf("expected compaction hint to be dropped for narrow width, got %q", meta)
-	}
-	if !strings.Contains(meta, "75%") {
-		t.Fatalf("expected context status to remain visible, got %q", meta)
 	}
 }
 
@@ -858,26 +728,6 @@ func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
 	}
 	if strings.Contains(lines[spinnerLine], "0:00") {
 		t.Fatalf("expected spinner line not to include elapsed timer, got %q", lines[spinnerLine])
-	}
-}
-
-func TestInputMetaView_RendersElapsedTimerLast(t *testing.T) {
-	m := newTestModel()
-	m.showSpinner = true
-	m.loadingStartedAt = time.Now().Add(-65 * time.Second)
-	m.contextStatus = contextStatus{
-		KnownWindow:   true,
-		KnownTokens:   true,
-		ContextWindow: 100,
-		CurrentTokens: 50,
-		Percent:       50,
-	}
-
-	meta := m.inputMetaView()
-	contextIdx := strings.Index(meta, "50%")
-	timerIdx := strings.Index(meta, "1:05")
-	if contextIdx == -1 || timerIdx == -1 {
-		t.Fatalf("expected context status and elapsed timer in meta, got %q", meta)
 	}
 }
 

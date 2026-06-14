@@ -957,6 +957,7 @@ func (m *replModel) handleClearCommand() replModel {
 	m.appState.ClearMessages()
 	m.appState.ResetClientState()
 	m.appState.ClearContextMetrics()
+	m.contextStatus.ResetTotals()
 	m.appState.SetMode(currentMode)
 	m.sessions.resetSession()
 	if m.permissionRequester != nil {
