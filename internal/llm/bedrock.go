@@ -203,6 +203,14 @@ func (c *BedrockClient) StreamChat(
 		toolConfig := toBedrockTools(toolRegistry)
 
 		for range maxToolTurns {
+			reducedMessages, reduction := reduceBedrockContextForRequest(c.contextWindowTokenCount, msgParams)
+			if !reduction.FitsBudget {
+				slog.Debug("Bedrock context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+				c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
+				return
+			}
+			msgParams = reducedMessages
+
 			turnToolConfig := cloneBedrockToolConfig(toolConfig)
 			turnSystem := append([]brtypes.SystemContentBlock(nil), system...)
 			turnSystem = applyBedrockPromptCaching(turnSystem, turnToolConfig, oneShot)

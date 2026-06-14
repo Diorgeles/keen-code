@@ -438,9 +438,15 @@ func (c *AnthropicClient) StreamChat(
 		turnStartLen := len(msgParams)
 		anthropicTools := toAnthropicTools(toolRegistry)
 		requestOpts := c.requestOptions(streamOpts)
-		lastInputTokenCount := 0
-
 		for range maxToolTurns {
+			reducedMessages, reduction := reduceAnthropicContextForRequest(c.contextWindowTokenCount, msgParams)
+			if !reduction.FitsBudget {
+				slog.Debug("Anthropic context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+				c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
+				return
+			}
+			msgParams = reducedMessages
+
 			thinking, outCfg, maxTok := anthropicThinkingParams(c.thinkingEffort)
 			params := anthropic.MessageNewParams{
 				Model:        c.model,
@@ -469,9 +475,6 @@ func (c *AnthropicClient) StreamChat(
 			}
 
 			if usage != nil {
-				if usage.InputTokens > 0 {
-					lastInputTokenCount = usage.InputTokens
-				}
 				slog.Debug(
 					"Anthropic usage emitted",
 					"input_tokens", usage.InputTokens,
@@ -493,16 +496,6 @@ func (c *AnthropicClient) StreamChat(
 
 			toolResultBlocks := c.executeTools(ctx, toolUses, toolRegistry, eventCh)
 			msgParams = append(msgParams, anthropic.NewUserMessage(toolResultBlocks...))
-
-			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
-				reducedMessages, reduction := reduceAnthropicContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, msgParams)
-				if !reduction.FitsBudget {
-					slog.Debug("Anthropic context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
-					c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
-					return
-				}
-				msgParams = reducedMessages
-			}
 		}
 
 		c.exitIncomplete(eventCh, msgParams, turnStartLen, injectedPending, nil, oneShot)

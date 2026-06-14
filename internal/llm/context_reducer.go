@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	brtypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/firebase/genkit/go/ai"
 	openai "github.com/openai/openai-go"
 	openaiParam "github.com/openai/openai-go/packages/param"
@@ -43,7 +44,7 @@ func contextInputBudget(contextWindowTokenCount int) int {
 	if window <= 0 {
 		window = defaultContextWindowTokenCount
 	}
-	safety := max(1024, window/100)
+	safety := max(4096, window/20)
 	budget := window - contextOutputReserveTokenCount - safety
 	if budget < 1 {
 		return 1
@@ -98,10 +99,16 @@ func estimateJSONTokenCount(v any) int {
 	return estimateContextTokenCount(string(b))
 }
 
-func reduceOpenAIContextForRequest(contextWindowTokenCount int,
-	currentInputTokenCount int,
+func reduceOpenAIContextForRequest(
+	contextWindowTokenCount int,
 	next []openai.ChatCompletionMessageParamUnion,
 ) ([]openai.ChatCompletionMessageParamUnion, contextReduction) {
+	estimatedInputTokenCount := estimateOpenAIMessagesTokenCount(next)
+	budget := contextInputBudget(contextWindowTokenCount)
+	if estimatedInputTokenCount <= budget {
+		return next, newContextReduction(estimatedInputTokenCount, budget)
+	}
+
 	targets := make([]toolResultReductionTarget, 0)
 	for i, msg := range next {
 		if msg.OfTool == nil {
@@ -121,7 +128,15 @@ func reduceOpenAIContextForRequest(contextWindowTokenCount int,
 		})
 	}
 
-	return next, reduceToolResultsForRequest(contextWindowTokenCount, currentInputTokenCount, targets)
+	return next, reduceToolResultsForRequest(contextWindowTokenCount, estimatedInputTokenCount, targets)
+}
+
+func estimateOpenAIMessagesTokenCount(messages []openai.ChatCompletionMessageParamUnion) int {
+	tokenCount := 0
+	for _, msg := range messages {
+		tokenCount += estimateContextTokenCount(string(marshalContextOrEmpty(msg)))
+	}
+	return tokenCount
 }
 
 func openAIToolContent(content openai.ChatCompletionToolMessageParamContentUnion) string {
@@ -131,10 +146,16 @@ func openAIToolContent(content openai.ChatCompletionToolMessageParamContentUnion
 	return string(marshalContextOrEmpty(content))
 }
 
-func reduceResponsesContextForRequest(contextWindowTokenCount int,
-	currentInputTokenCount int,
+func reduceResponsesContextForRequest(
+	contextWindowTokenCount int,
 	next []responses.ResponseInputItemUnionParam,
 ) ([]responses.ResponseInputItemUnionParam, contextReduction) {
+	estimatedInputTokenCount := estimateResponsesInputTokenCount(next)
+	budget := contextInputBudget(contextWindowTokenCount)
+	if estimatedInputTokenCount <= budget {
+		return next, newContextReduction(estimatedInputTokenCount, budget)
+	}
+
 	targets := make([]toolResultReductionTarget, 0)
 	for i, item := range next {
 		if item.OfFunctionCallOutput == nil || item.OfFunctionCallOutput.Output == removedToolResultPlaceholder {
@@ -149,13 +170,27 @@ func reduceResponsesContextForRequest(contextWindowTokenCount int,
 		})
 	}
 
-	return next, reduceToolResultsForRequest(contextWindowTokenCount, currentInputTokenCount, targets)
+	return next, reduceToolResultsForRequest(contextWindowTokenCount, estimatedInputTokenCount, targets)
 }
 
-func reduceAnthropicContextForRequest(contextWindowTokenCount int,
-	currentInputTokenCount int,
+func estimateResponsesInputTokenCount(input []responses.ResponseInputItemUnionParam) int {
+	tokenCount := 0
+	for _, item := range input {
+		tokenCount += estimateContextTokenCount(string(marshalContextOrEmpty(item)))
+	}
+	return tokenCount
+}
+
+func reduceAnthropicContextForRequest(
+	contextWindowTokenCount int,
 	next []anthropic.MessageParam,
 ) ([]anthropic.MessageParam, contextReduction) {
+	estimatedInputTokenCount := estimateAnthropicMessagesTokenCount(next)
+	budget := contextInputBudget(contextWindowTokenCount)
+	if estimatedInputTokenCount <= budget {
+		return next, newContextReduction(estimatedInputTokenCount, budget)
+	}
+
 	targets := make([]toolResultReductionTarget, 0)
 	for mi := range next {
 		for bi, block := range next[mi].Content {
@@ -183,7 +218,15 @@ func reduceAnthropicContextForRequest(contextWindowTokenCount int,
 		}
 	}
 
-	return next, reduceToolResultsForRequest(contextWindowTokenCount, currentInputTokenCount, targets)
+	return next, reduceToolResultsForRequest(contextWindowTokenCount, estimatedInputTokenCount, targets)
+}
+
+func estimateAnthropicMessagesTokenCount(messages []anthropic.MessageParam) int {
+	tokenCount := 0
+	for _, msg := range messages {
+		tokenCount += estimateContextTokenCount(string(marshalContextOrEmpty(msg)))
+	}
+	return tokenCount
 }
 
 func anthropicToolResultContent(result *anthropic.ToolResultBlockParam) string {
@@ -198,10 +241,16 @@ func anthropicToolResultContent(result *anthropic.ToolResultBlockParam) string {
 	return b.String()
 }
 
-func reduceGenkitContextForRequest(contextWindowTokenCount int,
-	currentInputTokenCount int,
+func reduceGenkitContextForRequest(
+	contextWindowTokenCount int,
 	next []*ai.Message,
 ) ([]*ai.Message, contextReduction) {
+	estimatedInputTokenCount := estimateGenkitMessagesTokenCount(next)
+	budget := contextInputBudget(contextWindowTokenCount)
+	if estimatedInputTokenCount <= budget {
+		return next, newContextReduction(estimatedInputTokenCount, budget)
+	}
+
 	targets := make([]toolResultReductionTarget, 0)
 	for mi, msg := range next {
 		if msg == nil || msg.Role != ai.RoleTool {
@@ -222,7 +271,73 @@ func reduceGenkitContextForRequest(contextWindowTokenCount int,
 		}
 	}
 
-	return next, reduceToolResultsForRequest(contextWindowTokenCount, currentInputTokenCount, targets)
+	return next, reduceToolResultsForRequest(contextWindowTokenCount, estimatedInputTokenCount, targets)
+}
+
+func estimateGenkitMessagesTokenCount(messages []*ai.Message) int {
+	tokenCount := 0
+	for _, msg := range messages {
+		tokenCount += estimateContextTokenCount(string(marshalContextOrEmpty(msg)))
+	}
+	return tokenCount
+}
+
+func reduceBedrockContextForRequest(
+	contextWindowTokenCount int,
+	next []brtypes.Message,
+) ([]brtypes.Message, contextReduction) {
+	estimatedInputTokenCount := estimateBedrockMessagesTokenCount(next)
+	budget := contextInputBudget(contextWindowTokenCount)
+	if estimatedInputTokenCount <= budget {
+		return next, newContextReduction(estimatedInputTokenCount, budget)
+	}
+
+	targets := make([]toolResultReductionTarget, 0)
+	for mi := range next {
+		for bi, block := range next[mi].Content {
+			toolResult, ok := block.(*brtypes.ContentBlockMemberToolResult)
+			if !ok {
+				continue
+			}
+			content := bedrockToolResultContent(toolResult.Value.Content)
+			if content == removedToolResultPlaceholder {
+				continue
+			}
+			messageIdx := mi
+			blockIdx := bi
+			targets = append(targets, toolResultReductionTarget{
+				tokenCount: estimateContextTokenCount(content),
+				remove: func() {
+					next[messageIdx].Content[blockIdx].(*brtypes.ContentBlockMemberToolResult).Value.Content = []brtypes.ToolResultContentBlock{
+						&brtypes.ToolResultContentBlockMemberText{Value: removedToolResultPlaceholder},
+					}
+				},
+			})
+		}
+	}
+
+	return next, reduceToolResultsForRequest(contextWindowTokenCount, estimatedInputTokenCount, targets)
+}
+
+func estimateBedrockMessagesTokenCount(messages []brtypes.Message) int {
+	tokenCount := 0
+	for _, msg := range messages {
+		tokenCount += estimateContextTokenCount(string(marshalContextOrEmpty(msg)))
+	}
+	return tokenCount
+}
+
+func bedrockToolResultContent(content []brtypes.ToolResultContentBlock) string {
+	var b strings.Builder
+	for _, block := range content {
+		switch v := block.(type) {
+		case *brtypes.ToolResultContentBlockMemberText:
+			b.WriteString(v.Value)
+		default:
+			b.Write(marshalContextOrEmpty(v))
+		}
+	}
+	return b.String()
 }
 
 func marshalContextOrEmpty(v any) []byte {

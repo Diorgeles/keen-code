@@ -162,9 +162,16 @@ func (c *OpenAIResponsesClient) StreamChat(
 		}
 		turnStartLen := len(input)
 		responseTools := toOpenAIResponseTools(toolRegistry)
-		lastInputTokenCount := 0
 
 		for range maxToolTurns {
+			reducedInput, reduction := reduceResponsesContextForRequest(c.contextWindowTokenCount, input)
+			if !reduction.FitsBudget {
+				slog.Debug("OpenAI Responses context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+				c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, fmt.Errorf(contextWindowExceededError), oneShot)
+				return
+			}
+			input = reducedInput
+
 			params := responses.ResponseNewParams{
 				Model: c.model,
 				Store: param.NewOpt(false),
@@ -191,9 +198,6 @@ func (c *OpenAIResponsesClient) StreamChat(
 				return
 			}
 
-			if completed.Usage.InputTokens > 0 {
-				lastInputTokenCount = int(completed.Usage.InputTokens)
-			}
 			if completed.Usage.InputTokens > 0 || completed.Usage.OutputTokens > 0 {
 				slog.Debug(
 					"OpenAI Responses usage",
@@ -223,16 +227,6 @@ func (c *OpenAIResponsesClient) StreamChat(
 
 			input = append(input, responseOutputInputs(completed.Output, toolCalls, streamedContent)...)
 			input = append(input, c.executeTools(ctx, toolCalls, toolRegistry, eventCh)...)
-
-			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
-				reducedInput, reduction := reduceResponsesContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, input)
-				if !reduction.FitsBudget {
-					slog.Debug("OpenAI Responses context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
-					c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, fmt.Errorf(contextWindowExceededError), oneShot)
-					return
-				}
-				input = reducedInput
-			}
 		}
 
 		c.exitIncomplete(eventCh, input, turnStartLen, replayedPendingInput, nil, oneShot)

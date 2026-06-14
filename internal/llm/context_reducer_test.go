@@ -5,16 +5,18 @@ import (
 	"testing"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	brtypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/firebase/genkit/go/ai"
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/responses"
 )
 
 func TestContextFitsBudget(t *testing.T) {
-	if !contextFitsBudget(10000, 700) {
+	if !contextFitsBudget(13050, 700) {
 		t.Fatal("expected context to fit budget")
 	}
-	if contextFitsBudget(10000, 800) {
+	if contextFitsBudget(13050, 800) {
 		t.Fatal("expected context to exceed budget")
 	}
 }
@@ -27,7 +29,7 @@ func TestReduceToolResultsForRequest_RemovesOldestUntilBudgetFits(t *testing.T) 
 		{tokenCount: 100, remove: func() { removed = append(removed, 2) }},
 	}
 
-	reduction := reduceToolResultsForRequest(10000, 850, targets)
+	reduction := reduceToolResultsForRequest(contextWindowForInputBudget(800), 850, targets)
 
 	if !reduction.FitsBudget {
 		t.Fatal("expected reduced context to fit budget")
@@ -53,7 +55,7 @@ func TestReduceToolResultsForRequest_ReturnsNotFitAfterRemovingAllTargets(t *tes
 		{tokenCount: 50, remove: func() { removed++ }},
 	}
 
-	reduction := reduceToolResultsForRequest(10000, 1000, targets)
+	reduction := reduceToolResultsForRequest(contextWindowForInputBudget(800), 1000, targets)
 
 	if reduction.FitsBudget {
 		t.Fatal("expected reduced context to remain over budget")
@@ -73,11 +75,16 @@ func TestReduceOpenAIContextForRequest_ReplacesOldestToolResults(t *testing.T) {
 		openai.ToolMessage(longResult, "call_old"),
 		openai.ToolMessage("recent result", "call_recent"),
 	}
+	originalTokenCount := estimateOpenAIMessagesTokenCount(messages)
+	budget := originalTokenCount - estimateContextTokenCount(longResult)/2
 
-	reduced, reduction := reduceOpenAIContextForRequest(10000, 850, messages)
+	reduced, reduction := reduceOpenAIContextForRequest(contextWindowForInputBudget(budget), messages)
 
 	if !reduction.FitsBudget {
 		t.Fatal("expected reduced context to fit budget")
+	}
+	if reduction.OriginalTokenCount != originalTokenCount {
+		t.Fatalf("expected original token count %d, got %d", originalTokenCount, reduction.OriginalTokenCount)
 	}
 	if reduction.RemovedToolResults != 1 {
 		t.Fatalf("expected 1 removed tool result, got %d", reduction.RemovedToolResults)
@@ -90,6 +97,49 @@ func TestReduceOpenAIContextForRequest_ReplacesOldestToolResults(t *testing.T) {
 	}
 }
 
+func TestReduceOpenAIContextForRequest_UsesFullMessageEstimate(t *testing.T) {
+	longResult := repeatString("new ", 200)
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage("inspect files"),
+		openai.ToolMessage(longResult, "call_new"),
+	}
+	originalTokenCount := estimateOpenAIMessagesTokenCount(messages)
+	budget := originalTokenCount - estimateContextTokenCount(longResult)/2
+
+	reduced, reduction := reduceOpenAIContextForRequest(contextWindowForInputBudget(budget), messages)
+
+	if !reduction.FitsBudget {
+		t.Fatal("expected reduced context to fit budget")
+	}
+	if reduction.RemovedToolResults != 1 {
+		t.Fatalf("expected 1 removed tool result, got %d", reduction.RemovedToolResults)
+	}
+	if got := openAIToolContent(reduced[1].OfTool.Content); got != removedToolResultPlaceholder {
+		t.Fatalf("expected tool result placeholder, got %q", got)
+	}
+}
+
+func TestReduceOpenAIContextForRequest_SkipsReductionWhenFullEstimateFits(t *testing.T) {
+	messages := []openai.ChatCompletionMessageParamUnion{
+		openai.UserMessage("inspect files"),
+		openai.ToolMessage("old result", "call_old"),
+		openai.ToolMessage("new result", "call_new"),
+	}
+	budget := estimateOpenAIMessagesTokenCount(messages) + 10
+
+	reduced, reduction := reduceOpenAIContextForRequest(contextWindowForInputBudget(budget), messages)
+
+	if !reduction.FitsBudget {
+		t.Fatal("expected context to fit budget")
+	}
+	if reduction.RemovedToolResults != 0 {
+		t.Fatalf("expected no removed tool results, got %d", reduction.RemovedToolResults)
+	}
+	if got := openAIToolContent(reduced[1].OfTool.Content); got != "old result" {
+		t.Fatalf("expected old tool result to remain, got %q", got)
+	}
+}
+
 func TestReduceResponsesContextForRequest_SkipsExistingPlaceholders(t *testing.T) {
 	longResult := repeatString("old ", 200)
 	input := []responses.ResponseInputItemUnionParam{
@@ -97,8 +147,9 @@ func TestReduceResponsesContextForRequest_SkipsExistingPlaceholders(t *testing.T
 		responses.ResponseInputItemParamOfFunctionCallOutput("call_old", longResult),
 		responses.ResponseInputItemParamOfFunctionCallOutput("call_recent", "recent result"),
 	}
+	budget := estimateResponsesInputTokenCount(input) - estimateContextTokenCount(longResult)/2
 
-	reduced, reduction := reduceResponsesContextForRequest(10000, 850, input)
+	reduced, reduction := reduceResponsesContextForRequest(contextWindowForInputBudget(budget), input)
 
 	if reduction.RemovedToolResults != 1 {
 		t.Fatalf("expected 1 removed tool result, got %d", reduction.RemovedToolResults)
@@ -122,8 +173,9 @@ func TestReduceAnthropicContextForRequest_ReplacesToolResultContentOnly(t *testi
 			anthropic.NewToolResultBlock("toolu_recent", "recent result", false),
 		),
 	}
+	budget := estimateAnthropicMessagesTokenCount(messages) - estimateContextTokenCount(longResult)/2
 
-	reduced, reduction := reduceAnthropicContextForRequest(10000, 850, messages)
+	reduced, reduction := reduceAnthropicContextForRequest(contextWindowForInputBudget(budget), messages)
 
 	if reduction.RemovedToolResults != 1 {
 		t.Fatalf("expected 1 removed tool result, got %d", reduction.RemovedToolResults)
@@ -144,12 +196,13 @@ func TestReduceAnthropicContextForRequest_ReplacesToolResultContentOnly(t *testi
 }
 
 func TestReduceGenkitContextForRequest_ReplacesToolResponseOutput(t *testing.T) {
+	longResult := repeatString("old ", 200)
 	messages := []*ai.Message{
 		ai.NewMessage(ai.RoleTool, nil,
 			ai.NewToolResponsePart(&ai.ToolResponse{
 				Name:   "read_file",
 				Ref:    "call_old",
-				Output: map[string]any{"content": repeatString("old ", 200)},
+				Output: map[string]any{"content": longResult},
 			}),
 			ai.NewToolResponsePart(&ai.ToolResponse{
 				Name:   "grep",
@@ -158,8 +211,9 @@ func TestReduceGenkitContextForRequest_ReplacesToolResponseOutput(t *testing.T) 
 			}),
 		),
 	}
+	budget := estimateGenkitMessagesTokenCount(messages) - estimateContextTokenCount(longResult)/2
 
-	reduced, reduction := reduceGenkitContextForRequest(10000, 850, messages)
+	reduced, reduction := reduceGenkitContextForRequest(contextWindowForInputBudget(budget), messages)
 
 	if reduction.RemovedToolResults != 1 {
 		t.Fatalf("expected 1 removed tool result, got %d", reduction.RemovedToolResults)
@@ -177,6 +231,60 @@ func TestReduceGenkitContextForRequest_ReplacesToolResponseOutput(t *testing.T) 
 	if got := reduced[0].Content[1].ToolResponse.Output; got != "recent result" {
 		t.Fatalf("expected recent tool output to remain, got %#v", got)
 	}
+}
+
+func TestReduceBedrockContextForRequest_ReplacesToolResultContentOnly(t *testing.T) {
+	longResult := repeatString("old ", 200)
+	messages := []brtypes.Message{
+		{
+			Role: brtypes.ConversationRoleUser,
+			Content: []brtypes.ContentBlock{
+				&brtypes.ContentBlockMemberToolResult{Value: brtypes.ToolResultBlock{
+					ToolUseId: aws.String("toolu_old"),
+					Content: []brtypes.ToolResultContentBlock{
+						&brtypes.ToolResultContentBlockMemberText{Value: longResult},
+					},
+					Status: brtypes.ToolResultStatusSuccess,
+				}},
+				&brtypes.ContentBlockMemberToolResult{Value: brtypes.ToolResultBlock{
+					ToolUseId: aws.String("toolu_recent"),
+					Content: []brtypes.ToolResultContentBlock{
+						&brtypes.ToolResultContentBlockMemberText{Value: "recent result"},
+					},
+					Status: brtypes.ToolResultStatusSuccess,
+				}},
+				&brtypes.ContentBlockMemberText{Value: repeatString("keep ", 120)},
+			},
+		},
+	}
+	budget := estimateBedrockMessagesTokenCount(messages) - estimateContextTokenCount(longResult)/2
+
+	reduced, reduction := reduceBedrockContextForRequest(contextWindowForInputBudget(budget), messages)
+
+	if reduction.RemovedToolResults != 1 {
+		t.Fatalf("expected 1 removed tool result, got %d", reduction.RemovedToolResults)
+	}
+	oldResult := reduced[0].Content[0].(*brtypes.ContentBlockMemberToolResult)
+	if aws.ToString(oldResult.Value.ToolUseId) != "toolu_old" {
+		t.Fatalf("expected tool use id to be preserved, got %q", aws.ToString(oldResult.Value.ToolUseId))
+	}
+	if oldResult.Value.Status != brtypes.ToolResultStatusSuccess {
+		t.Fatalf("expected status to be preserved, got %q", oldResult.Value.Status)
+	}
+	if got := bedrockToolResultContent(oldResult.Value.Content); got != removedToolResultPlaceholder {
+		t.Fatalf("expected placeholder content, got %q", got)
+	}
+	recentResult := reduced[0].Content[1].(*brtypes.ContentBlockMemberToolResult)
+	if got := bedrockToolResultContent(recentResult.Value.Content); got != "recent result" {
+		t.Fatalf("expected recent tool result to remain, got %q", got)
+	}
+}
+
+func contextWindowForInputBudget(budget int) int {
+	if budget+contextOutputReserveTokenCount+4096 < 81920 {
+		return budget + contextOutputReserveTokenCount + 4096
+	}
+	return (20*(budget+contextOutputReserveTokenCount) + 18) / 19
 }
 
 func repeatString(s string, count int) string {

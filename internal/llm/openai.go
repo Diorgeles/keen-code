@@ -457,9 +457,16 @@ func (c *OpenAICompatibleClient) StreamChat(
 		}
 		oaiTools := toOpenAITools(toolRegistry)
 		requestOpts := c.requestOptions(streamOpts)
-		lastInputTokenCount := 0
 
 		for range maxToolTurns {
+			reducedMessages, reduction := reduceOpenAIContextForRequest(c.contextWindowTokenCount, oaiMessages)
+			if !reduction.FitsBudget {
+				slog.Debug("OpenAI context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
+				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
+				return
+			}
+			oaiMessages = reducedMessages
+
 			params := c.buildChatParams(oaiMessages, oaiTools)
 
 			message, reasoningContent, streamedContent, hasChoice, usage, err := c.collectTurnWithRetry(ctx, params, eventCh, requestOpts...)
@@ -471,9 +478,6 @@ func (c *OpenAICompatibleClient) StreamChat(
 			if !hasChoice {
 				c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, nil, oneShot)
 				return
-			}
-			if usage.PromptTokens > 0 {
-				lastInputTokenCount = int(usage.PromptTokens)
 			}
 			if usage.PromptTokens > 0 || usage.CompletionTokens > 0 {
 				slog.Debug(
@@ -510,16 +514,6 @@ func (c *OpenAICompatibleClient) StreamChat(
 			toolMsgs := c.executeTools(ctx, message.ToolCalls, toolRegistry, eventCh)
 			if len(toolMsgs) > 0 {
 				oaiMessages = append(oaiMessages, toolMsgs...)
-			}
-
-			if lastInputTokenCount > 0 && !contextFitsBudget(c.contextWindowTokenCount, lastInputTokenCount) {
-				reducedMessages, reduction := reduceOpenAIContextForRequest(c.contextWindowTokenCount, lastInputTokenCount, oaiMessages)
-				if !reduction.FitsBudget {
-					slog.Debug("OpenAI context still exceeds budget after reduction", "inputTokenCount", reduction.ReducedTokenCount, "removedToolResultCount", reduction.RemovedToolResults)
-					c.exitIncomplete(eventCh, oaiMessages, turnStartLen, injectedPending, fmt.Errorf(contextWindowExceededError), oneShot)
-					return
-				}
-				oaiMessages = reducedMessages
 			}
 		}
 
