@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.3] - 2026-06-14
+
+### Added
+- Google Analytics tracking for the documentation site.
+- Automatic clipboard copy when mouse text selection is released in the REPL, with a transient copy notification.
+
+### Changed
+- Reduced tool context sent to the LLM before requests.
+- Removed `Ctrl+C` and `Cmd+C` as REPL selection copy shortcuts in favor of copy-on-release.
+
 ## [0.22.2] - 2026-06-15
 
 ### Added
@@ -475,7 +485,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.22.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.22.3...HEAD
+[0.22.3]: https://github.com/mochow13/keen-code/compare/v0.22.2...v0.22.3
 [0.22.2]: https://github.com/mochow13/keen-code/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/mochow13/keen-code/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/mochow13/keen-code/compare/v0.21.2...v0.22.0
