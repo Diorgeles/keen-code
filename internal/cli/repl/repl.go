@@ -83,7 +83,7 @@ type replModel struct {
 	showThinking              bool
 	history                   replhistory.InputHistory
 	selection                 viewportSelection
-	inputSelection            viewportSelection
+	inputSelection            inputSelection
 	btwLines                  []string
 	btwQuestion               string
 	btwStreamHandler          *StreamHandler
@@ -666,7 +666,7 @@ func (m replModel) View() tea.View {
 		}
 		m.textarea.SetStyles(styles)
 
-		textareaView := m.inputSelection.renderWithColumnOffset(m.textarea.View(), m.textarea.Width()+inputPromptWidth, m.textarea.Height(), m.textarea.ScrollYOffset(), inputPromptWidth)
+		textareaView := m.inputSelection.render(m.textarea.View(), m.textarea.Width()+inputPromptWidth, m.textarea.Height(), m.textarea.ScrollYOffset(), inputPromptWidth)
 		view.WriteString(renderInputArea(textareaView, m.width, m.textarea.Focused(), shellMode, m.currentMode()))
 		view.WriteString("\n")
 		if m.suggestion.Visible() {

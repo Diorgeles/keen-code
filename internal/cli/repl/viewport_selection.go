@@ -95,8 +95,8 @@ func (s *viewportSelection) registerClick(localX, localY int) int {
 }
 
 func (s *viewportSelection) selectWord(localX, localY, yOffset int) bool {
-	lineIndex := yOffset + localY
-	if lineIndex < 0 || lineIndex >= len(s.lines) {
+	lineIndex := clampInt(yOffset+localY, 0, max(0, len(s.lines)-1))
+	if lineIndex < 0 {
 		return false
 	}
 	line := ansi.Strip(s.lines[lineIndex])
@@ -111,8 +111,8 @@ func (s *viewportSelection) selectWord(localX, localY, yOffset int) bool {
 }
 
 func (s *viewportSelection) selectLine(localY, yOffset int) bool {
-	lineIndex := yOffset + localY
-	if lineIndex < 0 || lineIndex >= len(s.lines) {
+	lineIndex := clampInt(yOffset+localY, 0, max(0, len(s.lines)-1))
+	if lineIndex < 0 {
 		return false
 	}
 	lineWidth := ansi.StringWidth(s.lines[lineIndex])
@@ -130,10 +130,14 @@ func (s viewportSelection) selectedText() string {
 		return ""
 	}
 	start, end := s.normalizedRange()
-	if len(s.lines) == 0 || start.line >= len(s.lines) {
+	if len(s.lines) == 0 {
 		return ""
 	}
 	end.line = min(end.line, len(s.lines)-1)
+	start.line = min(start.line, len(s.lines)-1)
+	if start.line > end.line {
+		return ""
+	}
 
 	parts := make([]string, 0, end.line-start.line+1)
 	for lineIndex := start.line; lineIndex <= end.line; lineIndex++ {
@@ -156,15 +160,19 @@ func (s viewportSelection) selectedText() string {
 }
 
 func (s viewportSelection) render(view string, width, height, yOffset int) string {
-	return s.renderWithColumnOffset(view, width, height, yOffset, 0)
+	return renderSelection(view, width, height, yOffset, 0, s.anchor, s.cursor)
 }
 
-func (s viewportSelection) renderWithColumnOffset(view string, width, height, yOffset, colOffset int) string {
-	if !s.hasSelection() || width <= 0 || height <= 0 || view == "" {
+func renderSelection(view string, width, height, yOffset, colOffset int, anchor, cursor selectionPoint) string {
+	if (anchor.line == cursor.line && anchor.col == cursor.col) || width <= 0 || height <= 0 || view == "" {
 		return view
 	}
 
-	start, end := s.normalizedRange()
+	start, end := anchor, cursor
+	if end.line < start.line || (end.line == start.line && end.col < start.col) {
+		start, end = end, start
+	}
+
 	if end.line < yOffset || start.line >= yOffset+height {
 		return view
 	}
@@ -345,39 +353,6 @@ func (m *replModel) handleSelectionMouseDown(msg tea.MouseClickMsg) (bool, tea.C
 	return true, nil
 }
 
-func (m *replModel) handleInputSelectionMouseDown(msg tea.MouseClickMsg) (bool, tea.Cmd) {
-	mouse := msg.Mouse()
-	if mouse.Button != tea.MouseLeft {
-		return false, nil
-	}
-	if !m.mouseInInputTextArea(mouse.X, mouse.Y) {
-		if m.inputSelection.hasSelection() {
-			m.inputSelection.clear()
-		}
-		return false, nil
-	}
-
-	cmd := m.focusInput()
-	m.inputSelection.setContent(m.textarea.Value())
-	m.selection.clear()
-	x, y := m.inputSelectionLocalPosition(mouse.X, mouse.Y)
-	clickCount := m.inputSelection.registerClick(x, y)
-	switch clickCount {
-	case 2:
-		if !m.inputSelection.selectWord(x, y, m.textarea.ScrollYOffset()) {
-			m.inputSelection.start(x, y, m.textarea.ScrollYOffset())
-		}
-	case 3:
-		if !m.inputSelection.selectLine(y, m.textarea.ScrollYOffset()) {
-			m.inputSelection.start(x, y, m.textarea.ScrollYOffset())
-		}
-		m.inputSelection.clickCount = 0
-	default:
-		m.inputSelection.start(x, y, m.textarea.ScrollYOffset())
-	}
-	return true, cmd
-}
-
 func (m *replModel) handleSelectionMouseDrag(msg tea.MouseMotionMsg) bool {
 	if !m.selection.mouseDown {
 		return false
@@ -401,33 +376,11 @@ func (m *replModel) handleSelectionMouseDrag(msg tea.MouseMotionMsg) bool {
 	return true
 }
 
-func (m *replModel) handleInputSelectionMouseDrag(msg tea.MouseMotionMsg) bool {
-	if !m.inputSelection.mouseDown {
-		return false
-	}
-	mouse := msg.Mouse()
-	if mouse.Button != tea.MouseLeft && mouse.Button != tea.MouseNone {
-		return false
-	}
-
-	x, y := m.inputSelectionLocalPosition(mouse.X, mouse.Y)
-	m.inputSelection.setContent(m.textarea.Value())
-	m.inputSelection.drag(x, y, m.textarea.ScrollYOffset())
-	return true
-}
-
 func (m *replModel) handleSelectionMouseUp() (bool, tea.Cmd) {
 	if !m.selection.release() {
 		return false, nil
 	}
 	return true, m.copySelectedTextCmd(m.selection.selectedText())
-}
-
-func (m *replModel) handleInputSelectionMouseUp() (bool, tea.Cmd) {
-	if !m.inputSelection.release() {
-		return false, nil
-	}
-	return true, m.copySelectedTextCmd(m.inputSelection.selectedText())
 }
 
 func (m *replModel) handleMouseDown(msg tea.MouseClickMsg) (bool, tea.Cmd) {
@@ -453,26 +406,6 @@ func (m *replModel) handleMouseUp() (bool, tea.Cmd) {
 
 func (m replModel) mouseInViewport(x, y int) bool {
 	return x >= 0 && y >= 0 && x <= m.viewport.Width() && y < m.viewport.Height()
-}
-
-func (m replModel) mouseInInputTextArea(x, y int) bool {
-	inputTop := m.inputAreaTop()
-	textTop := inputTop + 1
-	return x >= 0 && y >= textTop && y < textTop+m.textarea.Height()
-}
-
-func (m replModel) inputSelectionLocalPosition(x, y int) (int, int) {
-	localY := clampInt(y-m.inputAreaTop()-1, 0, max(0, m.textarea.Height()-1))
-	localX := clampInt(x-inputPromptWidth, 0, max(0, m.textarea.Width()-inputPromptWidth))
-	return localX, localY
-}
-
-func (m replModel) inputAreaTop() int {
-	top := m.viewport.Height()
-	if m.showSpinner {
-		top += 2
-	}
-	return top
 }
 
 func absInt(v int) int {
