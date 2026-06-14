@@ -58,6 +58,12 @@ BASE_CONFIG = {
         "font": {"code": "Cascadia Code"},
     },
     "extra_css": ["extra.css"],
+    "extra": {
+        "analytics": {
+            "provider": "google",
+            "property": "G-1BLBXTQNSW",
+        },
+    },
     "markdown_extensions": [
         "attr_list",
         "pymdownx.highlight",
