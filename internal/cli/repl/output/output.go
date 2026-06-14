@@ -2,7 +2,6 @@ package output
 
 import (
 	"fmt"
-	"maps"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -141,6 +140,15 @@ func FormatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string 
 	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s → %s", startCall.Name, inputDisplay))
 }
 
+var toolDisplayFields = map[string][]string{
+	"read_file":     {"path"},
+	"write_file":    {"path"},
+	"edit_file":     {"path"},
+	"grep":          {"path", "pattern"},
+	"glob":          {"path", "pattern"},
+	"delegate_task": {"agent"},
+}
+
 func FormatToolInput(toolName string, input map[string]any, workingDir string) string {
 	if input == nil {
 		return ""
@@ -150,25 +158,25 @@ func FormatToolInput(toolName string, input map[string]any, workingDir string) s
 		return formatMCPToolInput(input)
 	}
 
-	displayInput := make(map[string]any, len(input))
-	maps.Copy(displayInput, input)
-	if path, ok := displayInput["path"].(string); ok {
-		displayInput["path"] = formatToolPathForUI(path, workingDir)
+	fields, ok := toolDisplayFields[toolName]
+	if !ok {
+		return jsonMarshalCompact(input)
 	}
 
-	switch toolName {
-	case "delegate_task":
-		if agent, ok := displayInput["agent"]; ok {
-			return fmt.Sprintf("agent=%v", agent)
+	displayInput := make(map[string]any, len(fields))
+	for _, field := range fields {
+		value, ok := input[field]
+		if !ok {
+			continue
 		}
-		return ""
-	case "write_file", "edit_file":
-		if path, ok := displayInput["path"]; ok {
-			return fmt.Sprintf("path=%v", path)
+		if field == "path" {
+			if path, ok := value.(string); ok {
+				displayInput[field] = formatToolPathForUI(path, workingDir)
+			}
+			continue
 		}
-		return ""
+		displayInput[field] = value
 	}
-
 	return jsonMarshalCompact(displayInput)
 }
 

@@ -131,12 +131,13 @@ func TestFormatToolInput_WriteFileShowsOnlyRelativePath(t *testing.T) {
 
 func TestFormatToolInput_SeparatesArgumentsWithDots(t *testing.T) {
 	got := FormatToolInput("grep", map[string]any{
-		"include": "*.go",
-		"path":    "internal/cli/repl",
-		"pattern": "FormatToolInput",
+		"include":     "*.go",
+		"output_mode": "content",
+		"path":        "internal/cli/repl",
+		"pattern":     "FormatToolInput",
 	}, "/tmp/project")
 
-	expected := "include=*.go • path=internal/cli/repl • pattern=FormatToolInput"
+	expected := "path=internal/cli/repl • pattern=FormatToolInput"
 	if got != expected {
 		t.Fatalf("expected dot-separated tool arguments, got %q", got)
 	}
