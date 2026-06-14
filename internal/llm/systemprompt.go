@@ -115,11 +115,7 @@ A structured list of files that are still important to continue the task.`
 
 const maxInstructionsSize = 8 * 1024
 
-func Build(workingDir, skillsCatalog string) string {
-	return BuildForMode(workingDir, skillsCatalog, ModeBuild)
-}
-
-func BuildForMode(workingDir, skillsCatalog string, mode AgentMode) string {
+func Build(workingDir, skillsCatalog, subagentsCatalog string, mode AgentMode) string {
 	var sb strings.Builder
 	sb.WriteString(sharedPrompt)
 	sb.WriteString(fmt.Sprintf("\n\nWorking directory: %s", workingDir))
@@ -133,6 +129,11 @@ func BuildForMode(workingDir, skillsCatalog string, mode AgentMode) string {
 	if skillsCatalog != "" {
 		sb.WriteString("\n\n")
 		sb.WriteString(skillsCatalog)
+	}
+
+	if subagentsCatalog != "" {
+		sb.WriteString("\n\n")
+		sb.WriteString(subagentsCatalog)
 	}
 
 	if mode == ModePlan {

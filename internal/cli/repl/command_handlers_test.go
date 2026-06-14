@@ -648,6 +648,95 @@ func TestHandleSkillsCommandDisable(t *testing.T) {
 	}
 }
 
+func TestHandleSubagentsCommandList(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	agentsDir := filepath.Join(work, ".agents", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "reviewer.md"), []byte("---\nname: reviewer\ndescription: Review scoped inputs\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write reviewer: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "hidden.md"), []byte("---\nname: hidden\ndescription: Hidden agent\nhidden: true\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write hidden: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/subagents list")
+	newM, _ := m.handleEnterKey()
+
+	out := ansi.Strip(newM.output.Join())
+	for _, expected := range []string{"Available Subagents", "Subagent", "Description", "reviewer", "Review scoped inputs"} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected %q in subagents list output, got %q", expected, out)
+		}
+	}
+	if strings.Contains(out, "hidden") {
+		t.Fatalf("expected hidden subagent to be omitted, got %q", out)
+	}
+}
+
+func TestHandleSubagentsCommandRootLists(t *testing.T) {
+	home := t.TempDir()
+	work := t.TempDir()
+	t.Setenv("HOME", home)
+	agentsDir := filepath.Join(work, ".agents", "agents")
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		t.Fatalf("mkdir agents: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "reviewer.md"), []byte("---\nname: reviewer\ndescription: Review scoped inputs\n---\nBody"), 0644); err != nil {
+		t.Fatalf("write reviewer: %v", err)
+	}
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.appState = replappstate.New(nil, work)
+	m.textarea.SetValue("/subagents")
+	newM, _ := m.handleEnterKey()
+
+	out := ansi.Strip(newM.output.Join())
+	for _, expected := range []string{"Available Subagents", "reviewer", "Review scoped inputs"} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected %q in subagents output, got %q", expected, out)
+		}
+	}
+}
+
+func TestHandleSubagentsCommandInvalidArgs(t *testing.T) {
+	m := newTestModel()
+	m.textarea.SetValue("/subagents foo")
+	newM, _ := m.handleEnterKey()
+
+	out := ansi.Strip(newM.output.Join())
+	if !strings.Contains(out, "Usage: /subagents [list]") {
+		t.Fatalf("expected usage output, got %q", out)
+	}
+}
+
+func TestParseSubagentArgs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{name: "root", input: "/subagents", want: nil},
+		{name: "list", input: "/subagents list", want: []string{"list"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseSubagentArgs(tt.input)
+			if strings.Join(got, " ") != strings.Join(tt.want, " ") {
+				t.Fatalf("parseSubagentArgs(%q) = %#v, want %#v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseSkillArgs(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -8,6 +8,7 @@ import (
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/skills"
+	"github.com/user/keen-code/internal/subagents"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -23,6 +24,7 @@ type AppState struct {
 	lastUsage       *llm.TokenUsage
 	skills          skills.Discovery
 	skillsConfig    skills.Config
+	subagents       subagents.Discovery
 }
 
 func New(client llm.LLMClient, workingDir string) *AppState {
@@ -34,6 +36,7 @@ func New(client llm.LLMClient, workingDir string) *AppState {
 		workingDir:   workingDir,
 	}
 	state.ReloadSkills()
+	state.ReloadSubagents()
 	return state
 }
 
@@ -124,6 +127,31 @@ func (s *AppState) SkillsCatalog() string {
 	return skills.Catalog(s.skills.Skills, s.skillsConfig)
 }
 
+func (s *AppState) ReloadSubagents() subagents.Discovery {
+	if strings.TrimSpace(s.workingDir) == "" {
+		s.subagents = subagents.Discovery{}
+		return s.GetSubagents()
+	}
+	bundledDir, bundledErr := subagents.EnsureBundled()
+	discovery := subagents.LoadMetadata(subagents.Discover(s.workingDir, bundledDir))
+	if bundledErr != nil {
+		discovery.Warnings = append(discovery.Warnings, "Bundled subagents failed to extract: "+bundledErr.Error())
+	}
+	s.subagents = discovery
+	return s.GetSubagents()
+}
+
+func (s *AppState) GetSubagents() subagents.Discovery {
+	return subagents.Discovery{
+		Profiles: append([]subagents.Profile(nil), s.subagents.Profiles...),
+		Warnings: append([]string(nil), s.subagents.Warnings...),
+	}
+}
+
+func (s *AppState) SubagentsCatalog() string {
+	return subagents.Catalog(s.subagents.Profiles)
+}
+
 func cloneSkillsConfig(cfg skills.Config) skills.Config {
 	cloned := skills.Config{IsEnabled: map[string]bool{}}
 	for name, enabled := range cfg.IsEnabled {
@@ -148,7 +176,7 @@ func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig, o
 	}
 	systemMsg := llm.Message{
 		Role:    llm.RoleSystem,
-		Content: llm.BuildForMode(s.workingDir, s.SkillsCatalog(), s.mode),
+		Content: llm.Build(s.workingDir, s.SkillsCatalog(), s.SubagentsCatalog(), s.mode),
 	}
 	messages := append([]llm.Message{systemMsg}, s.GetMessages()...)
 	registry := s.toolRegistry

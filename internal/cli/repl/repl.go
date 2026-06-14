@@ -166,7 +166,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	fileGuard := filesystem.NewGuard(ctx.workingDir, fileGitAwareness)
 	fileSearcher := replfilesearch.NewFileSearcher(ctx.workingDir, fileGuard)
 
-	repltooling.SetupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter, ctx.mcp)
+	repltooling.SetupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter, ctx.mcp, ctx.cfg)
 
 	mdRenderer, err := replmarkdown.New(defaultWidth)
 

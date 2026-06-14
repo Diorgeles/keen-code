@@ -21,12 +21,14 @@ import (
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/skills"
+	"github.com/user/keen-code/internal/subagents"
 )
 
 const (
 	mcpConnectTimeout = 5 * time.Minute
 	mcpUsage          = "Usage: /mcp status | /mcp connect <server>"
 	skillsUsage       = "Usage: /skills list|status | /skills reload | /skills enable|disable <name>"
+	subagentsUsage    = "Usage: /subagents [list]"
 	bangTimeout       = 180 * time.Second
 )
 
@@ -129,6 +131,11 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	case input == replcommands.Skills || strings.HasPrefix(input, replcommands.Skills+" "):
 		m.textarea.Reset()
 		result := m.handleSkillsCommand(input)
+		return result, nil, true
+
+	case input == replcommands.Subagents || strings.HasPrefix(input, replcommands.Subagents+" "):
+		m.textarea.Reset()
+		result := m.handleSubagentsCommand(input)
 		return result, nil, true
 
 	case input == replcommands.AllowPermission || strings.HasPrefix(input, replcommands.AllowPermission+" "):
@@ -580,6 +587,76 @@ func (m *replModel) handleSkillsCommand(input string) replModel {
 
 func parseSkillArgs(input string) []string {
 	return strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, replcommands.Skills)))
+}
+
+func (m *replModel) handleSubagentsCommand(input string) replModel {
+	args := parseSubagentArgs(input)
+	if len(args) > 1 || len(args) == 1 && args[0] != "list" {
+		m.output.AddError(subagentsUsage, repltheme.ErrorStyle)
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	discovery := m.appState.GetSubagents()
+	for _, warning := range discovery.Warnings {
+		m.output.AddError(warning, repltheme.ErrorStyle)
+	}
+
+	m.output.AddStyledLine("  Available Subagents\n", repltheme.MutedStyle.Bold(true))
+	visible := visibleSubagents(discovery.Profiles)
+	if len(visible) == 0 {
+		m.output.AddStyledLine("    No subagents found.", repltheme.MutedStyle)
+	} else {
+		m.addSubagentTable(visible)
+	}
+	m.output.AddEmptyLine()
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
+}
+
+func parseSubagentArgs(input string) []string {
+	return strings.Fields(strings.TrimSpace(strings.TrimPrefix(input, replcommands.Subagents)))
+}
+
+func visibleSubagents(profiles []subagents.Profile) []subagents.Profile {
+	items := make([]subagents.Profile, 0, len(profiles))
+	for _, profile := range profiles {
+		if !profile.Hidden {
+			items = append(items, profile)
+		}
+	}
+	return items
+}
+
+func (m *replModel) addSubagentTable(profiles []subagents.Profile) {
+	nameWidth := max(maxSubagentNameWidth(profiles), len("Subagent"))
+	rows := make([][]string, 0, len(profiles))
+	for _, profile := range profiles {
+		rows = append(rows, []string{profile.Name, truncateSkillDescription(profile.Description)})
+	}
+
+	m.addCommandTable([]string{"Subagent", "Description"}, rows, func(row, col int, style lipgloss.Style) lipgloss.Style {
+		if col == 0 {
+			style = style.Width(nameWidth + commandTableCellPadding)
+			if row != table.HeaderRow {
+				style = style.Inherit(repltheme.PrimaryBoldStyle)
+			}
+		}
+		if col == 1 && row != table.HeaderRow {
+			style = style.Inherit(repltheme.HelpDescStyle)
+		}
+		return style
+	})
+}
+
+func maxSubagentNameWidth(profiles []subagents.Profile) int {
+	width := 0
+	for _, profile := range profiles {
+		width = max(width, lipgloss.Width(profile.Name))
+	}
+	return width
 }
 
 func (m *replModel) addSkillTable(skillList []skills.Skill, cfg skills.Config) {
