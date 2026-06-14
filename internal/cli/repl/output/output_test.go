@@ -136,7 +136,7 @@ func TestFormatToolInput_SeparatesArgumentsWithDots(t *testing.T) {
 		"pattern": "FormatToolInput",
 	}, "/tmp/project")
 
-	expected := "include=*.go · path=internal/cli/repl · pattern=FormatToolInput"
+	expected := "include=*.go • path=internal/cli/repl • pattern=FormatToolInput"
 	if got != expected {
 		t.Fatalf("expected dot-separated tool arguments, got %q", got)
 	}
@@ -155,6 +155,18 @@ func TestFormatToolInput_CallMCPToolShowsOnlyServerAndTool(t *testing.T) {
 
 	if got != "context7/query-docs" {
 		t.Fatalf("expected call_mcp_tool input to show only server/tool, got %q", got)
+	}
+}
+
+func TestFormatToolInput_DelegateTaskShowsOnlyAgent(t *testing.T) {
+	got := FormatToolInput("delegate_task", map[string]any{
+		"agent":           "explorer",
+		"task":            "Inspect internal/subagents and summarize the design.",
+		"timeout_seconds": 120,
+	}, "/tmp/project")
+
+	if got != "agent=explorer" {
+		t.Fatalf("expected delegate_task input to show only agent, got %q", got)
 	}
 }
 
