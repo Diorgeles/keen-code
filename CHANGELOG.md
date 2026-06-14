@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-06-14
+
+### Added
+- Read-only subagent delegation via `delegate_task` with the bundled `explorer` subagent for scoped codebase investigations.
+
+### Changed
+- Simplified REPL tool invocation display.
+- Simplified displayed tool input fields in the REPL output.
+
 ## [0.22.3] - 2026-06-14
 
 ### Added
@@ -485,7 +494,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.22.3...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/mochow13/keen-code/compare/v0.22.3...v0.23.0
 [0.22.3]: https://github.com/mochow13/keen-code/compare/v0.22.2...v0.22.3
 [0.22.2]: https://github.com/mochow13/keen-code/compare/v0.22.1...v0.22.2
 [0.22.1]: https://github.com/mochow13/keen-code/compare/v0.22.0...v0.22.1
