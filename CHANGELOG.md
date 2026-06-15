@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-06-15
+
+### Added
+- Spinner animations for REPL loading states.
+- Qwen3.7 Plus model entry in the provider registry.
+
+### Changed
+- Shell output now renders with a distinct muted background style in the REPL.
+- Refined input meta display in the REPL.
+- Pruned superseded models from the provider registry.
+
+### Fixed
+- Updated test expectations for context status rendering and model count.
+
 ## [0.23.1] - 2026-06-15
 
 ### Added
@@ -502,7 +516,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.2...HEAD
+[0.23.2]: https://github.com/mochow13/keen-code/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/mochow13/keen-code/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/mochow13/keen-code/compare/v0.22.3...v0.23.0
 [0.22.3]: https://github.com/mochow13/keen-code/compare/v0.22.2...v0.22.3
