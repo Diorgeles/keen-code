@@ -685,19 +685,16 @@ func (m replModel) View() tea.View {
 }
 
 func (m replModel) inputMetaView() string {
-	provider := "-"
 	model := "-"
 
 	if m.ctx != nil && m.ctx.cfg != nil {
-		if m.ctx.cfg.Provider != "" {
-			provider = m.ctx.cfg.Provider
-		}
 		if m.ctx.cfg.Model != "" {
 			model = displayModelName(m.ctx.cfg.Provider, m.ctx.cfg.Model)
 		}
 	}
 
-	modelText := repltheme.MetaLabelStyle.Render(" ") + repltheme.HighlightStyle.Render(provider+"/"+model)
+	modelText := repltheme.HighlightStyle.Render(" " + model)
+	directory := repltheme.HighlightStyle.Render(abbreviateHome(m.ctx.workingDir))
 
 	thinkingText := ""
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
@@ -722,7 +719,7 @@ func (m replModel) inputMetaView() string {
 		timerText = repltheme.LoadingTimerStyle.Render("⏱ " + m.loadingElapsedText())
 	}
 
-	parts := []string{modelText}
+	parts := []string{directory, modelText}
 	if thinkingText != "" {
 		parts = append(parts, thinkingText)
 	}

@@ -140,14 +140,14 @@ func renderContextStatus(status contextStatus) string {
 		return repltheme.ContextStatusUnknownStyle.Render("N/A")
 	}
 	if !status.KnownTokens {
-		return repltheme.MetaLabelStyle.Render("context:") + " " + repltheme.ContextStatusPercentStyle.Render("0.0%") + " • " + repltheme.MetaLabelStyle.Render("0 in / 0 out")
+		return repltheme.MetaLabelStyle.Render("context:") + " " + repltheme.ContextStatusPercentStyle.Render("0.0%") + " • " + repltheme.MetaLabelStyle.Render("0 ↑ / 0 ↓")
 	}
 
 	percent := contextPercentStyle(status.Percent).Render(formatPercent(status.Percent))
 	result := repltheme.MetaLabelStyle.Render("context:") + " " + percent
 
 	if status.TotalInputTokens > 0 || status.TotalOutputTokens > 0 {
-		tokensText := formatCompactTokens(status.TotalInputTokens) + " in / " + formatCompactTokens(status.TotalOutputTokens) + " out"
+		tokensText := formatCompactTokens(status.TotalInputTokens) + " ↑ / " + formatCompactTokens(status.TotalOutputTokens) + " ↓"
 		result += " • " + repltheme.MetaLabelStyle.Render(tokensText)
 	}
 
