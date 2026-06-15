@@ -196,7 +196,8 @@ var (
 	AdversaryLabelStyle  = lipgloss.NewStyle().Foreground(TextPrimaryColor)
 	AdversaryChipStyle   = lipgloss.NewStyle().Background(SecondaryColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
 
-	ShellChipStyle = lipgloss.NewStyle().Background(AccentColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
+	ShellChipStyle       = lipgloss.NewStyle().Background(AccentColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
+	ShellChipOutputStyle = lipgloss.NewStyle().Background(MutedColor).Foreground(BlackColor).Bold(true).Padding(0, 1)
 
 	ModeBuildChipStyle = lipgloss.NewStyle().Background(PrimaryColor).Foreground(WhiteColor).Bold(true).Padding(0, 1)
 	ModePlanChipStyle  = lipgloss.NewStyle().Background(SecondaryColor).Foreground(BlackColor).Bold(true).Padding(0, 1)

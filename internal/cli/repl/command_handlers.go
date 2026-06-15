@@ -833,7 +833,7 @@ func (m *replModel) handleBangCommand(input string) replModel {
 	}
 
 	start := time.Now()
-	topRule, bottomRule := renderRulesWithChip(m.width, repltheme.AccentStyle, "shell", repltheme.ShellChipStyle)
+	topRule, bottomRule := renderRulesWithChip(m.width, repltheme.RuleStyle, "shell", repltheme.ShellChipOutputStyle)
 
 	m.output.AddEmptyLine()
 	m.output.AddLine(topRule)
