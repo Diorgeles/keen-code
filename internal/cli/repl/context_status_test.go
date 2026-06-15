@@ -72,7 +72,7 @@ func TestRenderContextStatusKnown(t *testing.T) {
 				TotalInputTokens:  1234,
 				TotalOutputTokens: 567,
 			},
-			want: "1.2k in / 567 out",
+			want: "1.2k ↑ / 567 ↓",
 		},
 		{
 			name: "without totals",
