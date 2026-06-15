@@ -170,10 +170,6 @@ providers:
         name: Kimi K2.6
         context_window: 256000
         thinking_efforts: ["enabled", "disabled"]
-      - id: kimi-k2.5
-        name: Kimi K2.5
-        context_window: 256000
-        thinking_efforts: ["enabled", "disabled"]
       - id: deepseek-v4-pro
         name: DeepSeek V4 Pro
         context_window: 1000000
@@ -182,12 +178,6 @@ providers:
         name: DeepSeek V4 Flash
         context_window: 1000000
         thinking_efforts: ["off", "high", "max"]
-      - id: mimo-v2-pro
-        name: MiMo-V2-Pro
-        context_window: 1000000
-      - id: mimo-v2-omni
-        name: MiMo-V2-Omni
-        context_window: 1000000
       - id: mimo-v2.5-pro
         name: MiMo-V2.5-Pro
         context_window: 1000000
@@ -202,6 +192,9 @@ providers:
         context_window: 204800
       - id: qwen3.7-max
         name: Qwen3.7 Max
+        context_window: 1000000
+      - id: qwen3.7-plus
+        name: Qwen3.7 Plus
         context_window: 1000000
       - id: qwen3.6-plus
         name: Qwen3.6 Plus
