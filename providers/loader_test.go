@@ -173,8 +173,8 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to find opencode-go provider")
 	}
-	if len(opencode.Models) != 14 {
-		t.Fatalf("expected 14 opencode-go models, got %d", len(opencode.Models))
+	if len(opencode.Models) != 15 {
+		t.Fatalf("expected 15 opencode-go models, got %d", len(opencode.Models))
 	}
 
 	qwen, ok := reg.GetModel("opencode-go", "qwen3.6-plus")
