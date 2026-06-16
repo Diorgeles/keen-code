@@ -22,9 +22,9 @@ import (
 	replwidgets "github.com/user/keen-code/internal/cli/repl/widgets"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/providers"
 	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/internal/tools"
-	"github.com/user/keen-code/providers"
 )
 
 func newTestModel() replModel {

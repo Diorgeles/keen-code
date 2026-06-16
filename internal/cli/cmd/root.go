@@ -14,7 +14,7 @@ import (
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
-	"github.com/user/keen-code/providers"
+	"github.com/user/keen-code/internal/providers"
 )
 
 var newMCPManager = func(opts ...keenmcp.Option) (keenmcp.Runtime, error) {

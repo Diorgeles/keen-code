@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/user/keen-code/internal/config"
-	"github.com/user/keen-code/providers"
+	"github.com/user/keen-code/internal/providers"
 )
 
 type Provider string

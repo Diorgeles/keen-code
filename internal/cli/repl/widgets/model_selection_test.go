@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/user/keen-code/internal/auth"
 	"github.com/user/keen-code/internal/config"
-	"github.com/user/keen-code/providers"
+	"github.com/user/keen-code/internal/providers"
 )
 
 func TestIsValidBaseURL_Empty(t *testing.T) {

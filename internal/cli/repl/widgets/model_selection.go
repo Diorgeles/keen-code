@@ -12,7 +12,7 @@ import (
 	keenauth "github.com/user/keen-code/internal/auth"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/config"
-	"github.com/user/keen-code/providers"
+	"github.com/user/keen-code/internal/providers"
 )
 
 func supportsBaseURL(providerID string) bool {

@@ -27,9 +27,9 @@ import (
 	"github.com/user/keen-code/internal/filesystem"
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
+	"github.com/user/keen-code/internal/providers"
 	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/internal/skills"
-	"github.com/user/keen-code/providers"
 )
 
 const (

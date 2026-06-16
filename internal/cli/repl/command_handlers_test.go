@@ -19,8 +19,8 @@ import (
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/mcpskills"
+	"github.com/user/keen-code/internal/providers"
 	"github.com/user/keen-code/internal/skills"
-	"github.com/user/keen-code/providers"
 )
 
 func TestHandleEnterKey_EmptyInput(t *testing.T) {
