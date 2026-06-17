@@ -16,6 +16,7 @@ Target version (required): $ARGUMENTS
 2. **Update `CHANGELOG.md`.**
    - Move all entries under `[Unreleased]` into a new `[X.Y.Z] - YYYY-MM-DD` section below it.
    - Add a new empty `[Unreleased]` section at the top.
+   - Check the commit history for any changes that should be included in the release and were missing in the [Unreleased] section.
    - Update the comparison links at the bottom of the file.
 
 3. **Run the tests.**
