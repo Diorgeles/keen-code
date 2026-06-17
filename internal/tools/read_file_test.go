@@ -64,7 +64,6 @@ func TestReadFileTool_InputSchema(t *testing.T) {
 	if offsetProp["type"] != "integer" {
 		t.Error("offset type should be 'integer'")
 	}
-
 	limitProp, ok := properties["limit"].(map[string]any)
 	if !ok {
 		t.Fatal("limit property should be a map")
@@ -147,6 +146,42 @@ func TestReadFileTool_Execute_GrantedRead(t *testing.T) {
 
 	if resultMap["truncated"] != false {
 		t.Errorf("expected truncated false, got %v", resultMap["truncated"])
+	}
+}
+
+func TestReadFileTool_Execute_KeenBashOutputReadDoesNotRequestPermission(t *testing.T) {
+	workingDir := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bashDir := filepath.Join(home, ".keen", "bash")
+	if err := os.MkdirAll(bashDir, 0700); err != nil {
+		t.Fatalf("failed to create bash output dir: %v", err)
+	}
+
+	testFile := filepath.Join(bashDir, "keen-bash-random.stdout")
+	content := "captured output"
+	if err := os.WriteFile(testFile, []byte(content), 0600); err != nil {
+		t.Fatalf("failed to create bash output file: %v", err)
+	}
+
+	guard := filesystem.NewGuard(workingDir, nil)
+	mockPR := &mockPermissionRequester{allow: false}
+	tool := NewReadFileTool(guard, mockPR)
+
+	result, err := tool.Execute(context.Background(), map[string]any{"path": testFile})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if mockPR.called {
+		t.Fatal("permission requester should not have been called")
+	}
+
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatal("result should be a map")
+	}
+	if resultMap["content"] != "1: captured output" {
+		t.Fatalf("unexpected content: %v", resultMap["content"])
 	}
 }
 

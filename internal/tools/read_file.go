@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -11,9 +12,9 @@ import (
 )
 
 const (
-	maxFileSize   = 10_485_760 // 10MB
-	defaultLimit  = 2000
-	maxLineLength = 2000
+	maxFileSize   = 25 * 1024 * 1024 // 25MB
+	defaultLimit  = 1000
+	maxLineLength = 1000
 )
 
 type ReadFileTool struct {
@@ -38,7 +39,7 @@ func (t *ReadFileTool) Description() string {
 - Use this when you know the exact file path and need its contents
 - Do not use this when you are unsure of the filename — use glob to find it first
 - Do not use this to search for content across files — use grep instead
-- By default, this returns up to 2000 lines from the start of the file
+- By default, this returns up to 1000 lines from the start of the file
 - Use offset and limit to read a specific line range
 - Call this tool in parallel when you already know multiple files you need to inspect
 - Avoid many tiny repeated reads. If you need surrounding context, read a larger window with limit
@@ -46,8 +47,9 @@ func (t *ReadFileTool) Description() string {
 - For code tracing, read the primary implementation file first, then callers/tests only if needed
 
 IMPORTANT:
-- The file must be valid UTF-8 text and under 10 MB. Binary files and files with invalid UTF-8 are rejected.
-- Content is returned with line numbers as "N: text". When copying text into edit_file oldString, do not include the line number prefix.`
+- The file must be valid UTF-8 text and under 25 MB. Binary files and files with invalid UTF-8 are rejected.
+- Content is returned with line numbers as "N: text". When copying text into edit_file oldString, do not include the line number prefix.
+- Long lines are truncated to keep tool results bounded`
 }
 
 func (t *ReadFileTool) InputSchema() map[string]any {
@@ -64,7 +66,7 @@ func (t *ReadFileTool) InputSchema() map[string]any {
 			},
 			"limit": map[string]any{
 				"type":        "integer",
-				"description": "Optional maximum number of lines to return (defaults to 2000)",
+				"description": "Optional maximum number of lines to return (defaults to 1000)",
 			},
 		},
 		"required":             []string{"path"},
@@ -200,12 +202,7 @@ func readFileContent(path string) ([]byte, error) {
 }
 
 func containsNullByte(content []byte) bool {
-	for _, b := range content {
-		if b == 0x00 {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(content, 0x00)
 }
 
 func formatFileContent(content []byte, offset, limit int) (string, int, bool, error) {
@@ -222,10 +219,7 @@ func formatFileContent(content []byte, offset, limit int) (string, int, bool, er
 	}
 
 	start := offset - 1
-	end := start + limit
-	if end > total {
-		end = total
-	}
+	end := min(start+limit, total)
 	truncated := end < total
 
 	numbered := make([]string, 0, end-start)

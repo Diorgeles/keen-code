@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -56,7 +57,7 @@ func (g *Guard) CheckPath(path string, operation string) Permission {
 		return PermissionDenied
 	}
 
-	if operation == "read" && g.IsInSkillDir(resolved) {
+	if operation == "read" && (g.IsInSkillDir(resolved) || g.IsInKeenBashDir(resolved)) {
 		return PermissionGranted
 	}
 
@@ -85,7 +86,7 @@ func (g *Guard) IsBlocked(path string) bool {
 		return true
 	}
 
-	if g.IsInSkillDir(resolved) {
+	if g.IsInSkillDir(resolved) || g.IsInKeenBashDir(resolved) {
 		return false
 	}
 
@@ -112,6 +113,39 @@ func (g *Guard) ResolvePath(path string) (string, error) {
 	resolved := filepath.Join(g.workingDir, path)
 	cleaned := filepath.Clean(resolved)
 	return cleaned, nil
+}
+
+func (g *Guard) IsInKeenBashDir(path string) bool {
+	cleaned := filepath.Clean(path)
+	bashDir, err := KeenBashOutputDir()
+	if err != nil {
+		return false
+	}
+	bashDir = filepath.Clean(bashDir)
+	if cleaned == bashDir {
+		return true
+	}
+	prefix := bashDir + string(filepath.Separator)
+	if !strings.HasPrefix(cleaned+string(filepath.Separator), prefix) {
+		return false
+	}
+
+	info, err := os.Lstat(cleaned)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	return true
+}
+
+func KeenBashOutputDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	if home == "" {
+		return "", fmt.Errorf("home directory is empty")
+	}
+	return filepath.Join(home, ".keen", "bash"), nil
 }
 
 func (g *Guard) IsInWorkingDir(path string) bool {

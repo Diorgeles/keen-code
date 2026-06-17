@@ -47,21 +47,28 @@ type ReadFileTool struct {
 **Parameters:**
 - `path` (string, required): Absolute or relative path to the file
 - `offset` (integer, optional): 1-based line number to start reading from (defaults to 1)
-- `limit` (integer, optional): Maximum number of lines to return (defaults to 2000)
+- `limit` (integer, optional): Maximum number of lines to return (defaults to 1000)
 
 **Validation:**
 - File must be valid UTF-8 text
-- File must be under 10MB
+- File must be under 25MB; `offset` and `limit` bound returned lines, not the initial file-size check
 - Binary files are rejected
+- Long lines are truncated to 1000 runes to keep tool results bounded
 
 **Returns:**
 ```json
 {
   "path": "/absolute/path/to/file",
-  "content": "file contents...",
-  "bytes_read": 1234
+  "content": "1: file contents...",
+  "bytes_read": 1234,
+  "offset": 1,
+  "limit": 1000,
+  "total_lines": 10,
+  "truncated": false
 }
 ```
+
+Files under `~/.keen/bash/` can be read without an extra permission prompt. Use the returned `stdout_file` and `stderr_file` paths from `bash` rather than guessing artifact names.
 
 ## write_file
 
@@ -190,7 +197,7 @@ type GrepTool struct {
 
 ## bash
 
-Executes shell commands with timeout and output limits.
+Executes shell commands with timeout and bounded inline output. Large stdout is saved to an artifact file so the model can inspect it later without flooding the prompt.
 
 ```go
 type BashTool struct {
@@ -205,8 +212,13 @@ type BashTool struct {
 - `summary` (string, optional): Brief description for the UI
 
 **Limits:**
-- Timeout: 180 seconds
-- Output: 10MB max (truncated if exceeded)
+- Timeout: 300 seconds
+- Inline output: 64KB max per stream before truncation
+- Truncated output preview: head/tail excerpt with omitted-byte count
+- Full truncated stdout is written to randomly named files under `~/.keen/bash/`, such as `keen-bash-*.stdout`
+- Stderr is returned only when the command exits non-zero; large captured stderr may be saved to `stderr_file`
+
+When `truncated` is true, the agent should not rerun the same broad command just to see more output. It should inspect any returned `stdout_file` or `stderr_file` with `read_file` using targeted `offset`/`limit` values, or use `grep` for targeted follow-up.
 
 **Dangerous commands (always prompt):**
 - File removal (`rm`, `rm -rf`)
@@ -220,8 +232,19 @@ type BashTool struct {
   "command": "go test ./...",
   "exit_code": 0,
   "stdout": "PASS\nok      github.com/user/keen-code    0.015s",
-  "stderr": "",
+  "truncated": false,
   "summary": "Run Go tests"
+}
+```
+
+**Returns (truncated output):**
+```json
+{
+  "command": "grep -R plan.md ~/.keen/sessions",
+  "exit_code": 0,
+  "stdout": "first preview...\n\n... (1048576 bytes omitted; full stdout saved to /Users/alice/.keen/bash/keen-bash-abc123.stdout) ...\n\nlast preview...",
+  "truncated": true,
+  "stdout_file": "/Users/alice/.keen/bash/keen-bash-abc123.stdout"
 }
 ```
 

@@ -135,6 +135,108 @@ func TestGuard_CheckPath_ClaudeSkillsDirGrantsReadOutsideWorkingDir(t *testing.T
 	}
 }
 
+func TestGuard_CheckPath_KeenBashDirGrantsRead(t *testing.T) {
+	workingDir := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bashDir := filepath.Join(home, ".keen", "bash")
+	if err := os.MkdirAll(bashDir, 0700); err != nil {
+		t.Fatalf("failed to create bash output dir: %v", err)
+	}
+
+	g := NewGuard(workingDir, nil)
+	if got := g.CheckPath(bashDir, "read"); got != PermissionGranted {
+		t.Errorf("CheckPath(~/.keen/bash, read) = %v, want PermissionGranted", got)
+	}
+
+	path := filepath.Join(bashDir, "any-file.log")
+	if err := os.WriteFile(path, []byte("output"), 0600); err != nil {
+		t.Fatalf("failed to write bash output file: %v", err)
+	}
+	got := g.CheckPath(path, "read")
+	if got != PermissionGranted {
+		t.Errorf("CheckPath(keen bash file, read) = %v, want PermissionGranted", got)
+	}
+}
+
+func TestGuard_CheckPath_KeenBashDirDoesNotGrantWrite(t *testing.T) {
+	workingDir := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bashDir := filepath.Join(home, ".keen", "bash")
+	if err := os.MkdirAll(bashDir, 0700); err != nil {
+		t.Fatalf("failed to create bash output dir: %v", err)
+	}
+
+	g := NewGuard(workingDir, nil)
+	path := filepath.Join(bashDir, "any-file.log")
+	if err := os.WriteFile(path, []byte("output"), 0600); err != nil {
+		t.Fatalf("failed to write bash output file: %v", err)
+	}
+	got := g.CheckPath(path, "write")
+	if got != PermissionPending {
+		t.Errorf("CheckPath(keen bash file, write) = %v, want PermissionPending", got)
+	}
+}
+
+func TestGuard_CheckPath_KeenBashDirRejectsSymlink(t *testing.T) {
+	workingDir := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bashDir := filepath.Join(home, ".keen", "bash")
+	if err := os.MkdirAll(bashDir, 0700); err != nil {
+		t.Fatalf("failed to create bash output dir: %v", err)
+	}
+
+	target := filepath.Join(workingDir, "secret.txt")
+	if err := os.WriteFile(target, []byte("secret"), 0600); err != nil {
+		t.Fatalf("failed to write target file: %v", err)
+	}
+
+	path := filepath.Join(bashDir, "linked-output")
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	g := NewGuard(workingDir, nil)
+	got := g.CheckPath(path, "read")
+	if got != PermissionDenied {
+		t.Errorf("CheckPath(keen bash symlink, read) = %v, want PermissionDenied", got)
+	}
+}
+
+func TestGuard_CheckPath_KeenBashDirRequiresExactDir(t *testing.T) {
+	workingDir := t.TempDir()
+	home := t.TempDir()
+	otherDir := t.TempDir()
+	t.Setenv("HOME", home)
+	bashDir := filepath.Join(home, ".keen", "bash")
+	if err := os.MkdirAll(bashDir, 0700); err != nil {
+		t.Fatalf("failed to create bash output dir: %v", err)
+	}
+
+	g := NewGuard(workingDir, nil)
+	for _, tc := range []struct {
+		path string
+		want Permission
+	}{
+		{filepath.Join(otherDir, "keen-bash-123.stdout"), PermissionPending},
+		{filepath.Join(home, ".keen", "not-bash", "keen-bash-123.stdout"), PermissionDenied},
+		{filepath.Join(bashDir+"-other", "output"), PermissionDenied},
+	} {
+		if err := os.MkdirAll(filepath.Dir(tc.path), 0700); err != nil {
+			t.Fatalf("failed to create parent dir: %v", err)
+		}
+		if err := os.WriteFile(tc.path, []byte("output"), 0600); err != nil {
+			t.Fatalf("failed to write candidate file: %v", err)
+		}
+		got := g.CheckPath(tc.path, "read")
+		if got != tc.want {
+			t.Errorf("CheckPath(%q, read) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
 func TestGuard_IsBlocked_Gitignore(t *testing.T) {
 	tmpDir := t.TempDir()
 	gitignorePath := filepath.Join(tmpDir, ".gitignore")

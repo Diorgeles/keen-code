@@ -50,9 +50,9 @@ func (g *Guard) CheckPath(path string, operation string) Permission
 ```
 
 ### Operation: "read"
-- **Granted**: Path is in working directory OR in skills directory
+- **Granted**: Path is in the working directory, in a skills directory, or under `~/.keen/bash/`
 - **Pending**: Path is outside working directory but not blocked
-- **Denied**: Path is blocked by policy or doesn't resolve
+- **Denied**: Path is blocked by policy or does not resolve
 
 ### Operation: "write" or "edit"
 - **Pending**: Always requires user approval (no auto-grant for writes)
@@ -97,7 +97,8 @@ A path is blocked if:
 2. It matches a `.gitignore` pattern
 3. It is in a hidden directory under home (`~/.something`)
 4. It has a prefix in `blockedPaths` (system directories)
-5. It is in a skill directory (exception - always allowed)
+5. It is in a skill directory (exception - always allowed for reads)
+6. It is under `~/.keen/bash/` (exception - always allowed for reads)
 
 ```go
 func (g *Guard) IsBlocked(path string) bool {
@@ -108,7 +109,7 @@ func (g *Guard) IsBlocked(path string) bool {
     if g.gitignore != nil && g.gitignore.IsIgnored(path) {
         return true
     }
-    if g.IsInSkillDir(resolved) {
+    if g.IsInSkillDir(resolved) || g.IsInKeenBashDir(resolved) {
         return false
     }
     // ... home and system path checks
@@ -137,6 +138,12 @@ func (g *Guard) IsInSkillDir(path string) bool {
     return false
 }
 ```
+
+## Bash Output Directory Exception
+
+The `bash` tool stores oversized stdout and stderr in randomly named files under `~/.keen/bash/`. Read access is granted without an additional prompt for files under that directory. Symlink entries are not auto-granted. This exception is read-only; writes and edits to those paths still require normal approval.
+
+Agents should use artifact paths returned by the `bash` result (`stdout_file` or `stderr_file`) and then inspect them with `read_file` line windows or targeted search.
 
 ## PermissionRequester Interface
 
@@ -214,7 +221,7 @@ Users can pre-allow specific tools for the current project via the `/allow-permi
 }
 ```
 
-- Tools in `allow` skip the interactive prompt entirely (including the dangerous-command prompt for `bash`). The filesystem guard still applies — system directories, `.gitignore`d files, and dotfiles under `$HOME` remain blocked.
+- Tools in `allow` skip the interactive prompt entirely (including the dangerous-command prompt for `bash`). The filesystem guard still applies: system directories, `.gitignore`d files, and dotfiles under `$HOME` remain blocked except for explicit read exceptions such as skills directories and `~/.keen/bash/`.
 - Tools absent from `allow` follow the normal mechanism described above.
 
 `/reset-permission <tool_names...>` removes tools from the allow list, restoring default behavior.

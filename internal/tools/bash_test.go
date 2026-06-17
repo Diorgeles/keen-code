@@ -335,7 +335,7 @@ func TestBashTool_Execute_NoPermissionRequester(t *testing.T) {
 	}
 }
 
-func TestBashTool_Execute_CapturesStderr(t *testing.T) {
+func TestBashTool_Execute_CapturesStderrForFailedCommand(t *testing.T) {
 	tempDir := t.TempDir()
 	guard := filesystem.NewGuard(tempDir, nil)
 	mockPR := &mockBashPermissionRequester{allow: true}
@@ -361,6 +361,31 @@ func TestBashTool_Execute_CapturesStderr(t *testing.T) {
 	stderr := resultMap["stderr"].(string)
 	if stderr == "" {
 		t.Error("expected stderr to contain error message for failing command")
+	}
+}
+
+func TestBashTool_Execute_OmitsStderrForSuccessfulCommand(t *testing.T) {
+	tempDir := t.TempDir()
+	guard := filesystem.NewGuard(tempDir, nil)
+	mockPR := &mockBashPermissionRequester{allow: true}
+	tool := NewBashTool(guard, mockPR)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"command": "printf warning >&2",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatal("result should be a map")
+	}
+	if resultMap["exit_code"] != 0 {
+		t.Fatalf("expected exit code 0, got %v", resultMap["exit_code"])
+	}
+	if _, ok := resultMap["stderr"]; ok {
+		t.Fatal("stderr should be omitted for successful commands")
 	}
 }
 
@@ -493,11 +518,14 @@ func TestBashTool_Execute_ResultStructure(t *testing.T) {
 		t.Fatal("result should be a map")
 	}
 
-	requiredFields := []string{"command", "exit_code", "stdout", "stderr"}
+	requiredFields := []string{"command", "exit_code", "stdout", "truncated"}
 	for _, field := range requiredFields {
 		if _, ok := resultMap[field]; !ok {
 			t.Errorf("result should contain %s field", field)
 		}
+	}
+	if _, ok := resultMap["stderr"]; ok {
+		t.Error("result should not contain stderr when command writes no stderr")
 	}
 
 	if resultMap["command"] != "echo hello" {
@@ -506,5 +534,59 @@ func TestBashTool_Execute_ResultStructure(t *testing.T) {
 
 	if resultMap["summary"] != "Test command" {
 		t.Errorf("expected summary 'Test command', got %v", resultMap["summary"])
+	}
+}
+
+func TestBashTool_Execute_TruncatesLargeStdoutToKeenBashFile(t *testing.T) {
+	tempDir := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	guard := filesystem.NewGuard(tempDir, nil)
+	mockPR := &mockBashPermissionRequester{allow: true}
+	tool := NewBashTool(guard, mockPR)
+
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"command": "awk 'BEGIN { for (i = 0; i < 70000; i++) printf \"x\" }'",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatal("result should be a map")
+	}
+
+	if _, ok := resultMap["stdout_bytes"]; ok {
+		t.Fatal("stdout_bytes should not be returned")
+	}
+	if _, ok := resultMap["stdout_truncated"]; ok {
+		t.Fatal("stdout_truncated should not be returned")
+	}
+	if resultMap["truncated"] != true {
+		t.Fatalf("expected truncated true, got %v", resultMap["truncated"])
+	}
+
+	stdout := resultMap["stdout"].(string)
+	if len(stdout) >= 70000 {
+		t.Fatalf("expected inline stdout to be truncated, got %d bytes", len(stdout))
+	}
+	if !strings.Contains(stdout, "bytes omitted") || !strings.Contains(stdout, "full stdout saved to") {
+		t.Fatalf("expected stdout preview to mention omitted bytes and saved file, got %q", stdout)
+	}
+
+	stdoutFile, ok := resultMap["stdout_file"].(string)
+	if !ok || stdoutFile == "" {
+		t.Fatalf("expected stdout_file path, got %v", resultMap["stdout_file"])
+	}
+	if filepath.Dir(stdoutFile) != filepath.Join(home, ".keen", "bash") {
+		t.Fatalf("expected stdout_file in ~/.keen/bash, got %q", stdoutFile)
+	}
+	content, err := os.ReadFile(stdoutFile)
+	if err != nil {
+		t.Fatalf("failed to read stdout file: %v", err)
+	}
+	if len(content) != 70000 {
+		t.Fatalf("expected stdout file to contain 70000 bytes, got %d", len(content))
 	}
 }

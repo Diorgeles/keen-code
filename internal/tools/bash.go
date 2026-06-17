@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"time"
 
@@ -10,8 +11,11 @@ import (
 )
 
 const (
-	bashTimeout   = 180 * time.Second
-	maxOutputSize = 10 * 1024 * 1024 // 10MB
+	bashTimeout             = 300 * time.Second
+	maxInlineOutputSize     = 64 * 1024
+	outputPreviewHeadSize   = 32 * 1024
+	outputPreviewTailSize   = 16 * 1024
+	truncatedOutputFileMode = 0600
 )
 
 type BashTool struct {
@@ -61,10 +65,17 @@ IMPORTANT:
   - building the project
   - running the project
   - installing dependencies
-- Commands time out after 180 seconds.
+- Commands time out after 300 seconds.
 - Quote paths that may contain spaces.
 - Prefer single commands over long chains. For independent commands, use parallel
-  tool calls instead of chaining with &&.`
+  tool calls instead of chaining with &&.
+
+Large output handling:
+- Large stdout is truncated in the tool result and saved to stdout_file.
+- Stderr is returned only when the command exits non-zero; large captured stderr may be saved to stderr_file.
+- If truncated is true, do not rerun the same broad command just to see more output.
+- Inspect any saved stdout_file/stderr_file with read_file offset/limit or grep for targeted follow-up.
+- Prefer narrowing the original command or searching the captured file before reading many chunks.`
 }
 
 func (t *BashTool) InputSchema() map[string]any {
@@ -177,21 +188,29 @@ func (t *BashTool) executeCommand(ctx context.Context, command, summary string) 
 		}
 	}
 
-	stdoutStr := string(stdout)
-	stderrStr := string(stderr)
-
-	if len(stdout) > maxOutputSize {
-		stdoutStr = stdoutStr[:maxOutputSize] + "\n... (output truncated)"
+	stdoutResult, err := summarizeCommandOutput("stdout", stdout)
+	if err != nil {
+		return nil, err
 	}
-	if len(stderr) > maxOutputSize {
-		stderrStr = stderrStr[:maxOutputSize] + "\n... (stderr truncated)"
+	stderrResult, err := summarizeCommandOutput("stderr", stderr)
+	if err != nil {
+		return nil, err
 	}
 
 	result := map[string]any{
 		"command":   command,
 		"exit_code": exitCode,
-		"stdout":    stdoutStr,
-		"stderr":    stderrStr,
+		"stdout":    stdoutResult.content,
+		"truncated": stdoutResult.truncated || stderrResult.truncated,
+	}
+	if stderrResult.content != "" {
+		result["stderr"] = stderrResult.content
+	}
+	if stdoutResult.file != "" {
+		result["stdout_file"] = stdoutResult.file
+	}
+	if stderrResult.file != "" {
+		result["stderr_file"] = stderrResult.file
 	}
 
 	if summary != "" {
@@ -199,4 +218,69 @@ func (t *BashTool) executeCommand(ctx context.Context, command, summary string) 
 	}
 
 	return result, nil
+}
+
+type commandOutputSummary struct {
+	content   string
+	file      string
+	truncated bool
+}
+
+func summarizeCommandOutput(stream string, data []byte) (commandOutputSummary, error) {
+	if len(data) <= maxInlineOutputSize {
+		return commandOutputSummary{content: string(data)}, nil
+	}
+
+	file, err := writeCommandOutputFile(stream, data)
+	if err != nil {
+		return commandOutputSummary{}, err
+	}
+
+	headSize := min(outputPreviewHeadSize, len(data))
+	tailSize := min(outputPreviewTailSize, len(data)-headSize)
+	tailStart := len(data) - tailSize
+	omitted := len(data) - headSize - tailSize
+
+	content := fmt.Sprintf(
+		"%s\n\n... (%d bytes omitted; full %s saved to %s) ...\n\n%s",
+		string(data[:headSize]),
+		omitted,
+		stream,
+		file,
+		string(data[tailStart:]),
+	)
+
+	return commandOutputSummary{
+		content:   content,
+		file:      file,
+		truncated: true,
+	}, nil
+}
+
+func writeCommandOutputFile(stream string, data []byte) (string, error) {
+	dir, err := filesystem.KeenBashOutputDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve bash output directory: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", fmt.Errorf("failed to create bash output directory %q: %w", dir, err)
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		return "", fmt.Errorf("failed to secure bash output directory %q: %w", dir, err)
+	}
+
+	file, err := os.CreateTemp(dir, "keen-bash-*"+"."+stream)
+	if err != nil {
+		return "", fmt.Errorf("failed to create %s output file: %w", stream, err)
+	}
+	path := file.Name()
+	defer file.Close()
+
+	if err := file.Chmod(truncatedOutputFileMode); err != nil {
+		return "", fmt.Errorf("failed to secure %s output file %q: %w", stream, path, err)
+	}
+	if _, err := file.Write(data); err != nil {
+		return "", fmt.Errorf("failed to write %s output file %q: %w", stream, path, err)
+	}
+	return path, nil
 }
