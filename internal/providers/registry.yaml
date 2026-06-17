@@ -117,16 +117,12 @@ providers:
   - id: zai
     name: Z.ai (GLM)
     models:
+      - id: glm-5.2
+        name: GLM-5.2
+        context_window: 1000000
+        thinking_efforts: ["enabled", "disabled"]
       - id: glm-5.1
         name: GLM-5.1
-        context_window: 200000
-        thinking_efforts: ["enabled", "disabled"]
-      - id: glm-5
-        name: GLM-5
-        context_window: 200000
-        thinking_efforts: ["enabled", "disabled"]
-      - id: glm-5-turbo
-        name: GLM-5 Turbo
         context_window: 200000
         thinking_efforts: ["enabled", "disabled"]
 
@@ -155,12 +151,12 @@ providers:
   - id: opencode-go
     name: OpenCode Go
     models:
+      - id: glm-5.2
+        name: GLM-5.2
+        context_window: 1000000
+        thinking_efforts: ["enabled", "disabled"]
       - id: glm-5.1
         name: GLM-5.1
-        context_window: 200000
-        thinking_efforts: ["enabled", "disabled"]
-      - id: glm-5
-        name: GLM-5
         context_window: 200000
         thinking_efforts: ["enabled", "disabled"]
       - id: kimi-k2.7-code
