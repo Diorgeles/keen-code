@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.4] - 2026-06-18
+
+### Added
+- Asynchronous `!` shell command execution with streaming output and cancellation support.
+- Bash tool now writes truncated output artifacts to `~/.keen/bash` and grants read access to them.
+
+### Changed
+- Refreshed GLM model entries in the provider registry.
+
+### Fixed
+- Corrected spacing in the REPL input meta display.
+- Skip context-reducer targets smaller than the placeholder threshold.
+
 ## [0.23.3] - 2026-06-17
 
 ### Changed
@@ -521,7 +534,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.3...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.4...HEAD
+[0.23.4]: https://github.com/mochow13/keen-code/compare/v0.23.3...v0.23.4
 [0.23.3]: https://github.com/mochow13/keen-code/compare/v0.23.2...v0.23.3
 [0.23.2]: https://github.com/mochow13/keen-code/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/mochow13/keen-code/compare/v0.23.0...v0.23.1
