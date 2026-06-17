@@ -24,6 +24,16 @@ Install the CLI globally:
 npm install -g keen-code
 ```
 
+Update the global install:
+
+```bash
+npm install -g keen-code@latest
+# or
+npm update -g keen-code
+```
+
+`npm update` without `-g` only updates local project dependencies.
+
 Check that the install worked:
 
 ```bash

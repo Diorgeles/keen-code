@@ -10,7 +10,8 @@ const binaryPath = path.join(__dirname, binaryName);
 
 if (!fs.existsSync(binaryPath)) {
   console.error(
-    "[keen] Binary not found. Try reinstalling: npm install -g keen-code"
+    "[keen] Binary not found. Try reinstalling: npm install -g keen-code@latest\n" +
+      "[keen] If updating an existing global install, run: npm update -g keen-code"
   );
   process.exit(1);
 }

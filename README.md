@@ -111,6 +111,8 @@ The LLM was rejecting `.go` files because MIME detection flagged them as binary.
 curl -fsSL https://raw.githubusercontent.com/mochow13/keen-code/main/scripts/install.sh | bash
 ```
 
+The same command above updates the CLI to the latest version.
+
 To pin a specific version:
 
 ```bash
@@ -126,6 +128,16 @@ Install the CLI globally:
 ```bash
 npm install -g keen-code
 ```
+
+Update the global install:
+
+```bash
+npm install -g keen-code@latest
+# or
+npm update -g keen-code
+```
+
+`npm update` without `-g` only updates local project dependencies.
 
 Check that the install worked:
 
