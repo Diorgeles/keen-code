@@ -68,6 +68,27 @@ func TestReduceToolResultsForRequest_ReturnsNotFitAfterRemovingAllTargets(t *tes
 	}
 }
 
+func TestReduceToolResultsForRequest_SkipsTargetsBelowThreshold(t *testing.T) {
+	var removed []int
+	placeholderTokenCount := estimateContextTokenCount(removedToolResultPlaceholder)
+	targets := []toolResultReductionTarget{
+		{tokenCount: 5, remove: func() { removed = append(removed, 0) }},
+		{tokenCount: placeholderTokenCount + 1, remove: func() { removed = append(removed, 1) }},
+	}
+
+	reduction := reduceToolResultsForRequest(contextWindowForInputBudget(800), 801, targets)
+
+	if !reduction.FitsBudget {
+		t.Fatal("expected reduced context to fit budget")
+	}
+	if reduction.RemovedToolResults != 1 {
+		t.Fatalf("expected 1 removed tool result, got %d", reduction.RemovedToolResults)
+	}
+	if len(removed) != 1 || removed[0] != 1 {
+		t.Fatalf("expected only large target removal, got %v", removed)
+	}
+}
+
 func TestReduceOpenAIContextForRequest_ReplacesOldestToolResults(t *testing.T) {
 	longResult := repeatString("old ", 200)
 	messages := []openai.ChatCompletionMessageParamUnion{

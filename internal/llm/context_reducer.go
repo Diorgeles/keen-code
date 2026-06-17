@@ -65,6 +65,9 @@ func reduceToolResultsForRequest(contextWindowTokenCount int, currentInputTokenC
 		if reduction.ReducedTokenCount <= budget {
 			break
 		}
+		if target.tokenCount <= placeholderTokenCount {
+			continue
+		}
 		target.remove()
 		reduction.ReducedTokenCount -= target.tokenCount
 		reduction.ReducedTokenCount += placeholderTokenCount
