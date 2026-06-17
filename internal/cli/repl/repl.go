@@ -693,8 +693,8 @@ func (m replModel) inputMetaView() string {
 		}
 	}
 
-	modelText := repltheme.HighlightStyle.Render(" " + model)
-	directory := repltheme.HighlightStyle.Render(abbreviateHome(m.ctx.workingDir))
+	modelText := repltheme.HighlightStyle.Render(model)
+	directory := repltheme.HighlightStyle.Render(" " + abbreviateHome(m.ctx.workingDir))
 
 	thinkingText := ""
 	if m.ctx != nil && m.ctx.cfg != nil && m.ctx.cfg.ThinkingEffort != "" && m.ctx.registry != nil {
