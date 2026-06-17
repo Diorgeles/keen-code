@@ -90,12 +90,19 @@ type replModel struct {
 	btwStreamCancel           context.CancelFunc
 	btwShowSpinner            bool
 	btwSpinner                spinner.Model
+	bang                      bangState
 	adversary                 adversaryState
 	lastSession               *session.Summary
 	projectPermsErr           error
 	initialScreenDone         bool
 	copyNotification          string
 	copyNotificationExpiresAt time.Time
+}
+
+type bangState struct {
+	active bool
+	events <-chan tea.Msg
+	cancel context.CancelFunc
 }
 
 type adversaryState struct {
@@ -266,13 +273,13 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	if strings.HasPrefix(input, "!") {
-		if m.streamHandler.IsActive() {
+		if m.streamHandler.IsActive() || m.bang.active {
 			return *m, nil
 		}
 		m.history.Push(input)
 		m.textarea.Reset()
-		result := m.handleBangCommand(input)
-		return result, nil
+		result, cmd := m.handleBangCommand(input)
+		return result, cmd
 	}
 
 	if m.streamHandler.IsActive() {
@@ -431,6 +438,10 @@ func (m replModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
+	if updated, cmd, handled := m.handleBangMsg(msg); handled {
+		return updated, cmd
+	}
+
 	if updated, cmd, handled := m.handleLLMStreamMsg(msg); handled {
 		return updated, cmd
 	}

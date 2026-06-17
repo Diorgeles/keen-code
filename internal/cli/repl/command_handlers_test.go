@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -50,6 +51,36 @@ func TestHandleEnterKey_ActiveStream(t *testing.T) {
 	}
 	if newM.textarea.Value() != "some input" {
 		t.Error("expected textarea to remain unchanged when stream is active")
+	}
+}
+
+func TestHandleBangCommand_ReturnsBeforeCommandCompletes(t *testing.T) {
+	m := newTestModel()
+
+	start := time.Now()
+	newM, cmd := m.handleBangCommand("!sleep 2")
+	if elapsed := time.Since(start); elapsed > 200*time.Millisecond {
+		t.Fatalf("handleBangCommand blocked for %s", elapsed)
+	}
+	if cmd == nil {
+		t.Fatal("expected command waiter")
+	}
+	if !newM.bang.active {
+		t.Fatal("expected bang command to be active")
+	}
+	if !strings.Contains(newM.output.Join(), "$ sleep 2") {
+		t.Fatal("expected command to be rendered immediately")
+	}
+
+	newM.cancelBangCommand()
+	for i := 0; i < 10 && cmd != nil; i++ {
+		msg := cmd()
+		updated, next := newM.updateNormalMode(msg)
+		newM = updated
+		cmd = next
+	}
+	if newM.bang.active {
+		t.Fatal("expected bang command to stop after cancellation")
 	}
 }
 

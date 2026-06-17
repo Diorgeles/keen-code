@@ -1,6 +1,8 @@
 package repl
 
 import (
+	"time"
+
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	"github.com/user/keen-code/internal/llm"
@@ -53,6 +55,18 @@ type mcpConnectDoneMsg struct {
 
 type copyNotificationExpiredMsg struct {
 	expiresAt int64
+}
+
+type bangOutputMsg struct {
+	stream string
+	line   string
+}
+type bangDoneMsg struct {
+	err      error
+	exitCode int
+	timedOut bool
+	canceled bool
+	duration time.Duration
 }
 
 type btwChunkMsg string

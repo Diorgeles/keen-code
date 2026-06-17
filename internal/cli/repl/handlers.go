@@ -397,6 +397,10 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 	case keyEnter:
 		return m.handleEnterKey()
 	case keyCtrlC, keyCtrlD:
+		if m.bang.active {
+			m.cancelBangCommand()
+			return *m, nil
+		}
 		if m.textarea.Value() != "" {
 			m.textarea.Reset()
 			m.adjustTextareaHeight()
@@ -416,6 +420,10 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			m.cancelBtwStream()
 			m.updateViewportContent()
 			m.scrollToBottomIfFollowing()
+			return *m, nil
+		}
+		if m.bang.active {
+			m.cancelBangCommand()
 			return *m, nil
 		}
 		if m.streamHandler != nil && m.streamHandler.IsActive() {

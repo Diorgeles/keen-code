@@ -3,7 +3,6 @@ package repl
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -822,94 +821,32 @@ func (m *replModel) handleBtwCommand(input string) (replModel, tea.Cmd) {
 	return *m, tea.Batch(m.btwSpinner.Tick, waitForBtwEvent(eventCh))
 }
 
-func (m *replModel) handleBangCommand(input string) replModel {
+func (m *replModel) handleBangCommand(input string) (replModel, tea.Cmd) {
 	command := strings.TrimSpace(strings.TrimPrefix(input, "!"))
 	if command == "" {
 		m.output.AddStyledLine("  Usage: !<command>", repltheme.UsageHintStyle)
 		m.output.AddEmptyLine()
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
-		return *m
+		return *m, nil
 	}
 
-	start := time.Now()
-	topRule, bottomRule := renderRulesWithChip(m.width, repltheme.RuleStyle, "shell", repltheme.ShellChipOutputStyle)
+	topRule, _ := renderRulesWithChip(m.width, repltheme.RuleStyle, "shell", repltheme.ShellChipOutputStyle)
 
 	m.output.AddEmptyLine()
 	m.output.AddLine(topRule)
 	m.output.AddStyledLine("  $ "+command, repltheme.BashCommandStyle)
-
-	ctx, cancel := context.WithTimeout(context.Background(), bangTimeout)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "bash", "-c", command)
-	stdout, err := cmd.Output()
-
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			if len(exitErr.Stderr) > 0 {
-				for line := range strings.SplitSeq(strings.TrimRight(string(exitErr.Stderr), "\n"), "\n") {
-					m.output.AddStyledLine("  "+line, repltheme.ErrorStyle)
-				}
-			}
-			m.output.AddStyledLine("  exit code: "+strconv.Itoa(exitErr.ExitCode()), repltheme.ErrorStyle)
-		} else if ctx.Err() == context.DeadlineExceeded {
-			m.output.AddStyledLine("  command timed out after "+bangTimeout.String(), repltheme.ErrorStyle)
-		} else {
-			m.output.AddStyledLine("  "+err.Error(), repltheme.ErrorStyle)
-		}
-	} else {
-		m.output.AddStyledLine("  ‹ done in "+time.Since(start).Truncate(time.Millisecond).String(), repltheme.BashSummaryStyle)
-	}
-
-	if len(stdout) > 0 {
-		if m.mdRenderer != nil {
-			lang := detectCodeLanguage(command)
-			markdown := "```" + lang + "\n" + strings.TrimRight(string(stdout), "\n") + "\n```"
-			rendered := m.mdRenderer.Render(markdown)
-			for line := range strings.SplitSeq(strings.TrimRight(rendered, "\n"), "\n") {
-				m.output.AddLine("  " + line)
-			}
-		} else {
-			for line := range strings.SplitSeq(strings.TrimRight(string(stdout), "\n"), "\n") {
-				m.output.AddStyledLine("  "+line, repltheme.BashOutputStyle)
-			}
-		}
-	}
-
-	m.output.AddLine("\n" + bottomRule)
-	m.output.AddEmptyLine()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
-	return *m
-}
 
-func detectCodeLanguage(command string) string {
-	if strings.Contains(command, "diff") {
-		return "diff"
+	ctx, cancel := context.WithTimeout(context.Background(), bangTimeout)
+	m.bang = bangState{
+		active: true,
+		events: startBangCommand(ctx, command),
+		cancel: cancel,
 	}
-	for _, pair := range [][2]string{
-		{".go", "go"},
-		{".py", "python"},
-		{".js", "javascript"},
-		{".ts", "typescript"},
-		{".rs", "rust"},
-		{".java", "java"},
-		{".c", "c"},
-		{".cpp", "cpp"},
-		{".h", "c"},
-		{".sh", "bash"},
-		{".yaml", "yaml"},
-		{".yml", "yaml"},
-		{".json", "json"},
-		{".toml", "toml"},
-		{".md", "markdown"},
-	} {
-		if strings.Contains(command, pair[0]) {
-			return pair[1]
-		}
-	}
-	return ""
+
+	return *m, waitForBangEvent(m.bang.events)
 }
 
 func (m *replModel) handleAdversaryCommand(input string) (replModel, tea.Cmd) {
