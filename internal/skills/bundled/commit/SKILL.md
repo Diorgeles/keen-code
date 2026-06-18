@@ -18,15 +18,13 @@ User intent (optional): $ARGUMENTS
 
    Use the log to learn the repo's commit-message style (conventional commits, plain sentences, scope prefixes, etc.).
 
-2. **Read project conventions.** If any of `CLAUDE.md`, `AGENTS.md`, or `CONTRIBUTING.md` exist at the repo root, read the section on commits — they often pin a format.
-
-3. **Decide what to stage.**
+2. **Decide what to stage.**
 
    - Stage tracked changes the user clearly intends to commit. Name files explicitly with `git add <path>`.
    - If there are untracked files, list them to the user and ask which (if any) should be included. Do not stage them silently.
    - Do not use `git add -A` or `git add .` — they can leak secrets or stray files.
 
-4. **Draft the message.**
+3. **Draft the message.**
 
    - Lead with *why* over *what*. The diff already shows the what.
    - Match the recent `git log` style.
@@ -34,7 +32,7 @@ User intent (optional): $ARGUMENTS
    - If the user provided intent in the line above, weave it in — do not quote it verbatim.
    - Do not add co-author or "generated with" trailers unless the user explicitly asks.
 
-5. **Commit.** Use a heredoc so multi-line bodies survive shell quoting:
+4. **Commit.** Use a heredoc so multi-line bodies survive shell quoting:
 
    ```bash
    git commit -m "$(cat <<'EOF'
@@ -45,7 +43,7 @@ User intent (optional): $ARGUMENTS
    )"
    ```
 
-6. **Verify.** Run `git status` and report the result to the user. Do not push — that is a separate, explicit step the user must request.
+5. **Verify.** Run `git status` and report the result to the user. Do not push — that is a separate, explicit step the user must request.
 
 ## On hook failures
 
