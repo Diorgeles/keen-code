@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.5] - 2026-06-18
+
+### Added
+- Atom One Dark color theme for markdown code highlighting in the REPL.
+- First Ctrl+C now interrupts active REPL work before a second Ctrl+C exits.
+
+### Removed
+- Bundled cleanup and plan skills.
+
 ## [0.23.4] - 2026-06-18
 
 ### Added
@@ -534,7 +543,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.4...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.5...HEAD
+[0.23.5]: https://github.com/mochow13/keen-code/compare/v0.23.4...v0.23.5
 [0.23.4]: https://github.com/mochow13/keen-code/compare/v0.23.3...v0.23.4
 [0.23.3]: https://github.com/mochow13/keen-code/compare/v0.23.2...v0.23.3
 [0.23.2]: https://github.com/mochow13/keen-code/compare/v0.23.1...v0.23.2
