@@ -8,6 +8,20 @@ import (
 
 const markdownMargin = 2
 
+const (
+	keenPrimaryLightColor = "#7986CB"
+
+	atomOneDarkRed     = "#e06c75"
+	atomOneDarkGreen   = "#98c379"
+	atomOneDarkYellow  = "#e5c07b"
+	atomOneDarkOrange  = "#d19a66"
+	atomOneDarkBlue    = "#61afef"
+	atomOneDarkPurple  = "#c678dd"
+	atomOneDarkCyan    = "#56b6c2"
+	atomOneDarkWhite   = "#abb2bf"
+	atomOneDarkComment = "#5c6370"
+)
+
 // MarkdownStyleConfig keeps assistant markdown on the terminal's default
 // foreground color while preserving markdown structure.
 func MarkdownStyleConfig(wordWrap int) ansi.StyleConfig {
@@ -98,7 +112,7 @@ func MarkdownStyleConfig(wordWrap int) ansi.StyleConfig {
 			StylePrimitive: ansi.StylePrimitive{
 				Prefix: "`",
 				Suffix: "`",
-				Color:  stringPtr("#7986CB"),
+				Color:  stringPtr(keenPrimaryLightColor),
 			},
 		},
 		CodeBlock: ansi.StyleCodeBlock{
@@ -129,63 +143,63 @@ func markdownContentWidth(wordWrap int) int {
 func markdownChromaStyle() *ansi.Chroma {
 	return &ansi.Chroma{
 		Comment: ansi.StylePrimitive{
-			Color:  stringPtr("#78909C"),
+			Color:  stringPtr(atomOneDarkComment),
 			Italic: boolPtr(true),
 		},
 		CommentPreproc: ansi.StylePrimitive{
-			Color: stringPtr("#FFB74D"),
+			Color: stringPtr(atomOneDarkPurple),
 		},
 		Keyword: ansi.StylePrimitive{
-			Color: stringPtr("#BA68C8"),
+			Color: stringPtr(atomOneDarkPurple),
 			Bold:  boolPtr(true),
 		},
 		KeywordReserved: ansi.StylePrimitive{
-			Color: stringPtr("#BA68C8"),
+			Color: stringPtr(atomOneDarkPurple),
 			Bold:  boolPtr(true),
 		},
 		KeywordNamespace: ansi.StylePrimitive{
-			Color: stringPtr("#BA68C8"),
+			Color: stringPtr(atomOneDarkPurple),
 		},
 		KeywordType: ansi.StylePrimitive{
-			Color: stringPtr("#64B5F6"),
+			Color: stringPtr(atomOneDarkYellow),
 		},
 		Operator: ansi.StylePrimitive{
-			Color: stringPtr("#4DD0E1"),
+			Color: stringPtr(atomOneDarkCyan),
 		},
 		Punctuation: ansi.StylePrimitive{
-			Color: stringPtr("#90A4AE"),
+			Color: stringPtr(atomOneDarkWhite),
 		},
 		NameBuiltin: ansi.StylePrimitive{
-			Color: stringPtr("#4DD0E1"),
+			Color: stringPtr(atomOneDarkCyan),
 		},
 		NameTag: ansi.StylePrimitive{
-			Color: stringPtr("#BA68C8"),
+			Color: stringPtr(atomOneDarkRed),
 		},
 		NameAttribute: ansi.StylePrimitive{
-			Color: stringPtr("#64B5F6"),
+			Color: stringPtr(atomOneDarkOrange),
 		},
 		NameClass: ansi.StylePrimitive{
-			Color: stringPtr("#64B5F6"),
+			Color: stringPtr(atomOneDarkYellow),
 			Bold:  boolPtr(true),
 		},
 		NameFunction: ansi.StylePrimitive{
-			Color: stringPtr("#4DD0E1"),
+			Color: stringPtr(atomOneDarkBlue),
 			Bold:  boolPtr(true),
 		},
 		LiteralNumber: ansi.StylePrimitive{
-			Color: stringPtr("#FFD54F"),
+			Color: stringPtr(atomOneDarkOrange),
 		},
 		LiteralString: ansi.StylePrimitive{
-			Color: stringPtr("#81C784"),
+			Color: stringPtr(atomOneDarkGreen),
 		},
 		LiteralStringEscape: ansi.StylePrimitive{
-			Color: stringPtr("#FFD54F"),
+			Color: stringPtr(atomOneDarkOrange),
 		},
 		GenericDeleted: ansi.StylePrimitive{
-			Color: stringPtr("#E57373"),
+			Color: stringPtr(atomOneDarkRed),
 		},
 		GenericInserted: ansi.StylePrimitive{
-			Color: stringPtr("#81C784"),
+			Color: stringPtr(atomOneDarkGreen),
 		},
 		GenericEmph: ansi.StylePrimitive{
 			Italic: boolPtr(true),
