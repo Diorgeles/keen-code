@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.6] - 2026-06-18
+
+### Fixed
+- Append a config fix hint pointing to `~/.keen/configs.json` to LLM config errors raised during resolve, load, and client construction.
+- Clear `pendingState` on context overflow after tool-result reduction so stale tool traces and thinking tokens are not re-injected on the next call.
+
 ## [0.23.5] - 2026-06-18
 
 ### Added
@@ -543,7 +549,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.5...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.6...HEAD
+[0.23.6]: https://github.com/mochow13/keen-code/compare/v0.23.5...v0.23.6
 [0.23.5]: https://github.com/mochow13/keen-code/compare/v0.23.4...v0.23.5
 [0.23.4]: https://github.com/mochow13/keen-code/compare/v0.23.3...v0.23.4
 [0.23.3]: https://github.com/mochow13/keen-code/compare/v0.23.2...v0.23.3
