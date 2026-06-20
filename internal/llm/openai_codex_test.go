@@ -712,3 +712,63 @@ func newTestCodexClient(t *testing.T) *OpenAICodexClient {
 		userAgent:   "keen-code-test",
 	}
 }
+
+func TestOpenAICodexClient_PromptCacheKey_SetFromSessionID(t *testing.T) {
+	client := newTestCodexClient(t)
+
+	var capturedParams responses.ResponseNewParams
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		capturedParams = params
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":1,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil, StreamOptions{SessionID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"})
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	for ev := range ch {
+		if ev.Type == StreamEventTypeError {
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if !capturedParams.PromptCacheKey.Valid() {
+		t.Fatal("expected PromptCacheKey to be set")
+	}
+	want := "a1b2c3d4e5f67890abcdef1234567890"
+	if capturedParams.PromptCacheKey.Value != want {
+		t.Fatalf("expected PromptCacheKey %q, got %q", want, capturedParams.PromptCacheKey.Value)
+	}
+}
+
+func TestOpenAICodexClient_PromptCacheKey_OmittedWithoutSessionID(t *testing.T) {
+	client := newTestCodexClient(t)
+
+	var capturedParams responses.ResponseNewParams
+	client.responseStreamImpl = func(ctx context.Context, params responses.ResponseNewParams, opts ...option.RequestOption) responseStream {
+		capturedParams = params
+		return &fakeResponseStream{
+			events: []responses.ResponseStreamEventUnion{
+				mustResponseEvent(t, `{"type":"response.completed","sequence_number":1,"response":{"id":"r1","created_at":0,"metadata":{},"model":"gpt-5.4","object":"response","output":[],"parallel_tool_calls":false,"temperature":1,"tool_choice":"auto","tools":[],"top_p":1}}`),
+			},
+		}
+	}
+
+	ch, err := client.StreamChat(context.Background(), []Message{{Role: RoleUser, Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("StreamChat() failed: %v", err)
+	}
+	for ev := range ch {
+		if ev.Type == StreamEventTypeError {
+			t.Fatalf("unexpected stream error: %v", ev.Error)
+		}
+	}
+
+	if capturedParams.PromptCacheKey.Valid() {
+		t.Fatalf("expected PromptCacheKey to be omitted, got %q", capturedParams.PromptCacheKey.Value)
+	}
+}

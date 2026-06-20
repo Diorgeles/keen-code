@@ -30,3 +30,10 @@ func opencodeSessionID(sessionID string) string {
 	}
 	return strings.ReplaceAll(sessionID, "-", "")
 }
+
+func promptCacheKey(sessionID string) string {
+	if sessionID == "" {
+		return ""
+	}
+	return strings.ReplaceAll(sessionID, "-", "")
+}

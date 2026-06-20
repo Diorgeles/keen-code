@@ -156,6 +156,7 @@ func (c *OpenAIResponsesClient) StreamChat(
 
 		input := toOpenAIResponseInput(messages)
 		oneShot := streamOptions(opts).OneShot
+		sessionID := streamOptions(opts).SessionID
 		var replayedPendingInput []responses.ResponseInputItemUnionParam
 		if !oneShot {
 			input, replayedPendingInput = c.injectPendingState(input)
@@ -179,6 +180,9 @@ func (c *OpenAIResponsesClient) StreamChat(
 				Input: responses.ResponseNewParamsInputUnion{
 					OfInputItemList: input,
 				},
+			}
+			if key := promptCacheKey(sessionID); key != "" {
+				params.PromptCacheKey = param.NewOpt(key)
 			}
 			if c.thinkingEffort != "" && c.thinkingEffort != "off" {
 				params.Reasoning = shared.ReasoningParam{

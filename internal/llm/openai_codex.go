@@ -79,6 +79,7 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 
 		instructions, input := codexInstructionsAndInput(messages)
 		oneShot := streamOptions(opts).OneShot
+		sessionID := streamOptions(opts).SessionID
 		var injectedPending []responses.ResponseInputItemUnionParam
 		if !oneShot {
 			input, injectedPending = c.injectPendingState(input)
@@ -103,6 +104,9 @@ func (c *OpenAICodexClient) StreamChat(ctx context.Context, messages []Message, 
 				Input: responses.ResponseNewParamsInputUnion{
 					OfInputItemList: input,
 				},
+			}
+			if key := promptCacheKey(sessionID); key != "" {
+				params.PromptCacheKey = param.NewOpt(key)
 			}
 			if c.thinkingEffort != "" {
 				params.Reasoning = shared.ReasoningParam{
