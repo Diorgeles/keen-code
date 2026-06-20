@@ -21,6 +21,7 @@ Keen Code provides slash commands (prefixed with `/`) for controlling the agent.
 | `/<skill-name> [args...]` | Activate an enabled skill |
 | `/compact [prompt]` | Compact conversation context; provide a prompt to guide what to retain |
 | `/clear` or `/new` | Clear the current session and start a new one |
+| `/emptyq` | Clear the input queue (works while agent is streaming) |
 | `/logout` | Sign out of the current OAuth provider |
 | `/exit` | Quit Keen Code |
 
@@ -38,7 +39,7 @@ Behavior:
 - Passes the full conversation history to the adversary model, with the main agent's turns clearly labelled so the adversary does not confuse them with its own output
 - Starts fresh each invocation — previous adversary responses are not included in the context
 - Has read-only tool access (`read_file`, `glob`, `grep`) — no write, edit, bash, or MCP tools
-- Cannot be invoked while the main agent is streaming; the command is silently ignored
+- Cannot be invoked while the main agent is streaming; the command is queued instead (see [Input Queuing](queuing.md))
 - Press `Esc` to cancel an in-progress adversary response
 - Rendered as a teal left-border block in the output, separate from the main conversation
 - Adversary output is not added to main session history
@@ -253,6 +254,16 @@ Clears the current session and starts fresh. This clears:
 /new
 ```
 
+## `/emptyq`
+
+Clears all queued inputs. Works at any time, including while the agent is actively streaming. Shows a "Queue cleared" notification, or "Queue is empty" if there is nothing to clear.
+
+```text
+/emptyq
+```
+
+See [Input Queuing](queuing.md) for full details on how queued messages are displayed and drained.
+
 ## `/logout`
 
 Signs out of the current OAuth provider. This is useful for providers that use browser-based OAuth, currently Codex (ChatGPT OAuth). It removes stored OAuth credentials and clears the active LLM client.
@@ -270,6 +281,26 @@ Quits Keen Code.
 ```text
 /exit
 ```
+
+## Input Queuing
+
+When the agent is actively streaming a response, Keen Code queues certain inputs instead of dropping them. Queued messages appear in a preview band below the spinner and are automatically submitted one at a time as each turn completes.
+
+**Queueable inputs:**
+
+- Normal text prompts
+- Enabled skill activations (`/<skill-name> [args]`)
+- `/adversary [prompt]`
+
+**Not queued** (rejected with a notification while busy):
+
+- Slash commands like `/clear`, `/model`, `/compact` — these are immediate state operations
+- Unknown `/`-prefixed inputs — shows "No such skill found"
+- `!shell` commands — immediate shell execution
+
+The queue holds up to **5 items**. Use `/emptyq` to clear the queue at any time, or press `Ctrl+C`/`Esc` while idle to clear it.
+
+See [`docs/queuing.md`](queuing.md) for the full behavior specification.
 
 ## File Mentions
 
@@ -320,9 +351,9 @@ These shortcuts are available in the REPL:
 |----------|--------|
 | `Enter` | Submit the current input |
 | `Shift+Enter` | Insert a newline in the input box |
-| `Ctrl+C` | Clear non-empty input; quit when input is empty; copy selected text when a selection is active |
+| `Ctrl+C` | Clear non-empty input; clear queued messages when idle; quit when input is empty and queue is empty; copy selected text when a selection is active |
 | `Ctrl+D` | Clear non-empty input; quit when input is empty |
-| `Esc` | Interrupt an active response; cancel an active `/btw` stream; cancel compaction/model/session pickers; hide suggestions; clear selections |
+| `Esc` | Interrupt an active response; clear queued messages when idle; cancel an active `/btw` stream; cancel compaction/model/session pickers; hide suggestions; clear selections |
 | `Tab` | Show or accept autocomplete suggestions |
 | `↑` / `↓` | Navigate input history when the cursor is at the top/bottom of input; otherwise move the cursor; scroll output when history cannot move |
 | `PageUp` / `PageDown` | Scroll output by a half page |

@@ -50,6 +50,7 @@ Key files:
 - `repl.go` - Main REPL loop and state management
 - `stream_handler.go` - Processes LLM stream events
 - `command_handlers.go` - Slash commands
+- `repl_queue.go` - Input queuing while agent is streaming
 - `session_state.go` - Session context management
 
 ### LLM Layer (`internal/llm/`)
