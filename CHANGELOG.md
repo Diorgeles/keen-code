@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-07-17
+
+### Added
+- Queue user inputs while the agent is streaming, preventing input loss during active LLM turns.
+- Loading spinner for bash and bang (`!`) shell commands, providing visual feedback during shell execution.
+
+### Changed
+- Reduced hallucinated MCP tool names with exact-name guidance in the system prompt.
+
 ## [0.23.7] - 2026-06-20
 
 ### Added
@@ -554,7 +563,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.23.7...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/mochow13/keen-code/compare/v0.23.7...v0.24.0
 [0.23.7]: https://github.com/mochow13/keen-code/compare/v0.23.6...v0.23.7
 [0.23.6]: https://github.com/mochow13/keen-code/compare/v0.23.5...v0.23.6
 [0.23.5]: https://github.com/mochow13/keen-code/compare/v0.23.4...v0.23.5
