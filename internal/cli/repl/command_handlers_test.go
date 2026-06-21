@@ -57,6 +57,22 @@ func TestHandleEnterKey_ActiveStream(t *testing.T) {
 	}
 }
 
+func TestHandleEnterKey_ActiveStream_AdjustsViewportHeight(t *testing.T) {
+	m := newTestModel()
+	m.textarea.SetValue("some input")
+	eventCh := make(chan llm.StreamEvent)
+	m.streamHandler.Start(eventCh, "Loading...")
+	m.adjustTextareaHeight()
+
+	before := m.viewport.Height()
+	newM, _ := m.handleEnterKey()
+	after := newM.viewport.Height()
+
+	if after != before-newM.queuedHeight() {
+		t.Errorf("expected viewport height to decrease by queued height %d, got before=%d after=%d", newM.queuedHeight(), before, after)
+	}
+}
+
 func TestHandleBangCommand_ReturnsBeforeCommandCompletes(t *testing.T) {
 	m := newTestModel()
 
@@ -1581,6 +1597,21 @@ func TestHandleEnterKey_AdversaryQueuedWhenBusy(t *testing.T) {
 	}
 	if cmd != nil {
 		t.Error("expected nil cmd when queueing /adversary")
+	}
+}
+
+func TestHandleEnterKey_AdversaryQueuedWhenBusy_AdjustsViewportHeight(t *testing.T) {
+	m := newTestModel()
+	m.showSpinner = true
+	m.adjustTextareaHeight()
+
+	before := m.viewport.Height()
+	m.textarea.SetValue("/adversary focus on error handling")
+	newM, _ := m.handleEnterKey()
+	after := newM.viewport.Height()
+
+	if after != before-newM.queuedHeight() {
+		t.Errorf("expected viewport height to decrease by queued height %d, got before=%d after=%d", newM.queuedHeight(), before, after)
 	}
 }
 

@@ -319,6 +319,7 @@ func (m *replModel) refreshMCPSkill(server, description string) bool {
 
 func (m *replModel) handleMCPConnectDone(msg mcpConnectDoneMsg) {
 	m.stopLoading()
+	m.adjustTextareaHeight()
 	changed := false
 	if msg.Err != nil {
 		m.output.AddError("MCP connect failed for "+msg.Server+": "+msg.Err.Error(), repltheme.ErrorStyle)
@@ -614,11 +615,18 @@ func (m *replModel) spinnerHeight() int {
 	return 0
 }
 
+func (m *replModel) copyNotificationHeight() int {
+	if m.copyNotification == "" || m.showSpinner {
+		return 0
+	}
+	return 2
+}
+
 func (m *replModel) adjustTextareaHeight() {
 	if m.height <= 0 {
 		return
 	}
-	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height() - m.queuedHeight())
+	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.copyNotificationHeight() - m.suggestion.Height() - m.queuedHeight())
 }
 
 func (m replModel) isAtTopOfInput() bool {
@@ -827,7 +835,7 @@ func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
 		m.output.SetWidth(msg.Width)
 	}
 	m.viewport.SetWidth(msg.Width)
-	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.suggestion.Height() - m.queuedHeight())
+	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.copyNotificationHeight() - m.suggestion.Height() - m.queuedHeight())
 
 	if !m.initialScreenDone && msg.Width > 0 {
 		for _, line := range buildInitialScreen(m.ctx, m.lastSession, m.width) {

@@ -296,10 +296,7 @@ func (m *replModel) copySelectedTextCmd(text string) tea.Cmd {
 	if cmd == nil {
 		return nil
 	}
-	expiresAt := time.Now().Add(copyNotificationTimeout)
-	m.copyNotification = copyNotificationMessage
-	m.copyNotificationExpiresAt = expiresAt
-	return tea.Batch(cmd, clearCopyNotificationCmd(expiresAt))
+	return tea.Batch(cmd, m.showNotification(copyNotificationMessage))
 }
 
 func (m *replModel) openURLAtMouse(x, y int) tea.Cmd {
