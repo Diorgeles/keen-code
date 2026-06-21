@@ -2,6 +2,7 @@ package repl
 
 import (
 	"image"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -277,11 +278,13 @@ func copySelectedTextCmd(text string) tea.Cmd {
 		return nil
 	}
 	return tea.Sequence(
-		tea.SetClipboard(text),
 		func() tea.Msg {
-			_ = clipboard.WriteAll(text)
+			if err := clipboard.WriteAll(text); err != nil {
+				slog.Debug("native clipboard copy failed", "error", err)
+			}
 			return nil
 		},
+		tea.SetClipboard(text),
 	)
 }
 
