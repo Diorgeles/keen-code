@@ -66,6 +66,34 @@ type Model struct {
 
 `adversary_provider` and `adversary_model` are set via `/adversary model` and control which model is used for adversarial reviews. They are independent of `active_provider`/`active_model` and can point to any configured provider.
 
+### Custom Headers
+
+You can attach custom HTTP headers to a provider by adding a `headers` object to that provider's config in `~/.keen/configs.json`. These headers are sent with every request to that provider.
+
+```json
+{
+  "active_provider": "deepseek",
+  "active_model": "deepseek-v4-pro",
+  "providers": {
+    "deepseek": {
+      "models": ["deepseek-v4-pro"],
+      "api_key": "sk-...",
+      "headers": {
+        "x_header_1": "val1",
+        "x_header_2": "val2"
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- Header names and values are plain strings.
+- They are set per-provider; different providers can have different headers.
+- Custom headers must be added by editing the config file directly. The `/model` UI does not provide a field for them.
+- Applied to all clients: Anthropic, OpenAI, Codex, DeepSeek, Moonshot AI, Z.ai, MiniMax, OpenCode Go, Google AI (Genkit), and Amazon Bedrock.
+
 ### Config Resolution
 
 The `Resolve` function in `internal/config/config.go` determines the final configuration by merging global and session configs:

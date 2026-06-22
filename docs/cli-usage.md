@@ -104,6 +104,8 @@ Navigation:
 
 API keys are masked while typed. If an API key already exists for the provider, press `Enter` on an empty API-key prompt to keep it.
 
+Custom HTTP headers for a provider can be configured by editing `~/.keen/configs.json` directly. See [`docs/ai-providers.md`](ai-providers.md#custom-headers).
+
 ## `/allow-permission <tool_names...>`
 
 Always allow the listed tools without prompting. The setting is saved to `.keen/permissions.json` in the working directory and takes effect immediately.
