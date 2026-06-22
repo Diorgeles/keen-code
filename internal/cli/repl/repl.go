@@ -536,7 +536,7 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 		m.handleUpdateCheckMsg(msg)
 		return m, nil
 	case mcpStartupStatusMsg:
-		m.handleMCPStartupStatus(msg.Statuses)
+		m.handleMCPStartupStatus(msg)
 		return m, nil
 	case mcpConnectDoneMsg:
 		m.handleMCPConnectDone(msg)
