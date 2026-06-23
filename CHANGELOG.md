@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.6] - 2026-06-23
+
+### Added
+- `--resume` flag to restore previous REPL sessions.
+
 ## [0.24.5] - 2026-06-23
 
 ### Fixed
@@ -596,7 +601,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.5...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.6...HEAD
+[0.24.6]: https://github.com/mochow13/keen-code/compare/v0.24.5...v0.24.6
 [0.24.5]: https://github.com/mochow13/keen-code/compare/v0.24.4...v0.24.5
 [0.24.4]: https://github.com/mochow13/keen-code/compare/v0.24.3...v0.24.4
 [0.24.3]: https://github.com/mochow13/keen-code/compare/v0.24.2...v0.24.3
