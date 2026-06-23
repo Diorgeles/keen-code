@@ -22,6 +22,21 @@ This project is built with Go. To run it locally, ensure you have Go installed o
    go test ./...
    ```
 
+## Debugging
+
+The application uses structured logging through `slog`. Control the log verbosity with the `KEEN_LOG_LEVEL` environment variable:
+
+- `KEEN_LOG_LEVEL=debug` — verbose debug output
+- `KEEN_LOG_LEVEL=info` — informational messages (default)
+- `KEEN_LOG_LEVEL=warn` or `KEEN_LOG_LEVEL=warning` — warnings only
+- `KEEN_LOG_LEVEL=error` — errors only
+
+Logs are written to `~/.keen/logs/keen-code-<timestamp>.log`. For example, to run with debug logging:
+
+```bash
+KEEN_LOG_LEVEL=debug go run cmd/main.go
+```
+
 ## Prerequisites
 
 - You need to have access to at least one AI coding agent
