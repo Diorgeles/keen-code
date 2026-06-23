@@ -251,7 +251,7 @@ func (m replModel) Init() tea.Cmd {
 }
 
 func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
-	input := m.textarea.Value()
+	input := strings.TrimSpace(m.textarea.Value())
 	if input == "" {
 		return *m, nil
 	}
