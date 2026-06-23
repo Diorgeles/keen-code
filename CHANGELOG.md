@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.5] - 2026-06-23
+
+### Fixed
+- Ignore whitespace-only input submissions in the REPL.
+
+### Changed
+- Document `KEEN_LOG_LEVEL` debugging instructions in CONTRIBUTING.md.
+
 ## [0.24.4] - 2026-06-22
 
 ### Added
@@ -588,7 +596,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.4...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.5...HEAD
+[0.24.5]: https://github.com/mochow13/keen-code/compare/v0.24.4...v0.24.5
 [0.24.4]: https://github.com/mochow13/keen-code/compare/v0.24.3...v0.24.4
 [0.24.3]: https://github.com/mochow13/keen-code/compare/v0.24.2...v0.24.3
 [0.24.2]: https://github.com/mochow13/keen-code/compare/v0.24.1...v0.24.2
