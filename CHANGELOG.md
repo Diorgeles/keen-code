@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.7] - 2026-06-24
+
+### Added
+- `api_key_helper` for shell-based API key resolution.
+- Block-level prompt caching for Anthropic.
+
 ## [0.24.6] - 2026-06-23
 
 ### Added
@@ -601,7 +607,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.6...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.7...HEAD
+[0.24.7]: https://github.com/mochow13/keen-code/compare/v0.24.6...v0.24.7
 [0.24.6]: https://github.com/mochow13/keen-code/compare/v0.24.5...v0.24.6
 [0.24.5]: https://github.com/mochow13/keen-code/compare/v0.24.4...v0.24.5
 [0.24.4]: https://github.com/mochow13/keen-code/compare/v0.24.3...v0.24.4
