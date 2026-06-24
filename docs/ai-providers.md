@@ -96,22 +96,38 @@ Notes:
 
 ### Config Resolution
 
-The `Resolve` function in `internal/config/config.go` determines the final configuration by merging global and session configs:
+Keen loads `~/.keen/configs.json` through `internal/config.Loader`, then builds the runtime `ResolvedConfig` in `internal/cli/cmd/root.go`.
 
-```go
-func Resolve(global *GlobalConfig, session *SessionConfig) (*ResolvedConfig, error)
-```
+Resolution order for the default interactive and headless paths:
+1. Provider: `global.active_provider`
+2. Model: `global.active_model`
+3. API key: `providers.{provider}.api_key_helper` → `providers.{provider}.api_key`
 
-Resolution order:
-1. Provider: session → global.active_provider → error if unset
-2. API Key: session → provider global config → error if required
-3. Model: session → global.active_model → provider's first configured model
+For `keen run --provider`, the selected provider's config replaces the active provider for that invocation. If `--model` is omitted, Keen uses the selected provider's first configured model. The API key is still resolved through `api_key_helper` first, then `api_key`.
 
 ## Authentication
 
 ### API Key Authentication
 
 Most providers use API key authentication. Keys are stored in the global config under `providers.{provider}.api_key`.
+
+Instead of storing a key, a provider can define `api_key_helper`. Keen executes the helper locally when resolving the provider config, trims stdout, and uses that value as the in-memory API key for the current run/session. When `api_key_helper` is set, it always wins over `api_key`; `api_key` can be empty and Keen does not write the helper output back to `~/.keen/configs.json`.
+
+```json
+{
+  "active_provider": "anthropic",
+  "active_model": "claude-sonnet-4-6",
+  "providers": {
+    "anthropic": {
+      "models": ["claude-sonnet-4-6"],
+      "api_key": "",
+      "api_key_helper": "example-auth token || (example-auth login > /dev/null 2>&1 && example-auth token)"
+    }
+  }
+}
+```
+
+> **Security note:** `api_key_helper` is executed as a shell command with the privileges of the running process. Treat it as executable code: never paste untrusted strings into this field, audit any helper script before use, and keep `~/.keen` permissions strict (e.g. `chmod 700 ~/.keen` and `chmod 600 ~/.keen/configs.json`) so other local users cannot inject or read its contents.
 
 MiniMax uses its Anthropic-compatible API. Users normally leave `base_url` unset. Keen uses `https://api.minimax.io/anthropic`, which the Anthropic SDK extends to `/v1/messages`.
 
