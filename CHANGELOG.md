@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.8] - 2026-07-18
+
+### Added
+- `api_key_helper` credential refresh on 401 responses.
+- REPL loading step shown while fetching credentials for `api_key_helper` providers.
+
 ## [0.24.7] - 2026-06-24
 
 ### Added
@@ -607,7 +613,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.7...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.8...HEAD
+[0.24.8]: https://github.com/mochow13/keen-code/compare/v0.24.7...v0.24.8
 [0.24.7]: https://github.com/mochow13/keen-code/compare/v0.24.6...v0.24.7
 [0.24.6]: https://github.com/mochow13/keen-code/compare/v0.24.5...v0.24.6
 [0.24.5]: https://github.com/mochow13/keen-code/compare/v0.24.4...v0.24.5
