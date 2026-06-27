@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.9] - 2026-06-27
+
+### Added
+- Automatic dangerous bash command classification in the `bash` tool, gating risky commands even when the LLM omits `isDangerous`.
+- File tagging (`@`) suggestions inside slash commands and skill invocations.
+
 ## [0.24.8] - 2026-07-18
 
 ### Added
@@ -613,7 +619,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.8...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.9...HEAD
+[0.24.9]: https://github.com/mochow13/keen-code/compare/v0.24.8...v0.24.9
 [0.24.8]: https://github.com/mochow13/keen-code/compare/v0.24.7...v0.24.8
 [0.24.7]: https://github.com/mochow13/keen-code/compare/v0.24.6...v0.24.7
 [0.24.6]: https://github.com/mochow13/keen-code/compare/v0.24.5...v0.24.6
