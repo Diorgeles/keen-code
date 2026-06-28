@@ -1,0 +1,7 @@
+# Safeguarding `bash` tool
+
+1. Check the code in @internal/tools/bash.go and figure out how permission works for bash.
+2. Who sets the isDangerous flag?
+3. We want to improve the safety but also don't want to annoy users by marking everything dangerous. What are the minimal set of commands we should absolutely mark as dangerous while others can be permitted by default. For example, removing or modifying file command are risky. Similarly, taking privilege access is risky. But at the same time, echoing to a file is much safer.
+4. Ok now create a proper plan for this and save in @.ai-interactions/tasks/issue-57 as output-1_safeguarding-bash.md (the dir doesn't exist). In the plan, outline all the commands that are gated inlcuding the cases where only with certain flags should be gated. Also add reasoning for each decision. Organise the list in a table.
+5. Ok to implement, we will do very simple. Write a separate file. In the file, list all commands that are always dangerous. For them, we always need user approval since they are dangerous. For other commands, if they have a dangerous flag like --force, also classify as dangerous. Do exactly how we planned in the @.ai-interactions/tasks/issue-57. If either LLM turns the isDangerous flag on, or Keen classifies as dangerous, we render the permission prompt for bash tool, exactly as it is done right now. So we should do minimal change. use a set instead of map. If in the set, we know it is dangerous. is this the best way to create a set in Golang?

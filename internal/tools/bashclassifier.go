@@ -208,10 +208,6 @@ func isDangerousSegment(segment string) bool {
 		return true
 	}
 
-	if hasOverwriteRedirect(tokens) {
-		return true
-	}
-
 	if isDangerousEnvCommand(tokens) {
 		return true
 	}
@@ -330,38 +326,6 @@ func isSensitiveEnvVarName(name string) bool {
 	upper := strings.ToUpper(name)
 	for _, prefix := range []string{"AWS", "SECRET", "TOKEN", "PASSWORD", "PRIVATE", "GITHUB_TOKEN", "API_KEY", "KEY"} {
 		if strings.Contains(upper, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasOverwriteRedirect(tokens []string) bool {
-	for _, tok := range tokens {
-		if isAppendRedirect(tok) {
-			continue
-		}
-		if tok == ">" || tok == ">|" || tok == "1>" || tok == "2>" || tok == "&>" {
-			return true
-		}
-		for _, prefix := range []string{">|", "1>", "2>", "&>"} {
-			if strings.HasPrefix(tok, prefix) {
-				return true
-			}
-		}
-		if strings.HasPrefix(tok, ">") {
-			return true
-		}
-	}
-	return false
-}
-
-func isAppendRedirect(tok string) bool {
-	if tok == ">>" || tok == "1>>" || tok == "2>>" || tok == "&>>" {
-		return true
-	}
-	for _, prefix := range []string{">>", "1>>", "2>>", "&>>"} {
-		if strings.HasPrefix(tok, prefix) {
 			return true
 		}
 	}

@@ -140,9 +140,11 @@ func TestIsDangerousCommand_Redirection(t *testing.T) {
 		command string
 		danger  bool
 	}{
-		{"overwrite", "echo test > file.txt", true},
-		{"overwrite stderr", "cmd 2> file.txt", true},
-		{"overwrite clobber", "echo test >| file.txt", true},
+		{"overwrite", "echo test > file.txt", false},
+		{"overwrite stderr", "cmd 2> file.txt", false},
+		{"overwrite clobber", "echo test >| file.txt", false},
+		{"stderr to stdout", "ls file1 file2 2>&1", false},
+		{"stderr to devnull", "grep pattern dir/ 2>/dev/null", false},
 		{"append", "echo test >> file.txt", false},
 		{"stdout only", "echo test", false},
 	}
