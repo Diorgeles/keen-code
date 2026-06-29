@@ -239,6 +239,9 @@ Client identity behavior:
 3. Else, Keen enables dynamic client registration with metadata:
    - `client_name`: `Keen Code` by default.
    - `redirect_uris`: the configured redirect URL.
+   - `grant_types`: `["authorization_code"]`.
+   - `response_types`: `["code"]`.
+   - `token_endpoint_auth_method`: `client_secret_post` (the OAuth 2.1-preferred method; some servers reject the RFC 7591 default `client_secret_basic`).
    - `scope`: the space-joined `auth.scopes` from `configs.json`.
 
 In normal CLI usage, Keen uses option 3 because the CLI does not expose pre-registered OAuth client config.
