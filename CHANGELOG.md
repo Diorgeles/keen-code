@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-06-29
+
+### Added
+- Distinct input styles for `/btw` and `/adversary` commands in the REPL.
+- Spill large MCP tool results to artifact files.
+
+### Fixed
+- Send required metadata in OAuth dynamic client registration for MCP servers.
+
 ## [0.24.12] - 2026-06-29
 
 ### Fixed
@@ -638,7 +647,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.24.12...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/mochow13/keen-code/compare/v0.24.12...v0.25.0
 [0.24.12]: https://github.com/mochow13/keen-code/compare/v0.24.11...v0.24.12
 [0.24.11]: https://github.com/mochow13/keen-code/compare/v0.24.10...v0.24.11
 [0.24.10]: https://github.com/mochow13/keen-code/compare/v0.24.9...v0.24.10
