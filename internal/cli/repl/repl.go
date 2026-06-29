@@ -36,6 +36,7 @@ const (
 	defaultWidth            = 120
 	inputMinHeight          = 1
 	inputMaxHeight          = 15
+	inputMaxContentHeight   = 10000
 	copyNotificationTimeout = 2 * time.Second
 	copyNotificationMessage = "Copied to clipboard"
 )
@@ -127,6 +128,7 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	ta.DynamicHeight = true
 	ta.MinHeight = inputMinHeight
 	ta.MaxHeight = inputMaxHeight
+	ta.MaxContentHeight = inputMaxContentHeight
 	ta.SetHeight(inputMinHeight)
 	ta.ShowLineNumbers = false
 	ta.SetPromptFunc(3, func(info textarea.PromptInfo) string {

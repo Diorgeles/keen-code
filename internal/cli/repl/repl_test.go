@@ -34,6 +34,7 @@ func newTestModel() replModel {
 	ta.DynamicHeight = true
 	ta.MinHeight = inputMinHeight
 	ta.MaxHeight = inputMaxHeight
+	ta.MaxContentHeight = inputMaxContentHeight
 	ta.SetHeight(inputMinHeight)
 	vp := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	return replModel{
