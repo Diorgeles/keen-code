@@ -76,6 +76,11 @@ type btwErrorMsg struct {
 	err error
 }
 
+// streamRenderMsg flushes a batched stream render. It is produced by a short
+// tea.Tick so rapid chunks are coalesced into a single viewport rebuild instead
+// of one rebuild per token.
+type streamRenderMsg struct{}
+
 type adversaryChunkMsg string
 type adversaryDoneMsg struct{}
 type adversaryErrorMsg struct {

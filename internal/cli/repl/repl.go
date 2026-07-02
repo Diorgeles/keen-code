@@ -39,6 +39,7 @@ const (
 	inputMaxContentHeight   = 10000
 	copyNotificationTimeout = 2 * time.Second
 	copyNotificationMessage = "Copied to clipboard"
+	streamRenderInterval    = 200 * time.Millisecond
 )
 
 type replContext struct {
@@ -101,6 +102,11 @@ type replModel struct {
 	copyNotification          string
 	copyNotificationExpiresAt time.Time
 	queuedInputs              []string
+
+	// Streamed tokens arrive faster than the terminal can redraw. Batch
+	// viewport rebuilds to a short window so updates are smooth and complete.
+	streamRenderPending  bool
+	streamRenderInterval time.Duration
 }
 
 type bangState struct {
@@ -217,8 +223,9 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 			spinner:       as,
 			streamHandler: NewStreamHandler(mdRenderer),
 		},
-		lastSession:     lastSession,
-		projectPermsErr: projectPermsErr,
+		lastSession:          lastSession,
+		projectPermsErr:      projectPermsErr,
+		streamRenderInterval: streamRenderInterval,
 	}
 	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
 		model.showThinking = *ctx.globalCfg.ShowThinking

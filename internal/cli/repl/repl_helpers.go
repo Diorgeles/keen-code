@@ -860,6 +860,38 @@ func (m *replModel) scrollToBottomIfFollowing() {
 	}
 }
 
+// afterStreamUpdate decides whether to redraw the viewport immediately or to
+// batch the update for a later streamRenderMsg. Callers must still schedule the
+// next async event wait themselves.
+func (m *replModel) afterStreamUpdate() tea.Cmd {
+	if m.streamRenderInterval <= 0 {
+		m.updateViewportContent()
+		m.scrollToBottomIfFollowing()
+		return nil
+	}
+
+	if m.streamRenderPending {
+		return nil
+	}
+
+	m.streamRenderPending = true
+	return tea.Tick(m.streamRenderInterval, func(time.Time) tea.Msg {
+		return streamRenderMsg{}
+	})
+}
+
+// flushStreamRender forces any pending batched render to happen now. It should
+// be called at stream boundaries (done/error/tool events) and on user input so
+// the UI never lags behind the final state.
+func (m *replModel) flushStreamRender() {
+	if !m.streamRenderPending {
+		return
+	}
+	m.streamRenderPending = false
+	m.updateViewportContent()
+	m.scrollToBottomIfFollowing()
+}
+
 func waitForBtwEvent(llmCh <-chan llm.StreamEvent) tea.Cmd {
 	if llmCh == nil {
 		return nil
