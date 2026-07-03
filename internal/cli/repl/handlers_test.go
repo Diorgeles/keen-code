@@ -336,6 +336,30 @@ func TestHandleKeyMsg_Esc_WhenIdleNoOp(t *testing.T) {
 	}
 }
 
+func TestHandleKeyMsg_Esc_WithInputClearsAndDoesNotQuit(t *testing.T) {
+	ta := textarea.New()
+	ta.SetValue("draft text")
+
+	m := replModel{
+		textarea: ta,
+		quitting: false,
+	}
+
+	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
+
+	if newM.textarea.Value() != "" {
+		t.Errorf("expected textarea to be cleared, got %q", newM.textarea.Value())
+	}
+
+	if newM.quitting {
+		t.Error("expected quitting to remain false when esc clears input")
+	}
+
+	if cmd != nil {
+		t.Error("expected nil cmd when esc clears input")
+	}
+}
+
 func TestHandleKeyMsg_Esc_CancelsCompactionBeforeSuggestions(t *testing.T) {
 	m := newTestModel()
 	m.isCompacting = true

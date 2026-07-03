@@ -454,11 +454,18 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		}
 		if m.streamHandler != nil && m.streamHandler.IsActive() {
 			m.interruptStream(interruptedPromptText)
-		} else if len(m.queuedInputs) > 0 {
+			return *m, nil
+		}
+		if len(m.queuedInputs) > 0 {
 			m.queuedInputs = nil
 			m.updateViewportContent()
 			m.adjustTextareaHeight()
 			return *m, m.showNotification("Queue cleared")
+		}
+		if m.textarea.Value() != "" {
+			m.textarea.Reset()
+			m.adjustTextareaHeight()
+			return *m, nil
 		}
 		return *m, nil
 	case keyUp, keyShiftUp:
