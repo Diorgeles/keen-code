@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-07-03
+
+### Fixed
+- Clear REPL input on `Esc` instead of quitting the application.
+
 ## [0.25.2] - 2026-07-02
 
 ### Fixed
@@ -657,7 +662,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.25.3...HEAD
+[0.25.3]: https://github.com/mochow13/keen-code/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/mochow13/keen-code/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/mochow13/keen-code/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/mochow13/keen-code/compare/v0.24.12...v0.25.0
