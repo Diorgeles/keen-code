@@ -35,7 +35,7 @@ Define reusable slash commands that package common prompts or workflow entry poi
 ### Persistent Memory
 Retain useful context across sessions beyond static instruction files like `AGENTS.md`. Project-local and user-global memory, kept visible and editable so it never silently mutates behavior.
 
-### Subagents and Delegation
+### ✅ Subagents and Delegation
 Let the agent delegate bounded subtasks — exploration, implementation, testing, review — to additional agents running in parallel. Keeps the main thread clean while handling larger tasks. All existing permission and filesystem boundaries still apply.
 
 ---
