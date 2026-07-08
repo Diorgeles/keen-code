@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-07-08
+
+### Changed
+- Tightened tool-memory guidance in the system prompt to prevent hallucinated findings from stale memory, requiring a fresh tool call before relying on external evidence.
+
 ## [0.26.0] - 2026-07-07
 
 ### Added
@@ -667,7 +672,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.26.1...HEAD
+[0.26.1]: https://github.com/mochow13/keen-code/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/mochow13/keen-code/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/mochow13/keen-code/compare/v0.25.2...v0.25.3
 [0.25.2]: https://github.com/mochow13/keen-code/compare/v0.25.1...v0.25.2
