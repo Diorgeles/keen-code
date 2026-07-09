@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-07-10
+
+### Added
+- GPT-5.6 model entries in the provider registry.
+- Debug logging for unhandled LLM tool tokens and malformed tool JSON in Anthropic and OpenAI clients.
+
 ## [0.26.1] - 2026-07-08
 
 ### Changed
@@ -672,7 +678,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/mochow13/keen-code/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/mochow13/keen-code/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/mochow13/keen-code/compare/v0.25.3...v0.26.0
 [0.25.3]: https://github.com/mochow13/keen-code/compare/v0.25.2...v0.25.3
