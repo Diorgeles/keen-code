@@ -316,6 +316,13 @@ func (c *OpenAICompatibleClient) collectTurn(
 				Content: reasoningDelta,
 			}
 		}
+
+		if len(delta.ToolCalls) > 0 {
+			slog.Debug("OpenAI chat delta tool_calls", "tool_calls", delta.ToolCalls)
+		}
+		if delta.ToolCalls[0].Function.Name != "" || delta.ToolCalls[0].Function.Arguments != "" {
+			slog.Debug("OpenAI chat delta function_call", "function_call", delta.FunctionCall)
+		}
 	}
 	_ = stream.Close()
 
@@ -579,6 +586,7 @@ func (c *OpenAICompatibleClient) executeTools(
 		input := map[string]any{}
 		if tc.Function.Arguments != "" {
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &input); err != nil {
+				slog.Debug("OpenAI tool arguments malformed", "tool", tc.Function.Name, "arguments", tc.Function.Arguments, "error", err)
 				input = map[string]any{}
 			}
 		}

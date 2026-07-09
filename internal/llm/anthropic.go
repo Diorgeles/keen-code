@@ -364,6 +364,8 @@ func (c *AnthropicClient) collectTurn(
 					name:       tu.Name,
 					inputStart: inputStart,
 				}
+			default:
+				slog.Debug("Anthropic content block start unhandled", "block_type", cbs.ContentBlock.Type, "raw", cbs.ContentBlock.RawJSON())
 			}
 
 		case "content_block_delta":
@@ -408,6 +410,8 @@ func (c *AnthropicClient) collectTurn(
 					blockStates[cbd.Index] = state
 				}
 				state.inputBuffer = append(state.inputBuffer, []byte(cbd.Delta.PartialJSON)...)
+			default:
+				slog.Debug("Anthropic content block delta unhandled", "delta_type", cbd.Delta.Type, "raw", cbd.Delta.RawJSON())
 			}
 
 		case "content_block_stop":
@@ -424,6 +428,7 @@ func (c *AnthropicClient) collectTurn(
 					assistantBlocks = append(assistantBlocks, anthropic.NewRedactedThinkingBlock(state.data))
 				case "tool_use":
 					if state.name == "" && state.id == "" {
+						slog.Debug("Anthropic tool_use block missing name/id, ignoring", "index", cbs.Index)
 						delete(blockStates, cbs.Index)
 						continue
 					}
@@ -438,6 +443,8 @@ func (c *AnthropicClient) collectTurn(
 				}
 				delete(blockStates, cbs.Index)
 			}
+		default:
+			slog.Debug("Anthropic stream event unhandled", "event_type", ev.Type, "raw", ev.RawJSON())
 		}
 	}
 	_ = stream.Close()
@@ -455,6 +462,7 @@ func (c *AnthropicClient) collectTurn(
 		tu := block.OfToolUse
 		var input map[string]any
 		if err := json.Unmarshal(tu.Input.(json.RawMessage), &input); err != nil {
+			slog.Debug("Anthropic tool_use input JSON malformed", "tool", tu.Name, "raw", string(tu.Input.(json.RawMessage)), "error", err)
 			input = map[string]any{}
 		}
 		toolUses = append(toolUses, toolUseEntry{
