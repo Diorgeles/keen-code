@@ -115,8 +115,8 @@ func TestNewClient_OpenAI(t *testing.T) {
 	if responsesClient.model != "gpt-5.4-mini" {
 		t.Errorf("expected model gpt-5.4-mini, got %s", responsesClient.model)
 	}
-	if responsesClient.contextWindowTokenCount != 400000 {
-		t.Errorf("expected context window 400000, got %d", responsesClient.contextWindowTokenCount)
+	if responsesClient.contextWindowTokenCount != defaultContextWindowTokenCount {
+		t.Errorf("expected fallback context window %d, got %d", defaultContextWindowTokenCount, responsesClient.contextWindowTokenCount)
 	}
 }
 
