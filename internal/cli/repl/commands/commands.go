@@ -12,6 +12,8 @@ const (
 	Exit            = "/exit"
 	Help            = "/help"
 	Logout          = "/logout"
+	Memory          = "/memory"
+	MemoryShow      = "/memory show"
 	Model           = "/model"
 	MCP             = "/mcp"
 	MCPConnect      = "/mcp connect"
@@ -50,6 +52,7 @@ var All = []SlashCommand{
 	{Exit, "Quit Keen"},
 	{Help, "Show available commands"},
 	{Logout, "Sign out of the current OAuth provider"},
+	{Memory, "Show memory file paths and contents"},
 	{MCP, "Show MCP status or refresh a server"},
 	{Model, "Change provider or model stored in ~/.keen/configs.json"},
 	{Mode, "Switch agent mode (plan|build)"},
@@ -74,6 +77,8 @@ var Suggestions = []SlashCommand{
 	{Exit, "Quit Keen"},
 	{Help, "Show available commands"},
 	{Logout, "Sign out of the current OAuth provider"},
+	{Memory, "Show memory file paths and contents"},
+	{MemoryShow, "Show memory contents"},
 	{MCP, "Show MCP commands"},
 	{MCPConnect, "Connect an MCP server"},
 	{MCPStatus, "Show MCP server status"},

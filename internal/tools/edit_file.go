@@ -8,6 +8,7 @@ import (
 
 	udiff "github.com/aymanbagabas/go-udiff"
 	"github.com/user/keen-code/internal/filesystem"
+	"github.com/user/keen-code/internal/memory"
 )
 
 type EditFileTool struct {
@@ -137,6 +138,10 @@ func (t *EditFileTool) Execute(ctx context.Context, input any) (any, error) {
 	} else {
 		newContent = strings.Replace(oldContent, oldString, newString, 1)
 		replacementCount = 1
+	}
+
+	if t.guard.IsMemoryPath(resolvedPath) && memory.ContainsSecret(newContent) {
+		return nil, fmt.Errorf("refusing to write memory file: content appears to contain a secret, token, or credential")
 	}
 
 	t.diffEmitter.EmitDiff(computeEditDiff(oldContent, newContent))

@@ -32,7 +32,7 @@ Add [Model Context Protocol](https://modelcontextprotocol.io) support so Keen ca
 
 Define reusable slash commands that package common prompts or workflow entry points. Commands can live in the repo (team-shared) or in user config (personal). Think `/review`, `/release-notes`, `/fix-tests` — the kind of repeated tasks every team has. Agent `skills` can be leveraged for this.
 
-### Persistent Memory
+### ✅ Persistent Memory
 Retain useful context across sessions beyond static instruction files like `AGENTS.md`. Project-local and user-global memory, kept visible and editable so it never silently mutates behavior.
 
 ### ✅ Subagents and Delegation

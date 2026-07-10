@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/user/keen-code/internal/filesystem"
@@ -372,5 +373,83 @@ func TestWriteFileTool_Execute_EmptyContent(t *testing.T) {
 
 	if string(writtenContent) != "" {
 		t.Errorf("expected empty content, got %q", string(writtenContent))
+	}
+}
+
+func TestWriteFileTool_MemoryPathRejectsSecret(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tmpDir := t.TempDir()
+	guard := filesystem.NewGuard(tmpDir, nil)
+	mockPR := &mockPermissionRequester{allow: true}
+	tool := NewWriteFileTool(guard, nil, mockPR)
+
+	memPath := filepath.Join(home, ".keen", "memory", "global", "MEMORY.md")
+	input := map[string]any{"path": memPath, "content": "api_key: sk-1234567890abcdefghijklmnopqrstuvwxyz"}
+	_, err := tool.Execute(context.Background(), input)
+	if err == nil {
+		t.Fatal("expected error writing secret to memory file")
+	}
+	if !strings.Contains(err.Error(), "secret") {
+		t.Fatalf("expected secret-related error, got %v", err)
+	}
+}
+
+func TestWriteFileTool_MemoryPathAllowsCleanContent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tmpDir := t.TempDir()
+	guard := filesystem.NewGuard(tmpDir, nil)
+	mockPR := &mockPermissionRequester{allow: true}
+	tool := NewWriteFileTool(guard, nil, mockPR)
+
+	memPath := filepath.Join(home, ".keen", "memory", "global", "MEMORY.md")
+	input := map[string]any{"path": memPath, "content": "- user prefers brief responses"}
+	result, err := tool.Execute(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatal("result should be a map")
+	}
+	if !resultMap["created"].(bool) {
+		t.Fatal("expected file to be created")
+	}
+}
+
+func TestWriteFileTool_ProjectMemoryPathRejectsSecret(t *testing.T) {
+	tmpDir := t.TempDir()
+	guard := filesystem.NewGuard(tmpDir, nil)
+	mockPR := &mockPermissionRequester{allow: true}
+	tool := NewWriteFileTool(guard, nil, mockPR)
+
+	input := map[string]any{"path": ".keen/MEMORY.md", "content": "api_key: sk-1234567890abcdefghijklmnopqrstuvwxyz"}
+	_, err := tool.Execute(context.Background(), input)
+	if err == nil {
+		t.Fatal("expected error writing secret to project memory file")
+	}
+	if !strings.Contains(err.Error(), "secret") {
+		t.Fatalf("expected secret-related error, got %v", err)
+	}
+}
+
+func TestWriteFileTool_ProjectMemoryPathAllowsCleanContent(t *testing.T) {
+	tmpDir := t.TempDir()
+	guard := filesystem.NewGuard(tmpDir, nil)
+	mockPR := &mockPermissionRequester{allow: true}
+	tool := NewWriteFileTool(guard, nil, mockPR)
+
+	input := map[string]any{"path": ".keen/MEMORY.md", "content": "- user prefers brief responses"}
+	result, err := tool.Execute(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatal("result should be a map")
+	}
+	if !resultMap["created"].(bool) {
+		t.Fatal("expected file to be created")
 	}
 }

@@ -57,8 +57,14 @@ func (g *Guard) CheckPath(path string, operation string) Permission {
 		return PermissionDenied
 	}
 
-	if operation == "read" && (g.IsInSkillDir(resolved) || g.IsInKeenBashDir(resolved) || g.IsInMCPArtifactsDir(resolved)) {
+	if operation == "read" && (g.IsInSkillDir(resolved) || g.IsInKeenBashDir(resolved) || g.IsInMCPArtifactsDir(resolved) || g.IsInMemoryDir(resolved)) {
 		return PermissionGranted
+	}
+
+	if operation == "write" || operation == "edit" {
+		if g.IsInMemoryDir(resolved) {
+			return PermissionPending
+		}
 	}
 
 	inWorkingDir := g.IsInWorkingDir(resolved)
@@ -86,7 +92,7 @@ func (g *Guard) IsBlocked(path string) bool {
 		return true
 	}
 
-	if g.IsInSkillDir(resolved) || g.IsInKeenBashDir(resolved) || g.IsInMCPArtifactsDir(resolved) {
+	if g.IsInSkillDir(resolved) || g.IsInKeenBashDir(resolved) || g.IsInMCPArtifactsDir(resolved) || g.IsInMemoryDir(resolved) {
 		return false
 	}
 
@@ -214,4 +220,30 @@ func (g *Guard) IsInSkillDir(path string) bool {
 		}
 	}
 	return false
+}
+
+func (g *Guard) IsInMemoryDir(path string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return false
+	}
+	memoryDir := filepath.Join(home, ".keen", "memory")
+	cleaned := filepath.Clean(path)
+	if cleaned == memoryDir {
+		return true
+	}
+	prefix := memoryDir + string(filepath.Separator)
+	return strings.HasPrefix(cleaned+string(filepath.Separator), prefix)
+}
+
+func (g *Guard) IsMemoryPath(path string) bool {
+	cleaned := filepath.Clean(path)
+	if g.IsInMemoryDir(cleaned) {
+		return true
+	}
+	if g.workingDir == "" {
+		return false
+	}
+	projectMemory := filepath.Join(filepath.Clean(g.workingDir), ".keen", "MEMORY.md")
+	return cleaned == projectMemory
 }

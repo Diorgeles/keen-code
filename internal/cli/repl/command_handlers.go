@@ -19,6 +19,7 @@ import (
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
+	"github.com/user/keen-code/internal/memory"
 	"github.com/user/keen-code/internal/skills"
 	"github.com/user/keen-code/internal/subagents"
 )
@@ -63,6 +64,11 @@ func (m *replModel) dispatchCommand(input string) (replModel, tea.Cmd, bool) {
 	case input == replcommands.Logout:
 		m.textarea.Reset()
 		result := m.handleLogoutCommand()
+		return result, nil, true
+
+	case input == replcommands.Memory || input == replcommands.MemoryShow || strings.HasPrefix(input, replcommands.Memory+" "):
+		m.textarea.Reset()
+		result := m.handleMemoryCommand(input, replcommands.MemoryShow)
 		return result, nil, true
 
 	case input == replcommands.Resume:
@@ -255,6 +261,110 @@ func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 	return *m, nil
+}
+
+func (m *replModel) handleMemoryCommand(input, showCommand string) replModel {
+	isShow := input == showCommand || strings.HasPrefix(input, showCommand+" ")
+	scope := strings.TrimSpace(strings.TrimPrefix(input, replcommands.Memory))
+	if isShow {
+		scope = strings.TrimSpace(strings.TrimPrefix(input, showCommand))
+	}
+
+	global, project := memory.Files(m.ctx.workingDir)
+
+	if !isShow {
+		if scope != "" {
+			m.output.AddStyledLine("  Usage: /memory | /memory show", repltheme.UsageHintStyle)
+			m.output.AddEmptyLine()
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m
+		}
+		if !global.Exists && !project.Exists && global.Path != "" && project.Path != "" {
+			m.output.AddStyledLine("  No memory files found.", repltheme.MutedStyle)
+			m.output.AddEmptyLine()
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m
+		}
+		m.output.AddStyledLine("  Global memory:  "+global.Path+existsLabel(global.Exists), labelStyle(global.Exists))
+		m.output.AddStyledLine("  Project memory: "+project.Path+existsLabel(project.Exists), labelStyle(project.Exists))
+		m.output.AddEmptyLine()
+		m.updateViewportContent()
+		m.viewport.GotoBottom()
+		return *m
+	}
+
+	switch scope {
+	case "":
+		if !global.Exists && !project.Exists {
+			m.output.AddStyledLine("  Memory is empty.", repltheme.MutedStyle)
+			m.output.AddEmptyLine()
+			m.updateViewportContent()
+			m.viewport.GotoBottom()
+			return *m
+		}
+		if global.Exists {
+			m.output.AddStyledLine("  ## Global memory", repltheme.MutedStyle.Bold(true))
+			m.output.AddStyledLine("  path: "+global.Path, repltheme.HelpDescStyle)
+			m.output.AddLine("")
+			for _, line := range strings.Split(strings.TrimSpace(global.Content), "\n") {
+				m.output.AddLine("  " + line)
+			}
+			m.output.AddLine("")
+		}
+		if project.Exists {
+			m.output.AddStyledLine("  ## Project memory", repltheme.MutedStyle.Bold(true))
+			m.output.AddStyledLine("  path: "+project.Path, repltheme.HelpDescStyle)
+			m.output.AddLine("")
+			for _, line := range strings.Split(strings.TrimSpace(project.Content), "\n") {
+				m.output.AddLine("  " + line)
+			}
+			m.output.AddLine("")
+		}
+	case "global":
+		if global.Exists {
+			m.output.AddStyledLine("  ## Global memory", repltheme.MutedStyle.Bold(true))
+			m.output.AddStyledLine("  path: "+global.Path, repltheme.HelpDescStyle)
+			m.output.AddLine("")
+			for _, line := range strings.Split(strings.TrimSpace(global.Content), "\n") {
+				m.output.AddLine("  " + line)
+			}
+		} else {
+			m.output.AddStyledLine("  Global memory is empty.", repltheme.MutedStyle)
+		}
+		m.output.AddEmptyLine()
+	case "project":
+		if project.Exists {
+			m.output.AddStyledLine("  ## Project memory", repltheme.MutedStyle.Bold(true))
+			m.output.AddStyledLine("  path: "+project.Path, repltheme.HelpDescStyle)
+			m.output.AddLine("")
+			for _, line := range strings.Split(strings.TrimSpace(project.Content), "\n") {
+				m.output.AddLine("  " + line)
+			}
+		} else {
+			m.output.AddStyledLine("  Project memory is empty.", repltheme.MutedStyle)
+		}
+		m.output.AddEmptyLine()
+	}
+
+	m.updateViewportContent()
+	m.viewport.GotoBottom()
+	return *m
+}
+
+func existsLabel(exists bool) string {
+	if exists {
+		return "  exists"
+	}
+	return "  missing"
+}
+
+func labelStyle(exists bool) lipgloss.Style {
+	if exists {
+		return repltheme.HighlightStyle
+	}
+	return repltheme.MutedStyle
 }
 
 func (m *replModel) handleModeCommand(input string) replModel {

@@ -312,6 +312,7 @@ func (c *AnthropicClient) collectTurn(
 			slog.Debug(
 				"Anthropic stream usage",
 				"event_type", "message_delta",
+				"stop_reason", md.Delta.StopReason,
 				"input_tokens", md.Usage.InputTokens,
 				"output_tokens", md.Usage.OutputTokens,
 				"cache_creation_input_tokens", md.Usage.CacheCreationInputTokens,
@@ -443,6 +444,10 @@ func (c *AnthropicClient) collectTurn(
 				}
 				delete(blockStates, cbs.Index)
 			}
+		case "message_stop":
+			if len(blockStates) > 0 {
+				slog.Debug("Anthropic stream stopped with unfinished content blocks", "count", len(blockStates))
+			}
 		default:
 			slog.Debug("Anthropic stream event unhandled", "event_type", ev.Type, "raw", ev.RawJSON())
 		}
@@ -451,6 +456,9 @@ func (c *AnthropicClient) collectTurn(
 
 	if err := stream.Err(); err != nil {
 		return nil, nil, nil, fmt.Errorf("stream error: %w", err)
+	}
+	if len(blockStates) > 0 {
+		slog.Debug("Anthropic stream ended with unfinished content blocks", "count", len(blockStates))
 	}
 	slog.Debug("Anthropic prompt cache hit", "cache_read_input_tokens", cacheReadInputTokens)
 

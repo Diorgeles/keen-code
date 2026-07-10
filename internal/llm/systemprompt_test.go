@@ -151,3 +151,24 @@ func TestBuild_ModeInstructionsAreAtEnd(t *testing.T) {
 		t.Fatal("expected skills catalog before mode section")
 	}
 }
+
+func TestBuild_ProjectMemoryIncluded(t *testing.T) {
+	dir := t.TempDir()
+	memDir := filepath.Join(dir, ".keen")
+	os.MkdirAll(memDir, 0755)
+	memPath := filepath.Join(memDir, "MEMORY.md")
+	os.WriteFile(memPath, []byte("- run go test -race ./... after Go changes"), 0644)
+
+	result := Build(dir, "", "", ModeBuild)
+	if !strings.Contains(result, "go test -race") {
+		t.Fatal("expected memory content in prompt")
+	}
+}
+
+func TestBuild_NoMemorySectionWhenEmpty(t *testing.T) {
+	dir := t.TempDir()
+	result := Build(dir, "", "", ModeBuild)
+	if strings.Contains(result, "run go test -race ./... after Go changes") {
+		t.Fatal("expected no loaded memory content when no memory file exists")
+	}
+}

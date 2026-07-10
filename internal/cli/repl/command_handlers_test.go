@@ -1644,3 +1644,113 @@ func TestHandleEnterKey_AdversaryQueueFull(t *testing.T) {
 		t.Errorf("expected queue to remain at 5, got %d", len(newM.queuedInputs))
 	}
 }
+
+func TestHandleMemoryCommand_NoFilesFound(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	result := m.handleMemoryCommand("/memory", "/memory show")
+	out := ansi.Strip(result.output.Join())
+	if !strings.Contains(out, "No memory files found.") {
+		t.Fatalf("expected 'No memory files found.', got %q", out)
+	}
+}
+
+func TestHandleMemoryCommand_ListPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+	os.MkdirAll(filepath.Join(home, ".keen", "memory", "global"), 0755)
+	os.WriteFile(filepath.Join(home, ".keen", "memory", "global", "MEMORY.md"), []byte("- brief"), 0644)
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	result := m.handleMemoryCommand("/memory", "/memory show")
+	out := ansi.Strip(result.output.Join())
+	if !strings.Contains(out, "Global memory:") || !strings.Contains(out, "exists") {
+		t.Fatalf("expected global memory exists, got %q", out)
+	}
+	if !strings.Contains(out, "Project memory:") || !strings.Contains(out, "missing") {
+		t.Fatalf("expected project memory missing, got %q", out)
+	}
+}
+
+func TestHandleMemoryCommand_ShowEmpty(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	result := m.handleMemoryCommand("/memory show", "/memory show")
+	out := ansi.Strip(result.output.Join())
+	if !strings.Contains(out, "Memory is empty.") {
+		t.Fatalf("expected 'Memory is empty.', got %q", out)
+	}
+}
+
+func TestHandleMemoryCommand_ShowContents(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+	os.MkdirAll(filepath.Join(home, ".keen", "memory", "global"), 0755)
+	os.WriteFile(filepath.Join(home, ".keen", "memory", "global", "MEMORY.md"), []byte("- prefers brief"), 0644)
+	os.MkdirAll(filepath.Join(work, ".keen"), 0755)
+	os.WriteFile(filepath.Join(work, ".keen", "MEMORY.md"), []byte("- run go test -race"), 0644)
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	result := m.handleMemoryCommand("/memory show", "/memory show")
+	out := ansi.Strip(result.output.Join())
+	if !strings.Contains(out, "Global memory") || !strings.Contains(out, "prefers brief") {
+		t.Fatalf("expected global memory content, got %q", out)
+	}
+	if !strings.Contains(out, "Project memory") || !strings.Contains(out, "go test -race") {
+		t.Fatalf("expected project memory content, got %q", out)
+	}
+}
+
+func TestHandleMemoryCommand_ShowProjectOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+	os.MkdirAll(filepath.Join(work, ".keen"), 0755)
+	os.WriteFile(filepath.Join(work, ".keen", "MEMORY.md"), []byte("- project note"), 0644)
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	result := m.handleMemoryCommand("/memory show project", "/memory show")
+	out := ansi.Strip(result.output.Join())
+	if !strings.Contains(out, "project note") {
+		t.Fatalf("expected project memory content, got %q", out)
+	}
+	if strings.Contains(out, "Global memory") {
+		t.Fatalf("did not expect global memory in project-only show, got %q", out)
+	}
+}
+
+func TestDispatchCommand_MemoryRouting(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	work := t.TempDir()
+
+	m := newTestModel()
+	m.ctx.workingDir = work
+	m.textarea.SetValue("/memory")
+	_, _, handled := m.dispatchCommand("/memory")
+	if !handled {
+		t.Fatal("expected /memory to be handled")
+	}
+}
+
+func TestIsKnownCommand_MemoryExists(t *testing.T) {
+	if !replcommands.IsKnownCommand("/memory") {
+		t.Fatal("expected /memory to be known")
+	}
+	if !replcommands.IsKnownCommand("/memory show") {
+		t.Fatal("expected /memory show to be known")
+	}
+}

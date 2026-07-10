@@ -353,6 +353,29 @@ func TestComputeEditDiff_SingleLineChange(t *testing.T) {
 	}
 }
 
+func TestEditFileTool_Execute_ProjectMemoryPathRejectsSecret(t *testing.T) {
+	tmpDir := t.TempDir()
+	memFile := filepath.Join(tmpDir, ".keen", "MEMORY.md")
+	if err := os.MkdirAll(filepath.Dir(memFile), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(memFile, []byte("- existing note\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	guard := newGuard(tmpDir)
+	tool := NewEditFileTool(guard, &mockDiffEmitter{}, &mockPermissionRequester{allow: true})
+
+	_, err := tool.Execute(context.Background(), map[string]any{
+		"path":      ".keen/MEMORY.md",
+		"oldString": "- existing note",
+		"newString": "api_key: sk-1234567890abcdefghijklmnopqrstuvwxyz",
+	})
+	if err == nil {
+		t.Fatal("expected error editing secret into project memory file")
+	}
+}
+
 func newGuard(dir string) *filesystem.Guard {
 	return filesystem.NewGuard(dir, nil)
 }

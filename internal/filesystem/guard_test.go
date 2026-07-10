@@ -307,3 +307,51 @@ func TestGuard_IsInWorkingDir(t *testing.T) {
 		}
 	}
 }
+
+func TestGuard_CheckPath_MemoryDirGrantsReadOutsideWorkingDir(t *testing.T) {
+	home := t.TempDir()
+	workingDir := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(workingDir, nil)
+	memPath := filepath.Join(home, ".keen", "memory", "global", "MEMORY.md")
+	got := g.CheckPath(memPath, "read")
+	if got != PermissionGranted {
+		t.Errorf("CheckPath(memory file, read) = %v, want PermissionGranted", got)
+	}
+}
+
+func TestGuard_CheckPath_MemoryDirWriteIsPending(t *testing.T) {
+	home := t.TempDir()
+	workingDir := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(workingDir, nil)
+	memPath := filepath.Join(home, ".keen", "memory", "global", "MEMORY.md")
+	got := g.CheckPath(memPath, "write")
+	if got != PermissionPending {
+		t.Errorf("CheckPath(memory file, write) = %v, want PermissionPending", got)
+	}
+}
+
+func TestGuard_IsBlocked_MemoryDirAllowed(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(t.TempDir(), nil)
+	memPath := filepath.Join(home, ".keen", "memory", "global", "MEMORY.md")
+	if g.IsBlocked(memPath) {
+		t.Errorf("expected memory path to not be blocked: %s", memPath)
+	}
+}
+
+func TestGuard_IsBlocked_KeenOutsideMemoryDenied(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	g := NewGuard(t.TempDir(), nil)
+	path := filepath.Join(home, ".keen", "configs.json")
+	if !g.IsBlocked(path) {
+		t.Error("expected ~/.keen path outside memory to be blocked")
+	}
+}

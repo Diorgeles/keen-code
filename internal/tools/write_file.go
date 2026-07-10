@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/user/keen-code/internal/filesystem"
+	"github.com/user/keen-code/internal/memory"
 )
 
 type WriteFileTool struct {
@@ -100,6 +101,10 @@ func (t *WriteFileTool) Execute(ctx context.Context, input any) (any, error) {
 	}
 
 	permission := t.guard.CheckPath(path, "write")
+
+	if t.guard.IsMemoryPath(resolvedPath) && memory.ContainsSecret(content) {
+		return nil, fmt.Errorf("refusing to write memory file: content appears to contain a secret, token, or credential")
+	}
 
 	switch permission {
 	case filesystem.PermissionDenied:

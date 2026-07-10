@@ -29,8 +29,8 @@ func TestFilterCommandsH(t *testing.T) {
 
 func TestFilterCommandsM(t *testing.T) {
 	got := replcommands.Filter("/m")
-	if len(got) != 5 || got[0].Name != "/mcp" || got[1].Name != "/mcp connect" || got[2].Name != "/mcp status" || got[3].Name != "/model" || got[4].Name != "/mode" {
-		t.Errorf("expected /mcp, /mcp connect, /mcp status, /model and /mode, got %v", got)
+	if len(got) != 7 || got[0].Name != "/memory" || got[1].Name != "/memory show" || got[2].Name != "/mcp" || got[3].Name != "/mcp connect" || got[4].Name != "/mcp status" || got[5].Name != "/model" || got[6].Name != "/mode" {
+		t.Errorf("expected /memory, /memory show, /mcp, /mcp connect, /mcp status, /model and /mode, got %v", got)
 	}
 }
 
