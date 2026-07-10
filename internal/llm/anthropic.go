@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	anthropic "github.com/anthropics/anthropic-sdk-go"
@@ -111,6 +112,41 @@ func anthropicBaseURL(provider Provider, configured string) string {
 		return miniMaxBaseURL
 	}
 	return ""
+}
+
+func formatAnthropicTurnInput(system []anthropic.TextBlockParam, messages []anthropic.MessageParam) string {
+	var input strings.Builder
+	for _, block := range system {
+		if input.Len() > 0 {
+			input.WriteString("\n\n")
+		}
+		input.WriteString("--- system ---\n")
+		input.WriteString(block.Text)
+	}
+	for _, message := range messages {
+		if input.Len() > 0 {
+			input.WriteString("\n\n")
+		}
+		input.WriteString("--- ")
+		input.WriteString(string(message.Role))
+		input.WriteString(" ---\n")
+		for i, block := range message.Content {
+			if i > 0 {
+				input.WriteByte('\n')
+			}
+			if block.OfText != nil {
+				input.WriteString(block.OfText.Text)
+				continue
+			}
+			encoded, err := json.Marshal(block)
+			if err != nil {
+				input.WriteString("[unprintable content block]")
+				continue
+			}
+			input.Write(encoded)
+		}
+	}
+	return input.String()
 }
 
 func toAnthropicMessages(messages []Message) ([]anthropic.TextBlockParam, []anthropic.MessageParam) {
@@ -558,6 +594,8 @@ func (c *AnthropicClient) StreamChat(
 			if len(turnTools) > 0 {
 				params.Tools = turnTools
 			}
+
+			slog.Debug("Anthropic turn input", "messages", formatAnthropicTurnInput(turnSystem, turnMessages))
 
 			assistantBlocks, toolUses, usage, err := c.collectTurnWithRetry(ctx, params, eventCh, requestOpts...)
 			if err != nil {

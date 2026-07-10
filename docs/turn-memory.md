@@ -3,227 +3,182 @@
 ## Table of Contents
 
 - [The Idea](#the-idea)
-- [How To Think About It](#how-to-think-about-it)
+- [Memory Layers](#memory-layers)
 - [Lifecycle Of A Turn](#lifecycle-of-a-turn)
+- [What The Next Turn Gets](#what-the-next-turn-actually-gets)
+- [Historical Tool Activity](#historical-tool-activity)
 - [Why Keen Does This](#why-keen-does-this)
-- [What The Next Turn Actually Gets](#what-the-next-turn-actually-gets)
-- [How This Differs From Other Coding Agents](#how-this-differs-from-other-coding-agents)
-- [What Is Distinctive About Keen's Approach](#what-is-distinctive-about-keens-approach)
-- [Pros](#pros)
-- [Cons](#cons)
-- [When This Design Works Well](#when-this-design-works-well)
-- [When Another Design Might Work Better](#when-another-design-might-work-better)
-- [Bottom Line](#bottom-line)
+- [Tradeoffs](#tradeoffs)
 - [Assistant Turn Reliability](#assistant-turn-reliability)
+- [Bottom Line](#bottom-line)
 
 ## The Idea
 
-`TurnMemory` addresses a simple problem: a coding agent needs detailed tool state while it is actively working, but keeping every tool call forever makes later turns noisy, expensive, and harder to reason about.
+`TurnMemory` addresses a simple problem: a coding agent needs detailed tool state while it is actively working, but keeping every tool call and result forever makes later turns noisy, expensive, and harder to reason about.
 
-So Keen splits memory into two layers:
+Keen therefore treats the end of a turn as a compression boundary. The raw execution trace is discarded after successful completion and replaced by a small, provider-neutral summary.
 
-- a temporary working memory for the current assistant turn
-- a small summary that survives into later turns
+`TurnMemory` is not a transcript, hidden chain of thought, or planner database. It retains only:
 
-That summary is `TurnMemory`.
+- durable outcomes that are likely to matter later, such as changed files and failed bash commands
+- compact historical tool activity that preserves where real tool execution occurred between assistant prose segments
 
-In practice, the current turn may involve many tool calls, many tool results, and several internal loop iterations. But once the turn is over, Keen does not carry forward that entire raw trace. It keeps only a small summary of the parts most likely to matter later.
+It never retains file contents, search results, command output, arbitrary tool input, MCP arguments, or MCP result content.
 
-## How To Think About It
+## Memory Layers
 
-`TurnMemory` is not a transcript. It is not a full execution log, nor a hidden chain of thought. It is closer to a short note about the turn: "what changed during this turn that the next turn may need to know?"
+Keen uses four related forms of state:
 
-Today that summary is intentionally narrow. It remembers facts such as:
+| Layer | Lifetime | Contents | Purpose |
+|---|---|---|---|
+| Current-turn execution | One active assistant turn | Provider-native tool calls and results | High-fidelity tool-loop reasoning |
+| Durable outcome memory | Later turns and persisted sessions | Changed files and failed bash commands | Preserve materially useful outcomes |
+| Historical tool activity | Later turns and persisted sessions | Tool, bounded target, success/error status, prose offset | Preserve the protocol shape of real execution |
+| Pending provider state | Until an interrupted turn resumes or completes | Provider-native in-progress messages | Recover incomplete tool loops without lossy conversion |
 
-- which files were changed
-- which bash commands failed
-
-That means Keen preserves outcomes rather than the entire path taken to reach them.
+The historical activity layer does not retain what a tool returned. A later turn that needs a file, command result, search result, MCP response, or external state must query it again.
 
 ## Lifecycle Of A Turn
 
-The model to keep in mind is:
-
-1. A new user turn starts.
-2. Keen gives the model the conversation history it has retained so far.
-3. Inside that turn, the model may call tools repeatedly.
-4. Those raw tool calls are available while the turn is still running.
-5. When the turn finishes successfully, Keen summarizes the useful state into `TurnMemory`.
-6. When the turn fails mid-loop, Keen saves the accumulated turn data as pending state (see "Assistant Turn Reliability" below).
-7. On normal completion, the raw tool-call trace does not become part of the next-turn conversation state.
-
-This means tool calls matter during execution, but they are temporary as long-term memory — unless the turn fails, in which case they are preserved for recovery.
-
-## Why Keen Does This
-
-The design is trying to balance three pressures:
-
-- the agent needs high-fidelity state while solving the current task
-- the next turn needs some continuity
-- the conversation should not bloat with low-value tool chatter
-
-Without a mechanism like `TurnMemory`, Keen would have two options:
-
-- keep all tool traffic forever, which pollutes context
-- keep none of it, which loses continuity after edits or failed commands
-
-`TurnMemory` is a middle ground. It keeps some continuity without keeping the entire trace. Today it is limited to file changes and failed bash commands. But it can be extended to remember other useful information in the future.
+1. A new user turn starts with retained conversation messages and `TurnMemory` from earlier assistant turns.
+2. During the active turn, the provider may emit assistant prose, tool calls, and tool results over several loop iterations.
+3. The REPL keeps an ordered stream of assistant, tool, bash, permission, and diff segments.
+4. On completion, Keen walks those segments and records each completed tool at the number of assistant-text bytes emitted before it.
+5. Keen stores the flattened assistant prose separately from the compact `TurnMemory`.
+6. When formatting that assistant message for a later provider request, Keen injects historical activity annotations at the saved offsets and appends durable outcome memory.
+7. The visible response and session transcript continue to show the original assistant prose and normal tool rendering, not the injected annotations.
+8. If the turn fails mid-loop, provider-native pending state remains the recovery mechanism.
 
 ## What The Next Turn Actually Gets
 
-On the next user turn, Keen does not replay the full prior tool trace back to the model as structured tool-call history.
-
-Instead, the next turn gets:
+On the next user turn, Keen sends:
 
 - prior user messages
-- prior assistant responses
-- the compact turn-memory summary from earlier assistant turns
-- any pending turn state from a prior failed turn (injected in provider-native format)
+- prior assistant prose
+- historical activity annotations inserted between the relevant prior assistant prose segments
+- durable `Tool memory` outcomes
+- pending provider-native state from a prior failed turn, when present
 
-That matters because it changes the agent's behavior. Keen is implicitly saying:
+This preserves a compact causal pattern:
 
-- if a read-only fact is needed again, re-read it
-- if a search result is needed again, re-run the search
-- if a file was changed, remember that it changed
-- if a shell command failed, remember that it failed
-- if the prior turn failed mid-loop, resume from where it left off
+```text
+assistant intent
+→ historical record of an actual tool invocation
+→ assistant conclusion
+```
 
-So continuity is based on retained outcomes, not retained execution traces — with the exception of failed turns, where the full in-progress transcript is preserved for recovery.
+It does not replay full structured tool calls or their outputs. The model can see that an earlier invocation happened, but it cannot rely on the discarded result as current evidence.
 
-## How This Differs From Other Coding Agents
+## Historical Tool Activity
 
-Many coding agents fall into one of three common patterns.
+A provider-facing assistant message may be formatted like this:
 
-### 1. Full-trace retention
+```text
+Let me inspect the stream handler.
 
-Some agents keep a large amount of prior tool activity in the next prompt, either directly or through aggressive transcript replay. In those systems, the model may see a long history of file reads, searches, command output, and edits from earlier turns.
+<historical_tool_activity>
+{"tool":"read_file","status":"success","target":"internal/llm/anthropic.go"}
+</historical_tool_activity>
 
-Keen is more selective than that. It does not treat the raw tool trace as long-term conversation state.
+The terminal event is handled after content blocks finish.
+```
 
-### 2. Hidden persistent scratchpad
+The annotation is generated by Keen and is not part of `Message.Content`. The system prompt tells the model never to emit or imitate it; current-turn work still requires a real tool call.
 
-Some agents keep a private server-side memory or execution state that survives across turns without being visible as part of the normal conversation. The user may see the agent "remember" prior tool work, even though that memory is not represented as plain conversation history.
+### Placement
 
-Keen is more explicit and narrower. Its cross-turn memory is small and legible rather than broad and opaque.
+Each activity stores a byte offset into the flattened assistant prose. The offset equals the cumulative byte length of assistant segments preceding the completed tool segment. Formatting uses that offset to restore the activity between prose segments without storing a duplicate copy of the prose in `TurnMemory`.
 
-### 3. Planner-state retention
+Multiple tools may share an offset. Their original execution order is retained. Invalid persisted offsets are ignored rather than causing formatting to fail.
 
-Some agents retain structured state such as task graphs, subgoals, artifact inventories, or execution plans across turns. In those systems, long-term memory is not just conversation plus tools; it is an explicit task-state machine.
+### Fields
 
-Keen's `TurnMemory` is simpler than that. It is not trying to be a planner database. It is a lightweight per-turn summary.
+| Field | Meaning |
+|---|---|
+| `text_offset` | Byte position in assistant prose where the annotation is injected |
+| `tool` | Keen tool name, or logical MCP tool name |
+| `status` | `success` when the invocation completed without a tool error; otherwise `error` |
+| `target` | Optional allowlisted, bounded target such as a path, pattern, command, URL, or subagent name |
+| `server` | MCP server name when the invocation used `call_mcp_tool` |
 
-## What Is Distinctive About Keen's Approach
+Targets are allowlisted by tool type and length-limited. File paths are made relative to the workspace when possible. Web URLs omit credentials, query parameters, and fragments. Raw outputs, complete errors, replacement text, written content, MCP arguments, and arbitrary input maps are not retained.
 
-Keen's approach is distinctive in three ways:
+### MCP calls
 
-- it separates "what the agent needed while thinking this turn" from "what should survive into future turns"
-- it treats most tool activity as disposable unless it changed the workspace or exposed a failed command
-- it keeps cross-turn memory small enough to be understandable by both the model and the user
+MCP wrapper calls are represented by their logical server and tool rather than only by `call_mcp_tool`:
 
-This makes `TurnMemory` closer to a working summary than an archive.
+```text
+<historical_tool_activity>
+{"server":"context7","tool":"query-docs","status":"success"}
+</historical_tool_activity>
+```
 
-## Pros
+This records that the invocation occurred. It does not retain the MCP arguments, response, preview, or artifact path, and does not establish that the external information is still current or factually correct.
 
-### Smaller context
+### What status means
 
-One advantage is context discipline. Tool-heavy coding sessions can grow quickly if every file read, grep result, and command output is kept forever. `TurnMemory` limits that growth.
+`success` means only that Keen completed the tool invocation without a reported tool error. It does not guarantee that:
 
-### Better signal-to-noise ratio
+- the tool output was factually correct
+- a search found useful results
+- an external mutation had the desired broader effect
+- the underlying workspace or service remains unchanged
 
-Most tool calls are not worth remembering verbatim. A search that found nothing, a file read, or a successful listing command usually matters only in the moment. By dropping those traces, Keen keeps later turns focused on what materially changed.
+`error` records only failure, not the full error text.
 
-### More predictable continuity
+## Why Keen Does This
 
-Because the retained memory is narrow, it is easier to understand what the agent will actually carry forward. That can make multi-turn behavior easier to reason about.
+The design balances three pressures:
 
-### Encourages fresh reads of mutable state
+- the active agent needs high-fidelity tool state while solving the current task
+- later turns need continuity and a truthful record that actions actually occurred
+- conversation context should not accumulate large, stale, or untrusted tool outputs
 
-This is valuable in coding work. Files may have changed, generated outputs may be stale, and search results may no longer reflect the current codebase. A design that favors re-reading over trusting old tool output can reduce stale-context errors. And guess what? Agents frequently reread files and search results in later turns anyway.
+Retaining prose while deleting every sign of tool activity can produce a misleading history in which the assistant appears to announce an action and then claim completion without executing anything. Historical annotations repair that protocol shape without turning `TurnMemory` into a raw execution archive.
 
-## Cons
+The durable outcome layer remains intentionally narrow. Changed files and failed commands carry useful continuity, while read/search/MCP results are expected to be refreshed when needed.
 
-### Loss of rich historical context
+## Tradeoffs
 
-The obvious downside is that the next turn no longer has the full investigative trail. If an earlier tool output contained an important nuance and it was not reflected in the final answer or `TurnMemory`, that nuance is gone from the model-facing conversation state.
+### Benefits
 
-### More repeated tool work
+- Smaller context than full tool-trace retention
+- Better distinction between narrated intent and actual prior execution
+- No persistence of large or untrusted tool results
+- Provider-neutral formatting
+- Fresh reads of mutable workspace and external state
+- Legible, bounded cross-turn memory
 
-Because read-only tool calls are not retained across turns, the agent may need to read files or search again in later turns. That is often the right tradeoff, but it can increase repeated work.
+### Costs
 
-### Can reduce KV-cache continuity
+- Rich investigative details from prior outputs are still lost
+- Later turns may repeat reads, searches, commands, and MCP calls
+- Synthetic textual annotations are less exact than provider-native tool blocks
+- Byte offsets require validation when loading persisted state
+- Compact history can reduce prompt/KV-cache continuity compared with retaining a full trace
 
-Because Keen carries forward a compact summary instead of the prior raw tool-call trace, the next turn may not line up as closely with the previous prompt prefix. Depending on the provider and how prompt caching or KV reuse works, that can reduce cache continuity across turns.
-
-This may increase cost or latency, but it is not guaranteed. The actual effect depends on the model provider, the caching strategy, and how much of the prompt still remains stable from turn to turn. Also tool outputs are frequently large so it is not obvious that the cost savings will outweigh the overhead of rerunning tools.
-
-### Limited support for long, interdependent investigations
-
-For very long debugging sessions, full raw traces can sometimes help because the agent can refer back to earlier experiments without redoing them. Keen's design is less suited to that style of persistent investigative memory.
-
-## When This Design Works Well
-
-`TurnMemory` works especially well when:
-
-- the workspace is the main source of truth
-- read-only tool calls are cheap to repeat
-- the important cross-turn facts are mostly "what changed" and "what failed"
-- the product values lean context over exhaustive replay
-
-That is a good fit for many coding sessions.
-
-## When Another Design Might Work Better
-
-A heavier memory model may be better when:
-
-- the agent does long investigations that depend on earlier observations
-- external systems produce important outputs that are expensive or impossible to reproduce
-- the product wants the model to reason over prior execution traces directly
-- planning state is as important as file state
-
-In those settings, a fuller transcript memory or a richer structured state model may work better than a narrow `TurnMemory`.
-
-## Bottom Line
-
-`TurnMemory` is a simple compression boundary.
-
-Inside a turn, Keen allows rich tool-driven execution.
-
-Across turns, Keen keeps only a small summary of the tool execution.
-
-If a turn fails, Keen preserves the full in-progress transcript as pending state so the model can resume on the next attempt — but that state is temporary and in-memory only.
-
-Compared with many other coding agents, Keen is more conservative about what deserves durable memory. The upside is cleaner context and clearer continuity. The downside is that some useful history is discarded.
+This design works best when the workspace is the source of truth, read-only tools are cheap to repeat, and lean context is preferred over exhaustive replay. A fuller trace or richer planner state may suit long investigations with expensive, irreproducible external observations.
 
 ## Assistant Turn Reliability
 
-### The Problem
+### Pending Turn State
 
-A single assistant turn can involve many loop iterations — reading files, running commands, editing code — before producing a final response. If the turn fails partway through (API error, empty response, max tool turns exhausted, or user interruption), all of that accumulated work is lost. The local variables holding the turn transcript are discarded when the goroutine exits. On the next user message, the model has no memory of the work it already performed and starts over from scratch.
+A single assistant turn can involve many provider tool-loop iterations. If it ends abnormally after tool work has accumulated, converting that partial exchange into generic conversation messages would be lossy and could invite side-effect re-execution.
 
-### The Solution: Pending Turn State
-
-Each LLM client stores a pending state field in the provider's native message format. When a turn ends abnormally and tool work has accumulated, the client saves the delta (everything beyond the initial message conversion) to this field. On the next `StreamChat` call, the pending state is injected into the conversation — spliced in before the new user message — so the model sees its prior work and can resume.
-
-### Terminal States
-
-A turn can end in three ways from the REPL's perspective:
+Each LLM client therefore stores pending state in its provider-native message format. On the next `StreamChat` call, that state is injected before the new user message so the model can resume from the prior work.
 
 | Event | Meaning | Pending state action |
 |---|---|---|
-| `Done` | Normal completion | Cleared (or never saved) |
-| `Incomplete` | Turn ended abnormally but work was done | Saved for next call |
-| `Error` | Turn failed before any tool work accumulated | Not saved |
+| `Done` | Normal completion | Cleared or never saved |
+| `Incomplete` | Turn ended abnormally after work occurred | Saved for the next call |
+| `Error` | Turn failed before recoverable provider work accumulated | Not saved |
 
-The `Incomplete` event is the key addition. It tells the REPL that work happened but the turn did not finish — so the REPL should not append anything to `appState.messages` (the pending state on the client already has the full transcript).
+Pending state is in-memory only, does not survive process crashes, avoids re-executing completed tools, and is cleared after successful recovery. Persisted transcript and `TurnMemory` may still describe the visible partial turn, but provider-native pending state—not historical annotations—is authoritative for resuming the incomplete tool loop.
 
-### Characteristics
+Retries within the same active turn rewind trailing unsealed assistant/reasoning segments. Historical activity is collected only from the final surviving segment list, so abandoned retry prose is not retained.
 
-- **In-memory only.** Pending state does not survive process crashes or get written to the session file.
-- **Provider-native format.** Each client stores messages in its own type, avoiding lossy conversion.
-- **No re-execution.** Tools have side effects; the state captures outputs, not re-execution intent.
-- **Sequential safety.** The REPL is single-threaded with respect to `StreamChat` calls, so no synchronization is needed.
-- **Cleared on success.** If the recovery turn completes normally, pending state is cleared and the full assistant response goes into `appState.messages` as usual.
+## Bottom Line
 
-### Why Not Just Save to appState?
+`TurnMemory` is a compact execution summary rather than a transcript.
 
-Saving the partial turn transcript into `appState.messages` would mean converting provider-native messages into the generic `Message` type and back — a lossy round-trip. It would also mean `appState` carries incomplete turn data that is not a proper assistant response. Keeping the state on the client avoids both problems.
+Inside a turn, Keen keeps rich provider-native tool state. Across completed turns, it retains durable outcomes plus bounded records of where real tools ran. The records establish prior invocation, not retained evidence or current state. Failed turns use temporary provider-native pending state for recovery.
