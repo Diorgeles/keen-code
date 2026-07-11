@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-07-11
+
+### Added
+- Adversary stream tool start/end event handling so tool calls are flushed and rendered like normal assistant tool calls.
+
+### Fixed
+- Install script now resolves the latest release from GitHub's public redirect instead of the REST API, avoiding the 60 req/hour unauthenticated rate limit on shared/CGNAT IPs.
+
 ## [0.28.0] - 2026-07-10
 
 ### Added
@@ -687,7 +695,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/mochow13/keen-code/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/mochow13/keen-code/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/mochow13/keen-code/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/mochow13/keen-code/compare/v0.26.0...v0.26.1
