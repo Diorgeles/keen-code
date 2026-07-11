@@ -30,8 +30,8 @@ detect_platform() {
 resolve_version() {
   local version="$1"
   if [ -z "$version" ]; then
-    version=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-      | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+    version=$(curl -fsS -o /dev/null -w '%{redirect_url}' \
+      "https://github.com/${REPO}/releases/latest" | sed 's#.*/tag/##')
     [ -n "$version" ] || die "could not determine latest version"
   fi
   echo "$version"
