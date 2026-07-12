@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-07-12
+
+### Added
+- OpenAI-compatible provider support for custom endpoints without registry-defined models.
+
+### Changed
+- Replay historical tool activity as provider-native tool calls and results, preserving invocation order while keeping discarded tool data out of assistant text.
+- Updated provider and model documentation to match the registry.
+
 ## [0.29.0] - 2026-07-11
 
 ### Added
@@ -695,7 +704,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/mochow13/keen-code/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/mochow13/keen-code/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/mochow13/keen-code/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/mochow13/keen-code/compare/v0.26.1...v0.27.0
