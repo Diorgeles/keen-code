@@ -15,6 +15,39 @@ Keen Code supports multiple AI providers through a plugin-like architecture. The
 | Amazon Bedrock | `amazon-bedrock` | AWS credentials | Claude Opus 4.8, Opus 4.6, Sonnet 4.6, Haiku 4.5 |
 | MiniMax | `minimax` | API Key | MiniMax M2.7, M2.5 |
 | OpenCode Go | `opencode-go` | API Key | GLM-5.1, GLM-5, Kimi K2.6, Kimi K2.5, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2, MiniMax M2.7/M2.5, Qwen3 Plus/Max |
+| OpenAI Compatible | `openai-compatible` | API Key | Any OpenAI-compatible model |
+
+## OpenAI-Compatible Providers
+
+Keen supports arbitrary OpenAI-compatible endpoints through the `openai-compatible` provider. This is config-file only: set `active_provider`, `active_model`, and the provider entry in `~/.keen/configs.json`, then restart Keen.
+
+### OpenRouter Example
+
+```json
+{
+  "active_provider": "openai-compatible",
+  "active_model": "tencent/hy3:free",
+  "providers": {
+    "openai-compatible": {
+      "models": ["tencent/hy3:free"],
+      "api_key": "sk-or-v1-...",
+      "base_url": "https://openrouter.ai/api/v1",
+      "headers": {
+        "HTTP-Referer": "https://your-site.com",
+        "X-Title": "Keen Code"
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- `active_provider` must be `"openai-compatible"`.
+- `active_model` must match one of the entries in `providers.openai-compatible.models`.
+- `base_url` is required and must be the OpenAI-compatible chat completions endpoint base (usually ending in `/v1`).
+- `api_key` is sent as the `Authorization: Bearer ...` token.
+- Custom headers in `headers` are sent with every request.
 
 ## Provider Registry
 
