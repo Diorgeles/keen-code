@@ -6,15 +6,16 @@ Keen Code supports multiple AI providers through a plugin-like architecture. The
 
 | Provider | ID | Authentication | Models |
 |----------|-----|----------------|--------|
-| Anthropic | `anthropic` | API Key | Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 |
-| OpenAI | `openai` | API Key | GPT-5.5, GPT-5.4, GPT-5.4-mini, GPT-5.3-codex |
-| Codex | `openai-codex` | OAuth | GPT-5.5, GPT-5.4, GPT-5.4-mini, GPT-5.3-codex |
+| Anthropic | `anthropic` | API Key | Claude Fable 5, Sonnet 5, Opus 4.8, Opus 4.6, Sonnet 4.6, Haiku 4.5 |
+| OpenAI | `openai` | API Key | GPT-5.6 Sol, GPT-5.6 Luna, GPT-5.6 Terra, GPT-5.5, GPT-5.4 |
+| Codex | `openai-codex` | OAuth | GPT-5.6 Sol, GPT-5.6 Terra, GPT-5.6 Luna, GPT-5.5, GPT-5.4 |
 | Google AI | `googleai` | API Key | Gemini 3.1 Pro, 3.1 Flash-Lite, 3 Flash |
-| Moonshot AI | `moonshotai` | API Key | Kimi K2.6, K2.5, K2 Thinking, K2 Thinking Turbo |
+| Moonshot AI | `moonshotai` | API Key | Kimi K2.7 Code, K2.6, K2.5, K2 Thinking, K2 Thinking Turbo |
+| Z.ai | `zai` | API Key | GLM-5.2, GLM-5.1 |
 | DeepSeek | `deepseek` | API Key | DeepSeek V4 Flash, V4 Pro |
-| Amazon Bedrock | `amazon-bedrock` | AWS credentials | Claude Opus 4.8, Opus 4.6, Sonnet 4.6, Haiku 4.5 |
-| MiniMax | `minimax` | API Key | MiniMax M2.7, M2.5 |
-| OpenCode Go | `opencode-go` | API Key | GLM-5.1, GLM-5, Kimi K2.6, Kimi K2.5, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2, MiniMax M2.7/M2.5, Qwen3 Plus/Max |
+| MiniMax | `minimax` | API Key | MiniMax M3, M2.7 |
+| Amazon Bedrock | `amazon-bedrock` | AWS credentials | Claude Fable 5, Sonnet 5, Opus 4.8, Opus 4.6, Sonnet 4.6, Haiku 4.5 |
+| OpenCode Go | `opencode-go` | API Key | GLM-5.2, GLM-5.1, Kimi K2.7 Code, K2.6, DeepSeek V4 Pro, DeepSeek V4 Flash, MiMo-V2.5 Pro, MiMo-V2.5, MiniMax M3, M2.7, Qwen3.7 Max, Qwen3.7 Plus, Qwen3.6 Plus |
 | OpenAI Compatible | `openai-compatible` | API Key | Any OpenAI-compatible model |
 
 ## OpenAI-Compatible Providers
@@ -283,14 +284,14 @@ Models support different thinking effort levels:
 
 | Provider | Efforts |
 |----------|---------|
-| Anthropic | low, medium, high, max |
-| OpenAI | none, low, medium, high, xhigh |
+| Anthropic | low, medium, high, xhigh, max |
+| OpenAI | none, low, medium, high, xhigh, max |
 | Google AI | low, medium, high, minimal |
 | DeepSeek | off, high, max |
-| Amazon Bedrock | low, medium, high, max |
+| Amazon Bedrock | low, medium, high, xhigh, max |
 | Z.ai | enabled, disabled |
 | OpenCode Go DeepSeek | off, high, max |
-| OpenCode Go GLM/Kimi/OpenAI-compatible Qwen | enabled, disabled |
+| OpenCode Go GLM/Kimi/Qwen3.6 Plus | enabled, disabled |
 
 The thinking effort is set via config and passed to the LLM client, which configures the provider's thinking parameters.
 
