@@ -36,18 +36,11 @@ Target version (required): $ARGUMENTS
 
 6. **Create and push the tag.**
    ```bash
-   git tag vX.Y.Z
-   git push origin main
-   git push origin vX.Y.Z
+   git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
    ```
    The tag must match `npm/package.json` version exactly (e.g. `v1.2.3`).
 
 7. **Watch the pipelines.** Pushing the tag triggers the build and release workflows. Watch them to completion:
-   ```bash
-   gh run list --limit 5
-   gh run watch <run-id>
-   ```
-   Or watch the latest run directly:
    ```bash
    gh run watch $(gh run list --limit 1 --json databaseId --jq '.[0].databaseId')
    ```
