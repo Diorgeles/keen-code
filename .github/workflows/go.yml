@@ -15,7 +15,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25.7'
+        go-version: '1.25.12'
         cache: true
 
     - name: Download dependencies
@@ -38,7 +38,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25.7'
+        go-version: '1.25.12'
         cache: true
 
     - name: Go vet
@@ -58,5 +58,5 @@ jobs:
     steps:
     - uses: golang/govulncheck-action@v1
       with:
-        go-version-file: go.mod
+        go-version-input: '1.25.12'
         go-package: ./...
