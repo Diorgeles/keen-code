@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-07-14
+
+### Fixed
+- Improve model-facing tool validation errors and preserve literal source characters in serialized tool outputs.
+- Reduce historical tool-result placeholders to concise status metadata.
+
 ## [0.31.0] - 2026-07-13
 
 ### Added
@@ -713,7 +719,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.31.1...HEAD
+[0.31.1]: https://github.com/mochow13/keen-code/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/mochow13/keen-code/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/mochow13/keen-code/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/mochow13/keen-code/compare/v0.28.0...v0.29.0
