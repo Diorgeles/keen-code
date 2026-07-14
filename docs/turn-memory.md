@@ -67,7 +67,7 @@ assistant intent
 → assistant conclusion
 ```
 
-It replays structured tool calls with empty placeholder arguments and one of two status-aware placeholder results, not the original arguments or outputs. The model can see whether an earlier invocation completed or failed, but it cannot rely on the discarded result as current evidence.
+It replays structured tool calls with empty placeholder arguments and a concise, status-aware result, not the original arguments or outputs. The model can see whether an earlier invocation completed or failed, but it cannot rely on the discarded result as current evidence.
 
 ## Historical Tool Activity
 
@@ -76,11 +76,11 @@ A provider-facing exchange is reconstructed conceptually like this:
 ```text
 assistant: Let me inspect the stream handler.
 assistant tool call: read_file({})
-tool result: Historical tool data intentionally removed; call required tools with valid arguments for actual results.
+tool result: {"status":"success","output_retained":false}
 assistant: The terminal event is handled after content blocks finish.
 ```
 
-Failed invocations instead use `Historical tool invocation failed and details were removed; call required tools with valid arguments if needed.` Unknown status values are treated as failures.
+Failed invocations instead use `{"status":"error","output_retained":false}`. Unknown status values are treated as failures.
 
 The call and result use each provider's native protocol and are not part of `Message.Content`. Empty arguments are placeholders rather than valid examples; current-turn work still requires a real tool call with schema-valid arguments. Synthetic call IDs are generated while formatting so each provider can pair calls with results; original provider call IDs are not retained.
 
