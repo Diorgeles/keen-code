@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.2] - 2026-07-14
+
+### Fixed
+- Upgrade Go dependencies to address known security vulnerabilities.
+
+### Changed
+- Scan reachable Go vulnerabilities and run CodeQL security analysis in CI.
+
 ## [0.31.1] - 2026-07-14
 
 ### Fixed
@@ -719,7 +727,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.31.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.31.2...HEAD
+[0.31.2]: https://github.com/mochow13/keen-code/compare/v0.31.1...v0.31.2
 [0.31.1]: https://github.com/mochow13/keen-code/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/mochow13/keen-code/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/mochow13/keen-code/compare/v0.29.0...v0.30.0
