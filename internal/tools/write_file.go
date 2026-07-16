@@ -101,8 +101,10 @@ func (t *WriteFileTool) Execute(ctx context.Context, input any) (any, error) {
 	}
 
 	var oldContent string
+	existed := false
 	if data, err := os.ReadFile(resolvedPath); err == nil {
 		oldContent = string(data)
+		existed = true
 	}
 
 	if t.diffEmitter != nil {
@@ -136,11 +138,15 @@ func (t *WriteFileTool) Execute(ctx context.Context, input any) (any, error) {
 		return nil, err
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"path":          resolvedPath,
 		"bytes_written": len(content),
 		"created":       created,
-	}, nil
+	}
+	if !existed || oldContent != content {
+		result["file_changed"] = resolvedPath
+	}
+	return result, nil
 }
 
 func writeFileContent(path string, content string) (bool, error) {

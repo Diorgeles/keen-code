@@ -208,6 +208,9 @@ func (t *BashTool) executeCommand(ctx context.Context, command, summary string) 
 		"stdout":    stdoutResult.content,
 		"truncated": stdoutResult.truncated || stderrResult.truncated,
 	}
+	if exitCode != 0 {
+		result["failed_command"] = command
+	}
 	if stderrResult.content != "" {
 		result["stderr"] = stderrResult.content
 	}

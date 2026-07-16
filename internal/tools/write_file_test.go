@@ -162,6 +162,9 @@ func TestWriteFileTool_Execute_GrantedWrite(t *testing.T) {
 	if resultMap["created"] != true {
 		t.Errorf("expected created true for new file, got %v", resultMap["created"])
 	}
+	if resultMap["file_changed"] != testFile {
+		t.Errorf("expected file_changed %q, got %v", testFile, resultMap["file_changed"])
+	}
 
 	writtenContent, err := os.ReadFile(testFile)
 	if err != nil {
@@ -328,6 +331,24 @@ func TestWriteFileTool_Execute_OverwriteExisting(t *testing.T) {
 
 	if string(writtenContent) != newContent {
 		t.Errorf("expected content %q, got %q", newContent, string(writtenContent))
+	}
+}
+
+func TestWriteFileTool_Execute_UnchangedContentOmitsFileChanged(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "unchanged.txt")
+	content := "same content"
+	if err := os.WriteFile(testFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := NewWriteFileTool(filesystem.NewGuard(tmpDir, nil), nil, &mockPermissionRequester{allow: true})
+	result, err := tool.Execute(context.Background(), map[string]any{"path": testFile, "content": content})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := result.(map[string]any)["file_changed"]; ok {
+		t.Fatalf("expected unchanged write to omit file_changed, got %#v", result)
 	}
 }
 

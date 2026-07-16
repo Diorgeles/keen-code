@@ -658,15 +658,15 @@ func TestToAnthropicMessages_TurnMemoryRendered(t *testing.T) {
 			Role:    RoleAssistant,
 			Content: "done",
 			TurnMemory: &TurnMemory{
-				FilesChanged: []string{"main.go"},
+				ToolActivity: []HistoricalToolActivity{{Tool: "write_file", Status: "success", FileChanged: "main.go"}},
 			},
 		},
 	}
 
 	_, msgParams := toAnthropicMessages(messages)
 
-	if len(msgParams) != 1 {
-		t.Fatalf("expected 1 message param, got %d", len(msgParams))
+	if len(msgParams) != 3 {
+		t.Fatalf("expected tool call, result, and final message, got %d", len(msgParams))
 	}
 }
 

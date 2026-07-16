@@ -177,7 +177,7 @@ func toAnthropicMessages(messages []Message) ([]anthropic.TextBlockParam, []anth
 				if len(step.Activities) > 0 {
 					results := make([]anthropic.ContentBlockParamUnion, 0, len(step.Activities))
 					for _, invocation := range step.Activities {
-						results = append(results, anthropic.NewToolResultBlock(invocation.ID, historicalToolResult(invocation.Status), invocation.Status != "success"))
+						results = append(results, anthropic.NewToolResultBlock(invocation.ID, historicalToolResult(invocation), invocation.Status != "success"))
 					}
 					msgParams = append(msgParams, anthropic.NewUserMessage(results...))
 				}

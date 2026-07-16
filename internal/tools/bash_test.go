@@ -222,6 +222,9 @@ func TestBashTool_Execute_InvalidCommand(t *testing.T) {
 	if resultMap["exit_code"] == 0 {
 		t.Error("expected non-zero exit code for invalid command")
 	}
+	if resultMap["failed_command"] != "nonexistentcommand12345" {
+		t.Errorf("expected failed command in result, got %v", resultMap["failed_command"])
+	}
 
 	stderr := resultMap["stderr"].(string)
 	if stderr == "" {
@@ -383,6 +386,9 @@ func TestBashTool_Execute_OmitsStderrForSuccessfulCommand(t *testing.T) {
 	}
 	if resultMap["exit_code"] != 0 {
 		t.Fatalf("expected exit code 0, got %v", resultMap["exit_code"])
+	}
+	if _, ok := resultMap["failed_command"]; ok {
+		t.Fatal("failed_command should be omitted for successful commands")
 	}
 	if _, ok := resultMap["stderr"]; ok {
 		t.Fatal("stderr should be omitted for successful commands")

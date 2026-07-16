@@ -124,6 +124,9 @@ providers:
   - id: moonshotai
     name: Moonshot AI
     models:
+      - id: kimi-k3
+        name: Kimi K3
+        context_window: 1000000
       - id: kimi-k2.7-code
         name: Kimi K2.7 Code
         context_window: 256000
@@ -177,6 +180,12 @@ providers:
   - id: opencode-go
     name: OpenCode Go
     models:
+      - id: grok-4.5
+        name: Grok 4.5
+        context_window: 500000
+      - id: kimi-k3
+        name: Kimi K3
+        context_window: 1000000
       - id: glm-5.2
         name: GLM-5.2
         context_window: 1000000

@@ -169,11 +169,15 @@ func (t *EditFileTool) Execute(ctx context.Context, input any) (any, error) {
 		return nil, fmt.Errorf("write failed: %w", err)
 	}
 
-	return map[string]any{
+	result := map[string]any{
 		"success":          true,
 		"path":             resolvedPath,
 		"replacementCount": replacementCount,
-	}, nil
+	}
+	if oldContent != newContent {
+		result["file_changed"] = resolvedPath
+	}
+	return result, nil
 }
 
 func computeEditDiff(oldContent, newContent string) []EditDiffLine {

@@ -149,6 +149,9 @@ func TestEditFileTool_Execute_SingleReplacement(t *testing.T) {
 	if resultMap["replacementCount"] != 1 {
 		t.Errorf("expected replacementCount 1, got %v", resultMap["replacementCount"])
 	}
+	if resultMap["file_changed"] != testFile {
+		t.Errorf("expected file_changed %q, got %v", testFile, resultMap["file_changed"])
+	}
 
 	got, _ := os.ReadFile(testFile)
 	if string(got) != "hello Go\n" {
@@ -219,6 +222,27 @@ func TestEditFileTool_Execute_ReplaceFirst(t *testing.T) {
 	got, _ := os.ReadFile(testFile)
 	if string(got) != "bar foo foo\n" {
 		t.Errorf("unexpected file content: %q", string(got))
+	}
+}
+
+func TestEditFileTool_Execute_UnchangedReplacementOmitsFileChanged(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("same\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := NewEditFileTool(newGuard(tmpDir), &mockDiffEmitter{}, &mockPermissionRequester{allow: true})
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"path":      testFile,
+		"oldString": "same",
+		"newString": "same",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := result.(map[string]any)["file_changed"]; ok {
+		t.Fatalf("expected unchanged edit to omit file_changed, got %#v", result)
 	}
 }
 

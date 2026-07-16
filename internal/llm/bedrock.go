@@ -144,7 +144,7 @@ func toBedrockMessages(messages []Message) ([]brtypes.SystemContentBlock, []brty
 						resultBlocks = append(resultBlocks, &brtypes.ContentBlockMemberToolResult{Value: brtypes.ToolResultBlock{
 							ToolUseId: aws.String(invocation.ID),
 							Content: []brtypes.ToolResultContentBlock{
-								&brtypes.ToolResultContentBlockMemberText{Value: historicalToolResult(invocation.Status)},
+								&brtypes.ToolResultContentBlockMemberText{Value: historicalToolResult(invocation)},
 							},
 							Status: status,
 						}})

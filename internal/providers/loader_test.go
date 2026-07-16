@@ -173,7 +173,7 @@ func TestModel_ThinkingEffortsLoadFromYAML(t *testing.T) {
 	if !ok {
 		t.Fatal("expected to find opencode-go provider")
 	}
-	if len(opencode.Models) != 13 {
+	if len(opencode.Models) != 15 {
 		t.Fatalf("expected 15 opencode-go models, got %d", len(opencode.Models))
 	}
 

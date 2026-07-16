@@ -9,58 +9,6 @@ import (
 	"github.com/user/keen-code/internal/llm"
 )
 
-func TestTurnMemoryAccumulator_DeduplicatesChangedFiles(t *testing.T) {
-	acc := newTurnMemoryAccumulator()
-
-	acc.RecordToolEnd(&llm.ToolCall{
-		Name:   "write_file",
-		Output: map[string]any{"path": "a.go"},
-	})
-	acc.RecordToolEnd(&llm.ToolCall{
-		Name:   "edit_file",
-		Output: map[string]any{"path": "a.go"},
-	})
-	acc.RecordToolEnd(&llm.ToolCall{
-		Name:   "edit_file",
-		Output: map[string]any{"path": "b.go"},
-	})
-
-	memory := acc.Build()
-	if memory == nil {
-		t.Fatal("expected turn memory")
-	}
-	if len(memory.FilesChanged) != 2 {
-		t.Fatalf("expected 2 changed files, got %#v", memory.FilesChanged)
-	}
-	if memory.FilesChanged[0] != "a.go" || memory.FilesChanged[1] != "b.go" {
-		t.Fatalf("expected stable file ordering, got %#v", memory.FilesChanged)
-	}
-}
-
-func TestTurnMemoryAccumulator_RecordsFailedBashOnly(t *testing.T) {
-	acc := newTurnMemoryAccumulator()
-
-	acc.RecordToolEnd(&llm.ToolCall{
-		Name:   "bash",
-		Output: map[string]any{"command": "go test ./...", "exit_code": 1},
-	})
-	acc.RecordToolEnd(&llm.ToolCall{
-		Name:   "bash",
-		Output: map[string]any{"command": "go build ./...", "exit_code": 0},
-	})
-
-	memory := acc.Build()
-	if memory == nil {
-		t.Fatal("expected turn memory")
-	}
-	if len(memory.FailedBash) != 1 {
-		t.Fatalf("expected one failed bash command, got %#v", memory.FailedBash)
-	}
-	if memory.FailedBash[0].Command != "go test ./..." || memory.FailedBash[0].ExitCode != 1 {
-		t.Fatalf("unexpected failed bash entry %#v", memory.FailedBash[0])
-	}
-}
-
 func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 	workingDir := t.TempDir()
 	sh := NewStreamHandler(nil)
@@ -79,13 +27,14 @@ func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 	}
 	m.startAssistantTurnMemory()
 	relativeFile := filepath.Join("nested", "a.go")
-	m.recordToolMemory(&llm.ToolCall{
+	sh.HandleToolEnd(&llm.ToolCall{
 		Name:   "edit_file",
-		Output: map[string]any{"path": filepath.Join(workingDir, relativeFile)},
+		Output: map[string]any{"file_changed": filepath.Join(workingDir, relativeFile)},
 	})
-	m.recordToolMemory(&llm.ToolCall{
+	sh.HandleBashStart("go test ./...", "")
+	sh.HandleBashEnd(&llm.ToolCall{
 		Name:   "bash",
-		Output: map[string]any{"command": "go test ./...", "exit_code": 1},
+		Output: map[string]any{"failed_command": "go test ./...", "exit_code": 1},
 	})
 
 	updated, _ := m.handleLLMDone()
@@ -97,36 +46,31 @@ func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 	if messages[0].TurnMemory == nil {
 		t.Fatal("expected assistant turn memory")
 	}
-	if len(messages[0].TurnMemory.FilesChanged) != 1 || messages[0].TurnMemory.FilesChanged[0] != relativeFile {
-		t.Fatalf("unexpected files changed %#v", messages[0].TurnMemory.FilesChanged)
+	activities := messages[0].TurnMemory.ToolActivity
+	if len(activities) != 3 {
+		t.Fatalf("unexpected tool activity %#v", activities)
 	}
-	if len(messages[0].TurnMemory.FailedBash) != 1 {
-		t.Fatalf("unexpected failed bash entries %#v", messages[0].TurnMemory.FailedBash)
+	if activities[1].FileChanged != relativeFile {
+		t.Fatalf("unexpected file change %#v", activities[1])
 	}
-	if len(messages[0].TurnMemory.ToolActivity) != 1 || messages[0].TurnMemory.ToolActivity[0].TextOffset != len("working") {
-		t.Fatalf("unexpected tool activity %#v", messages[0].TurnMemory.ToolActivity)
+	if activities[2].FailedCommand != "go test ./..." || activities[2].ExitCode == nil || *activities[2].ExitCode != 1 {
+		t.Fatalf("unexpected failed bash activity %#v", activities[2])
 	}
 }
 
-func TestRecordToolMemory_UsesRelativePathFromWorkingDir(t *testing.T) {
+func TestCollectHistoricalToolActivity_UsesRelativeChangedPath(t *testing.T) {
 	workingDir := t.TempDir()
-	m := replModel{
-		appState: replappstate.New(nil, workingDir),
-	}
-	m.startAssistantTurnMemory()
-
 	targetPath := filepath.Join(workingDir, "dir", "file.go")
-	m.recordToolMemory(&llm.ToolCall{
-		Name:   "write_file",
-		Output: map[string]any{"path": targetPath},
-	})
+	activities := collectHistoricalToolActivity([]streamSegment{{
+		kind: segmentToolEnd,
+		toolCall: &llm.ToolCall{
+			Name:   "write_file",
+			Output: map[string]any{"file_changed": targetPath},
+		},
+	}}, workingDir)
 
-	memory := m.consumeTurnMemory()
-	if memory == nil || len(memory.FilesChanged) != 1 {
-		t.Fatalf("expected one changed file, got %#v", memory)
-	}
-	if memory.FilesChanged[0] != filepath.Join("dir", "file.go") {
-		t.Fatalf("expected relative changed file path, got %#v", memory.FilesChanged)
+	if len(activities) != 1 || activities[0].FileChanged != filepath.Join("dir", "file.go") {
+		t.Fatalf("expected relative changed file path, got %#v", activities)
 	}
 }
 
@@ -186,18 +130,32 @@ func TestCollectHistoricalToolActivity_ExtractsMCPWithoutArguments(t *testing.T)
 	}
 }
 
-func TestRebuildTurnMemoryFromSegments_DropsAbandonedOutcomes(t *testing.T) {
+func TestRebuildTurnMemoryFromSegments_KeepsSurvivingActivity(t *testing.T) {
 	workingDir := t.TempDir()
 	m := replModel{appState: replappstate.New(nil, workingDir)}
 	m.startAssistantTurnMemory()
-	m.recordToolMemory(&llm.ToolCall{Name: "edit_file", Input: map[string]any{"path": "abandoned.go"}})
+	m.turnMemory.toolActivity = []llm.HistoricalToolActivity{{Tool: "edit_file", FileChanged: "abandoned.go"}}
 
 	m.rebuildTurnMemoryFromSegments([]streamSegment{
-		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Input: map[string]any{"path": "kept.go"}}},
+		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Output: map[string]any{"file_changed": "kept.go"}}},
 	})
 	memory := m.consumeTurnMemory()
-	if memory == nil || len(memory.FilesChanged) != 1 || memory.FilesChanged[0] != "kept.go" {
-		t.Fatalf("expected only surviving outcome, got %#v", memory)
+	if memory == nil || len(memory.ToolActivity) != 1 || memory.ToolActivity[0].FileChanged != "kept.go" {
+		t.Fatalf("expected only surviving activity, got %#v", memory)
+	}
+}
+
+func TestCollectHistoricalToolActivity_DoesNotInferRetainedOutcomesFromArguments(t *testing.T) {
+	activities := collectHistoricalToolActivity([]streamSegment{
+		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Input: map[string]any{"path": "a.go"}, Output: map[string]any{"path": "a.go"}}},
+		{kind: segmentBash, command: "go test ./...", toolCall: &llm.ToolCall{Name: "bash", Input: map[string]any{"command": "go test ./..."}, Output: map[string]any{"exit_code": 1}}},
+	}, "")
+
+	if activities[0].FileChanged != "" {
+		t.Fatalf("expected file_changed to come only from tool output, got %#v", activities[0])
+	}
+	if activities[1].FailedCommand != "" || activities[1].ExitCode == nil || *activities[1].ExitCode != 1 {
+		t.Fatalf("expected failed command to come only from tool output, got %#v", activities[1])
 	}
 }
 

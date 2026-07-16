@@ -110,7 +110,7 @@ func toGenkitMessages(messages []Message) []*ai.Message {
 					responses = append(responses, ai.NewToolResponsePart(&ai.ToolResponse{
 						Name:   invocation.Tool,
 						Ref:    invocation.ID,
-						Output: historicalToolResult(invocation.Status),
+						Output: historicalToolResult(invocation),
 					}))
 				}
 				aiMessages = append(aiMessages, &ai.Message{Role: ai.RoleTool, Content: responses})

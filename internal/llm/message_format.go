@@ -2,13 +2,7 @@ package llm
 
 import (
 	"strconv"
-	"strings"
 	"unicode/utf8"
-)
-
-const (
-	historicalToolSuccessResult = `{"status":"success","output_retained":false}`
-	historicalToolFailureResult = `{"status":"error","output_retained":false}`
 )
 
 type historicalMessageStep struct {
@@ -17,36 +11,16 @@ type historicalMessageStep struct {
 }
 
 type historicalToolInvocation struct {
-	ID     string
-	Tool   string
-	Status string
+	ID            string
+	Tool          string
+	Status        string
+	FileChanged   string
+	FailedCommand string
+	ExitCode      *int
 }
 
 func FormatMessageForProvider(message Message) string {
-	content := message.Content
-	if message.Role != RoleAssistant || message.TurnMemory == nil || message.TurnMemory.IsEmpty() {
-		return content
-	}
-
-	lines := make([]string, 0, 1+len(message.TurnMemory.FailedBash)+1)
-	if len(message.TurnMemory.FilesChanged) > 0 || len(message.TurnMemory.FailedBash) > 0 {
-		lines = append(lines, "Tool memory:")
-	}
-	if len(message.TurnMemory.FilesChanged) > 0 {
-		lines = append(lines, "- Files changed: "+strings.Join(message.TurnMemory.FilesChanged, ", "))
-	}
-	for _, failed := range message.TurnMemory.FailedBash {
-		lines = append(lines, "- Failed bash: "+failed.Command+" (exit "+strconv.Itoa(failed.ExitCode)+")")
-	}
-
-	if len(lines) == 0 {
-		return content
-	}
-	if content == "" {
-		return strings.Join(lines, "\n")
-	}
-
-	return content + "\n\n" + strings.Join(lines, "\n")
+	return message.Content
 }
 
 func historicalMessageSteps(messageIndex int, message Message) []historicalMessageStep {
@@ -66,9 +40,12 @@ func historicalMessageSteps(messageIndex int, message Message) []historicalMessa
 		}
 
 		invocation := historicalToolInvocation{
-			ID:     "historical_" + strconv.Itoa(messageIndex) + "_" + strconv.Itoa(activityIndex),
-			Tool:   historicalProviderToolName(activity),
-			Status: activity.Status,
+			ID:            "historical_" + strconv.Itoa(messageIndex) + "_" + strconv.Itoa(activityIndex),
+			Tool:          historicalProviderToolName(activity),
+			Status:        activity.Status,
+			FileChanged:   activity.FileChanged,
+			FailedCommand: activity.FailedCommand,
+			ExitCode:      activity.ExitCode,
 		}
 		activityIndex++
 
@@ -94,11 +71,23 @@ func historicalMessageSteps(messageIndex int, message Message) []historicalMessa
 	return steps
 }
 
-func historicalToolResult(status string) string {
-	if status == "success" {
-		return historicalToolSuccessResult
+func historicalToolResult(invocation historicalToolInvocation) string {
+	status := invocation.Status
+	if status != "success" {
+		status = "error"
 	}
-	return historicalToolFailureResult
+	result := struct {
+		Status        string `json:"status"`
+		FileChanged   string `json:"file_changed,omitempty"`
+		FailedCommand string `json:"failed_command,omitempty"`
+		ExitCode      *int   `json:"exit_code,omitempty"`
+	}{
+		Status:        status,
+		FileChanged:   invocation.FileChanged,
+		FailedCommand: invocation.FailedCommand,
+		ExitCode:      invocation.ExitCode,
+	}
+	return serializeToolOutput(result)
 }
 
 func historicalProviderToolName(activity HistoricalToolActivity) string {

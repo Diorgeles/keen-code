@@ -740,14 +740,13 @@ func TestReasoningEffortForLevel(t *testing.T) {
 }
 
 func TestToOpenAIResponseInput_RendersTurnMemoryForAssistant(t *testing.T) {
+	exitCode := 1
 	input := toOpenAIResponseInput([]Message{
 		{
 			Role:    RoleAssistant,
 			Content: "done",
 			TurnMemory: &TurnMemory{
-				FailedBash: []FailedBashCommand{
-					{Command: "go test ./...", ExitCode: 1},
-				},
+				ToolActivity: []HistoricalToolActivity{{Tool: "bash", Status: "success", FailedCommand: "go test ./...", ExitCode: &exitCode}},
 			},
 		},
 	})
@@ -756,8 +755,8 @@ func TestToOpenAIResponseInput_RendersTurnMemoryForAssistant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal input: %v", err)
 	}
-	if !strings.Contains(string(body), "Tool memory:") || !strings.Contains(string(body), "Failed bash: go test ./... (exit 1)") {
-		t.Fatalf("expected rendered turn memory in Responses payload, got %s", string(body))
+	if !strings.Contains(string(body), `\"failed_command\":\"go test ./...\"`) || strings.Contains(string(body), "Tool memory:") {
+		t.Fatalf("expected failed command only in Responses tool result, got %s", string(body))
 	}
 }
 

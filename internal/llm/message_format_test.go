@@ -2,23 +2,19 @@ package llm
 
 import "testing"
 
-func TestFormatMessageForProvider_AppendsTurnMemoryForAssistant(t *testing.T) {
+func TestFormatMessageForProvider_DoesNotAppendTurnMemory(t *testing.T) {
 	message := Message{
 		Role:    RoleAssistant,
 		Content: "Updated the parser.",
-		TurnMemory: &TurnMemory{
-			FilesChanged: []string{"a.go", "b.go"},
-			FailedBash: []FailedBashCommand{
-				{Command: "go test ./...", ExitCode: 1},
-			},
-		},
+		TurnMemory: &TurnMemory{ToolActivity: []HistoricalToolActivity{{
+			Tool:        "write_file",
+			Status:      "success",
+			FileChanged: "a.go",
+		}}},
 	}
 
-	got := FormatMessageForProvider(message)
-
-	want := "Updated the parser.\n\nTool memory:\n- Files changed: a.go, b.go\n- Failed bash: go test ./... (exit 1)"
-	if got != want {
-		t.Fatalf("unexpected formatted message:\nwant: %q\ngot:  %q", want, got)
+	if got := FormatMessageForProvider(message); got != message.Content {
+		t.Fatalf("expected assistant content only, got %q", got)
 	}
 }
 
@@ -27,7 +23,6 @@ func TestFormatMessageForProvider_LeavesUserMessageUntouched(t *testing.T) {
 		Role:    RoleUser,
 		Content: "hello",
 		TurnMemory: &TurnMemory{
-			FilesChanged: []string{"a.go"},
 			ToolActivity: []HistoricalToolActivity{{
 				TextOffset: 2,
 				Tool:       "read_file",
@@ -71,12 +66,25 @@ func TestHistoricalMessageSteps_PreservesActivityOrder(t *testing.T) {
 	}
 }
 
-func TestHistoricalToolResult_UsesConciseStatusJSON(t *testing.T) {
-	if got := historicalToolResult("success"); got != `{"status":"success","output_retained":false}` {
-		t.Fatalf("unexpected success result: %q", got)
+func TestHistoricalToolResult_RetainsOnlyCompactOutcome(t *testing.T) {
+	exitCode := 1
+	tests := []struct {
+		name       string
+		invocation historicalToolInvocation
+		want       string
+	}{
+		{name: "success", invocation: historicalToolInvocation{Status: "success"}, want: `{"status":"success"}`},
+		{name: "error", invocation: historicalToolInvocation{Status: "error"}, want: `{"status":"error"}`},
+		{name: "file changed", invocation: historicalToolInvocation{Status: "success", FileChanged: "a.go"}, want: `{"status":"success","file_changed":"a.go"}`},
+		{name: "failed command", invocation: historicalToolInvocation{Status: "success", FailedCommand: "go test ./...", ExitCode: &exitCode}, want: `{"status":"success","failed_command":"go test ./...","exit_code":1}`},
 	}
-	if got := historicalToolResult("error"); got != `{"status":"error","output_retained":false}` {
-		t.Fatalf("unexpected failure result: %q", got)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := historicalToolResult(tt.invocation); got != tt.want {
+				t.Fatalf("unexpected result: want %q, got %q", tt.want, got)
+			}
+		})
 	}
 }
 

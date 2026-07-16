@@ -740,7 +740,7 @@ func TestToOpenAIMessages_RendersTurnMemoryForAssistant(t *testing.T) {
 			Role:    RoleAssistant,
 			Content: "done",
 			TurnMemory: &TurnMemory{
-				FilesChanged: []string{"a.go"},
+				ToolActivity: []HistoricalToolActivity{{Tool: "write_file", Status: "success", FileChanged: "a.go"}},
 			},
 		},
 	})
@@ -749,8 +749,8 @@ func TestToOpenAIMessages_RendersTurnMemoryForAssistant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal messages: %v", err)
 	}
-	if !strings.Contains(string(body), "Tool memory:") || !strings.Contains(string(body), "Files changed: a.go") {
-		t.Fatalf("expected rendered turn memory in OpenAI message payload, got %s", string(body))
+	if !strings.Contains(string(body), `\"file_changed\":\"a.go\"`) || strings.Contains(string(body), "Tool memory:") {
+		t.Fatalf("expected file change only in OpenAI tool result, got %s", string(body))
 	}
 }
 
