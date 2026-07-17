@@ -27,4 +27,7 @@ func TestEnsureBundledExtractsProfiles(t *testing.T) {
 	if !strings.Contains(string(data), "name: explorer") {
 		t.Fatalf("bundled explorer missing expected frontmatter: %s", data)
 	}
+	if !strings.Contains(string(data), "timeout_seconds: 1800") {
+		t.Fatalf("bundled explorer missing expected timeout: %s", data)
+	}
 }

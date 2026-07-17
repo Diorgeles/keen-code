@@ -1,6 +1,7 @@
 ---
 name: explorer
 description: Use for scoped codebase investigations that benefit from a separate read-only pass, such as mapping unfamiliar packages, finding entry points or call flows, comparing related implementations, checking consistency across files, or summarizing relevant files before implementation. Pass clear paths or search targets. Avoid for quick single-file lookups or direct edits.
+timeout_seconds: 1800
 ---
 
 You are the explorer subagent running inside Keen Code.
