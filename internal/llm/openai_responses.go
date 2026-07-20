@@ -103,10 +103,10 @@ func toOpenAIResponseInput(messages []Message) []responses.ResponseInputItemUnio
 					result = append(result, responses.ResponseInputItemParamOfMessage(step.Text, responses.EasyInputMessageRoleAssistant))
 				}
 				for _, invocation := range step.Activities {
-					result = append(result, responses.ResponseInputItemParamOfFunctionCall(`{}`, invocation.ID, invocation.Tool))
+					result = append(result, responses.ResponseInputItemParamOfFunctionCall(historicalToolArguments(invocation.Activity), invocation.ID, invocation.Activity.Tool))
 				}
 				for _, invocation := range step.Activities {
-					result = append(result, responses.ResponseInputItemParamOfFunctionCallOutput(invocation.ID, historicalToolResult(invocation)))
+					result = append(result, responses.ResponseInputItemParamOfFunctionCallOutput(invocation.ID, historicalToolResult(invocation.Activity)))
 				}
 			}
 		}
@@ -512,14 +512,14 @@ func (c *OpenAIResponsesClient) executeTools(
 					ToolCall: toolCall,
 				}
 			}
-			toolOutput = serializeToolOutput(map[string]any{"error": execErr.Error()})
+			toolOutput = serializeJSON(map[string]any{"error": execErr.Error()})
 		} else {
 			slog.Debug("Tool response", "tool", tc.Name, "duration", duration)
 			eventCh <- StreamEvent{
 				Type:     StreamEventTypeToolEnd,
 				ToolCall: toolCall,
 			}
-			toolOutput = serializeToolOutput(output)
+			toolOutput = serializeJSON(output)
 		}
 
 		toolMessages = append(toolMessages, responses.ResponseInputItemParamOfFunctionCallOutput(tc.CallID, toolOutput))

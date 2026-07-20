@@ -169,7 +169,7 @@ func toAnthropicMessages(messages []Message) ([]anthropic.TextBlockParam, []anth
 					blocks = append(blocks, anthropic.NewTextBlock(step.Text))
 				}
 				for _, invocation := range step.Activities {
-					blocks = append(blocks, anthropic.NewToolUseBlock(invocation.ID, json.RawMessage(`{}`), invocation.Tool))
+					blocks = append(blocks, anthropic.NewToolUseBlock(invocation.ID, json.RawMessage(historicalToolArguments(invocation.Activity)), invocation.Activity.Tool))
 				}
 				if len(blocks) > 0 {
 					msgParams = append(msgParams, anthropic.NewAssistantMessage(blocks...))
@@ -177,7 +177,7 @@ func toAnthropicMessages(messages []Message) ([]anthropic.TextBlockParam, []anth
 				if len(step.Activities) > 0 {
 					results := make([]anthropic.ContentBlockParamUnion, 0, len(step.Activities))
 					for _, invocation := range step.Activities {
-						results = append(results, anthropic.NewToolResultBlock(invocation.ID, historicalToolResult(invocation), invocation.Status != "success"))
+						results = append(results, anthropic.NewToolResultBlock(invocation.ID, historicalToolResult(invocation.Activity), invocation.Activity.Status != "success"))
 					}
 					msgParams = append(msgParams, anthropic.NewUserMessage(results...))
 				}
@@ -779,14 +779,14 @@ func (c *AnthropicClient) executeTools(
 					ToolCall: toolCall,
 				}
 			}
-			resultContent = serializeToolOutput(map[string]any{"error": execErr.Error()})
+			resultContent = serializeJSON(map[string]any{"error": execErr.Error()})
 		} else {
 			slog.Debug("Tool response", "tool", tu.name, "duration", duration)
 			eventCh <- StreamEvent{
 				Type:     StreamEventTypeToolEnd,
 				ToolCall: toolCall,
 			}
-			resultContent = serializeToolOutput(output)
+			resultContent = serializeJSON(output)
 		}
 
 		resultBlocks = append(resultBlocks, anthropic.NewToolResultBlock(tu.id, resultContent, execErr != nil))

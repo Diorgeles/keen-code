@@ -21,14 +21,12 @@ type TurnMemory struct {
 }
 
 type HistoricalToolActivity struct {
-	TextOffset    int    `json:"text_offset"`
-	Tool          string `json:"tool"`
-	Status        string `json:"status"`
-	Target        string `json:"target,omitempty"`
-	Server        string `json:"server,omitempty"`
-	FileChanged   string `json:"file_changed,omitempty"`
-	FailedCommand string `json:"failed_command,omitempty"`
-	ExitCode      *int   `json:"exit_code,omitempty"`
+	TextOffset  int            `json:"text_offset"`
+	Tool        string         `json:"tool"`
+	Input       map[string]any `json:"input,omitempty"`
+	Status      string         `json:"status"`
+	FileChanged string         `json:"file_changed,omitempty"`
+	ExitCode    *int           `json:"exit_code,omitempty"`
 }
 
 func CloneMessage(message Message) Message {
@@ -52,9 +50,39 @@ func CloneTurnMemory(memory *TurnMemory) *TurnMemory {
 
 	cloned := &TurnMemory{}
 	if len(memory.ToolActivity) > 0 {
-		cloned.ToolActivity = append([]HistoricalToolActivity(nil), memory.ToolActivity...)
+		cloned.ToolActivity = make([]HistoricalToolActivity, len(memory.ToolActivity))
+		for i, activity := range memory.ToolActivity {
+			cloned.ToolActivity[i] = activity
+			cloned.ToolActivity[i].Input = cloneInputMap(activity.Input)
+		}
 	}
 	return cloned
+}
+
+func cloneInputMap(input map[string]any) map[string]any {
+	if input == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(input))
+	for key, value := range input {
+		cloned[key] = cloneInputValue(value)
+	}
+	return cloned
+}
+
+func cloneInputValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		return cloneInputMap(value)
+	case []any:
+		cloned := make([]any, len(value))
+		for i, item := range value {
+			cloned[i] = cloneInputValue(item)
+		}
+		return cloned
+	default:
+		return value
+	}
 }
 
 func (m *TurnMemory) IsEmpty() bool {

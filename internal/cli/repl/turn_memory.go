@@ -1,18 +1,25 @@
 package repl
 
 import (
-	"net/url"
+	"encoding/json"
+	"maps"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/user/keen-code/internal/llm"
 )
 
-const maxHistoricalToolTargetBytes = 256
+const maxHistoricalToolInputFieldBytes = 4 * 1024
 
-var sensitiveTargetPattern = regexp.MustCompile(`(?i)(api[_-]?key|token|secret|password|passwd|authorization|credential)`)
+var retainedHistoricalToolInputs = map[string]struct{}{
+	"read_file":     {},
+	"grep":          {},
+	"glob":          {},
+	"web_fetch":     {},
+	"bash":          {},
+	"delegate_task": {},
+	"call_mcp_tool": {},
+}
 
 type turnMemoryAccumulator struct {
 	toolActivity []llm.HistoricalToolActivity
@@ -61,110 +68,63 @@ func historicalToolActivity(toolCall *llm.ToolCall, textOffset int, workingDir, 
 		activity.Status = "error"
 	}
 
-	if toolCall.Name == "call_mcp_tool" {
-		activity.Server = boundedTarget(toolStringField(toolCall, "server"))
-		activity.Tool = boundedTarget(toolStringField(toolCall, "tool"))
-		if activity.Tool == "" {
-			activity.Tool = toolCall.Name
+	if _, ok := retainedHistoricalToolInputs[toolCall.Name]; ok {
+		input := toolCall.Input
+		if retainsPathInput(toolCall.Name) {
+			input = cloneToolInput(input)
+			if path, ok := input["path"].(string); ok {
+				input["path"] = relativizePath(path, workingDir)
+			}
 		}
-		return activity
+		if toolCall.Name == "bash" && bashCommand != "" {
+			input = cloneToolInput(input)
+			input["command"] = bashCommand
+		}
+		activity.Input = boundedHistoricalToolInput(input)
 	}
 
-	activity.Target = historicalToolTarget(toolCall, workingDir, bashCommand)
+	if toolCall.Name == "bash" {
+		exitCode, ok := extractIntField(toolCall.Output, "exit_code")
+		if ok && exitCode != 0 {
+			activity.ExitCode = &exitCode
+		}
+	}
 	if activity.Status != "success" {
 		return activity
 	}
 
-	switch toolCall.Name {
-	case "write_file", "edit_file":
-		activity.FileChanged = boundedTarget(relativizePath(extractStringField(toolCall.Output, "file_changed"), workingDir))
-	case "bash":
-		exitCode, ok := extractIntField(toolCall.Output, "exit_code")
-		if !ok || exitCode == 0 {
-			return activity
-		}
-		command := extractStringField(toolCall.Output, "failed_command")
-		activity.FailedCommand = boundedTarget(command)
-		activity.ExitCode = &exitCode
+	if toolCall.Name == "write_file" || toolCall.Name == "edit_file" {
+		activity.FileChanged = relativizePath(extractStringField(toolCall.Output, "file_changed"), workingDir)
 	}
 	return activity
 }
 
-func historicalToolTarget(toolCall *llm.ToolCall, workingDir, bashCommand string) string {
-	var target string
-	switch toolCall.Name {
-	case "read_file", "write_file", "edit_file":
-		target = relativizePath(inputStringField(toolCall, "path"), workingDir)
-	case "glob", "grep":
-		path := relativizePath(inputStringField(toolCall, "path"), workingDir)
-		pattern := inputStringField(toolCall, "pattern")
-		target = joinTarget(path, pattern)
-	case "bash":
-		target = bashCommand
-		if target == "" {
-			target = toolStringField(toolCall, "command")
+func boundedHistoricalToolInput(input map[string]any) map[string]any {
+	if len(input) == 0 {
+		return nil
+	}
+
+	bounded := make(map[string]any, len(input))
+	for key, value := range input {
+		encoded, err := json.Marshal(value)
+		if err == nil && len(encoded) <= maxHistoricalToolInputFieldBytes {
+			bounded[key] = value
 		}
-	case "web_fetch":
-		target = sanitizedURL(inputStringField(toolCall, "url"))
-	case "delegate_task":
-		target = inputStringField(toolCall, "agent")
 	}
-	return boundedTarget(target)
+	if len(bounded) == 0 {
+		return nil
+	}
+	return bounded
 }
 
-func toolStringField(toolCall *llm.ToolCall, key string) string {
-	if toolCall == nil {
-		return ""
-	}
-	if value := extractStringField(toolCall.Output, key); value != "" {
-		return value
-	}
-	return inputStringField(toolCall, key)
+func cloneToolInput(input map[string]any) map[string]any {
+	cloned := make(map[string]any, len(input)+1)
+	maps.Copy(cloned, input)
+	return cloned
 }
 
-func inputStringField(toolCall *llm.ToolCall, key string) string {
-	if toolCall == nil || toolCall.Input == nil {
-		return ""
-	}
-	value, _ := toolCall.Input[key].(string)
-	return value
-}
-
-func joinTarget(path, detail string) string {
-	if path == "" || path == "." {
-		return detail
-	}
-	if detail == "" {
-		return path
-	}
-	return path + " :: " + detail
-}
-
-func sanitizedURL(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return ""
-	}
-	parsed.User = nil
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String()
-}
-
-func boundedTarget(target string) string {
-	target = strings.Join(strings.Fields(target), " ")
-	if sensitiveTargetPattern.MatchString(target) {
-		return ""
-	}
-	if len(target) <= maxHistoricalToolTargetBytes {
-		return target
-	}
-
-	limit := maxHistoricalToolTargetBytes - len("...")
-	for limit > 0 && !utf8.RuneStart(target[limit]) {
-		limit--
-	}
-	return target[:limit] + "..."
+func retainsPathInput(tool string) bool {
+	return tool == "read_file" || tool == "grep" || tool == "glob"
 }
 
 func (a *turnMemoryAccumulator) Build() *llm.TurnMemory {
@@ -172,9 +132,7 @@ func (a *turnMemoryAccumulator) Build() *llm.TurnMemory {
 		return nil
 	}
 
-	return &llm.TurnMemory{
-		ToolActivity: append([]llm.HistoricalToolActivity(nil), a.toolActivity...),
-	}
+	return llm.CloneTurnMemory(&llm.TurnMemory{ToolActivity: a.toolActivity})
 }
 
 func extractStringField(output any, key string) string {

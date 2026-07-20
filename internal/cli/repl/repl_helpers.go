@@ -136,7 +136,7 @@ func renderLoadingText(text string, elapsed time.Duration) string {
 	}
 
 	cycleLen := visibleLen + 12
-	pos := int(elapsed.Milliseconds()/40) % cycleLen
+	pos := int(elapsed.Milliseconds()/30) % cycleLen
 
 	var sb strings.Builder
 	visIdx := 0

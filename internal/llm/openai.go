@@ -140,8 +140,8 @@ func toOpenAIMessages(messages []Message) []openai.ChatCompletionMessageParamUni
 					am.ToolCalls = append(am.ToolCalls, openai.ChatCompletionMessageToolCallParam{
 						ID: invocation.ID,
 						Function: openai.ChatCompletionMessageToolCallFunctionParam{
-							Name:      invocation.Tool,
-							Arguments: `{}`,
+							Name:      invocation.Activity.Tool,
+							Arguments: historicalToolArguments(invocation.Activity),
 						},
 					})
 				}
@@ -149,7 +149,7 @@ func toOpenAIMessages(messages []Message) []openai.ChatCompletionMessageParamUni
 					result = append(result, openai.ChatCompletionMessageParamUnion{OfAssistant: &am})
 				}
 				for _, invocation := range step.Activities {
-					result = append(result, openai.ToolMessage(historicalToolResult(invocation), invocation.ID))
+					result = append(result, openai.ToolMessage(historicalToolResult(invocation.Activity), invocation.ID))
 				}
 			}
 		}
@@ -636,14 +636,14 @@ func (c *OpenAICompatibleClient) executeTools(
 					ToolCall: toolCall,
 				}
 			}
-			toolOutput = serializeToolOutput(map[string]any{"error": execErr.Error()})
+			toolOutput = serializeJSON(map[string]any{"error": execErr.Error()})
 		} else {
 			slog.Debug("Tool response", "tool", tc.Function.Name, "duration", duration)
 			eventCh <- StreamEvent{
 				Type:     StreamEventTypeToolEnd,
 				ToolCall: toolCall,
 			}
-			toolOutput = serializeToolOutput(output)
+			toolOutput = serializeJSON(output)
 		}
 
 		toolMessages = append(toolMessages, openai.ToolMessage(toolOutput, tc.ID))

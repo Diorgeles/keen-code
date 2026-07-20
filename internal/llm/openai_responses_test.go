@@ -746,7 +746,7 @@ func TestToOpenAIResponseInput_RendersTurnMemoryForAssistant(t *testing.T) {
 			Role:    RoleAssistant,
 			Content: "done",
 			TurnMemory: &TurnMemory{
-				ToolActivity: []HistoricalToolActivity{{Tool: "bash", Status: "success", FailedCommand: "go test ./...", ExitCode: &exitCode}},
+				ToolActivity: []HistoricalToolActivity{{Tool: "bash", Input: map[string]any{"command": "go test ./..."}, Status: "success", ExitCode: &exitCode}},
 			},
 		},
 	})
@@ -755,8 +755,8 @@ func TestToOpenAIResponseInput_RendersTurnMemoryForAssistant(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal input: %v", err)
 	}
-	if !strings.Contains(string(body), `\"failed_command\":\"go test ./...\"`) || strings.Contains(string(body), "Tool memory:") {
-		t.Fatalf("expected failed command only in Responses tool result, got %s", string(body))
+	if !strings.Contains(string(body), `\"command\":\"go test ./...\"`) || !strings.Contains(string(body), `\"exit_code\":1`) || strings.Contains(string(body), "failed_command") || strings.Contains(string(body), "Tool memory:") {
+		t.Fatalf("expected command input and compact Responses result, got %s", string(body))
 	}
 }
 

@@ -497,14 +497,14 @@ func (c *OpenAICodexClient) executeTools(
 					ToolCall: toolCall,
 				}
 			}
-			toolOutput = serializeToolOutput(map[string]any{"error": execErr.Error()})
+			toolOutput = serializeJSON(map[string]any{"error": execErr.Error()})
 		} else {
 			slog.Debug("Tool response", "tool", tc.Name, "duration", duration)
 			eventCh <- StreamEvent{
 				Type:     StreamEventTypeToolEnd,
 				ToolCall: toolCall,
 			}
-			toolOutput = serializeToolOutput(output)
+			toolOutput = serializeJSON(output)
 		}
 
 		toolMessages = append(toolMessages, responses.ResponseInputItemParamOfFunctionCallOutput(tc.CallID, toolOutput))

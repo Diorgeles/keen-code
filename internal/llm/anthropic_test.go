@@ -658,7 +658,7 @@ func TestToAnthropicMessages_TurnMemoryRendered(t *testing.T) {
 			Role:    RoleAssistant,
 			Content: "done",
 			TurnMemory: &TurnMemory{
-				ToolActivity: []HistoricalToolActivity{{Tool: "write_file", Status: "success", FileChanged: "main.go"}},
+				ToolActivity: []HistoricalToolActivity{{Tool: "read_file", Input: map[string]any{"path": "main.go"}, Status: "success"}},
 			},
 		},
 	}
@@ -667,6 +667,13 @@ func TestToAnthropicMessages_TurnMemoryRendered(t *testing.T) {
 
 	if len(msgParams) != 3 {
 		t.Fatalf("expected tool call, result, and final message, got %d", len(msgParams))
+	}
+	body, err := json.Marshal(msgParams)
+	if err != nil {
+		t.Fatalf("marshal messages: %v", err)
+	}
+	if !strings.Contains(string(body), `"input":{"path":"main.go"}`) {
+		t.Fatalf("expected retained tool input, got %s", body)
 	}
 }
 

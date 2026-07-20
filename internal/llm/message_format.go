@@ -11,12 +11,8 @@ type historicalMessageStep struct {
 }
 
 type historicalToolInvocation struct {
-	ID            string
-	Tool          string
-	Status        string
-	FileChanged   string
-	FailedCommand string
-	ExitCode      *int
+	ID       string
+	Activity HistoricalToolActivity
 }
 
 func FormatMessageForProvider(message Message) string {
@@ -40,12 +36,8 @@ func historicalMessageSteps(messageIndex int, message Message) []historicalMessa
 		}
 
 		invocation := historicalToolInvocation{
-			ID:            "historical_" + strconv.Itoa(messageIndex) + "_" + strconv.Itoa(activityIndex),
-			Tool:          historicalProviderToolName(activity),
-			Status:        activity.Status,
-			FileChanged:   activity.FileChanged,
-			FailedCommand: activity.FailedCommand,
-			ExitCode:      activity.ExitCode,
+			ID:       "historical_" + strconv.Itoa(messageIndex) + "_" + strconv.Itoa(activityIndex),
+			Activity: activity,
 		}
 		activityIndex++
 
@@ -71,28 +63,30 @@ func historicalMessageSteps(messageIndex int, message Message) []historicalMessa
 	return steps
 }
 
-func historicalToolResult(invocation historicalToolInvocation) string {
-	status := invocation.Status
+func historicalToolInput(activity HistoricalToolActivity) map[string]any {
+	if activity.Input == nil {
+		return map[string]any{}
+	}
+	return activity.Input
+}
+
+func historicalToolArguments(activity HistoricalToolActivity) string {
+	return serializeJSON(historicalToolInput(activity))
+}
+
+func historicalToolResult(activity HistoricalToolActivity) string {
+	status := activity.Status
 	if status != "success" {
 		status = "error"
 	}
 	result := struct {
-		Status        string `json:"status"`
-		FileChanged   string `json:"file_changed,omitempty"`
-		FailedCommand string `json:"failed_command,omitempty"`
-		ExitCode      *int   `json:"exit_code,omitempty"`
+		Status      string `json:"status"`
+		FileChanged string `json:"file_changed,omitempty"`
+		ExitCode    *int   `json:"exit_code,omitempty"`
 	}{
-		Status:        status,
-		FileChanged:   invocation.FileChanged,
-		FailedCommand: invocation.FailedCommand,
-		ExitCode:      invocation.ExitCode,
+		Status:      status,
+		FileChanged: activity.FileChanged,
+		ExitCode:    activity.ExitCode,
 	}
-	return serializeToolOutput(result)
-}
-
-func historicalProviderToolName(activity HistoricalToolActivity) string {
-	if activity.Server != "" {
-		return "call_mcp_tool"
-	}
-	return activity.Tool
+	return serializeJSON(result)
 }

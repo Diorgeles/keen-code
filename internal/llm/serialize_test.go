@@ -8,14 +8,14 @@ import (
 
 func TestSerializeToolOutputPreservesHTMLCharacters(t *testing.T) {
 	content := `if a < b && b > c { println("ok") }`
-	got := serializeToolOutput(map[string]any{"content": content})
+	got := serializeJSON(map[string]any{"content": content})
 
 	if !json.Valid([]byte(got)) {
-		t.Fatalf("serializeToolOutput() returned invalid JSON: %q", got)
+		t.Fatalf("serializeJSON() returned invalid JSON: %q", got)
 	}
 	for _, escaped := range []string{`\u003c`, `\u003e`, `\u0026`} {
 		if strings.Contains(got, escaped) {
-			t.Fatalf("serializeToolOutput() contains HTML escape %q: %s", escaped, got)
+			t.Fatalf("serializeJSON() contains HTML escape %q: %s", escaped, got)
 		}
 	}
 
@@ -29,10 +29,10 @@ func TestSerializeToolOutputPreservesHTMLCharacters(t *testing.T) {
 }
 
 func TestSerializeToolOutputNilAndUnsupportedValues(t *testing.T) {
-	if got := serializeToolOutput(nil); got != "{}" {
-		t.Fatalf("serializeToolOutput(nil) = %q, want %q", got, "{}")
+	if got := serializeJSON(nil); got != "{}" {
+		t.Fatalf("serializeJSON(nil) = %q, want %q", got, "{}")
 	}
-	if got := serializeToolOutput(make(chan int)); got != "{}" {
-		t.Fatalf("serializeToolOutput(channel) = %q, want %q", got, "{}")
+	if got := serializeJSON(make(chan int)); got != "{}" {
+		t.Fatalf("serializeJSON(channel) = %q, want %q", got, "{}")
 	}
 }

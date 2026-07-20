@@ -276,7 +276,7 @@ func TestToGenkitMessages_RendersTurnMemoryForAssistant(t *testing.T) {
 			Role:    RoleAssistant,
 			Content: "done",
 			TurnMemory: &TurnMemory{
-				ToolActivity: []HistoricalToolActivity{{Tool: "write_file", Status: "success", FileChanged: "a.go"}},
+				ToolActivity: []HistoricalToolActivity{{Tool: "read_file", Input: map[string]any{"path": "a.go"}, Status: "success"}},
 			},
 		},
 	})
@@ -284,7 +284,11 @@ func TestToGenkitMessages_RendersTurnMemoryForAssistant(t *testing.T) {
 	if len(messages) != 3 {
 		t.Fatalf("expected tool call, result, and final message, got %#v", messages)
 	}
-	if got := messages[1].Content[0].ToolResponse.Output; got != `{"status":"success","file_changed":"a.go"}` {
+	input, ok := messages[0].Content[0].ToolRequest.Input.(map[string]any)
+	if !ok || input["path"] != "a.go" {
+		t.Fatalf("unexpected retained tool input %#v", messages[0].Content[0].ToolRequest.Input)
+	}
+	if got := messages[1].Content[0].ToolResponse.Output; got != `{"status":"success"}` {
 		t.Fatalf("unexpected retained tool result %q", got)
 	}
 }
