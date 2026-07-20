@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-07-20
+
+### Added
+- Retain bounded inputs for read-only, shell, delegation, and MCP tools in turn memory and provider history.
+
+### Changed
+- Allow explorer subagents more time to complete scoped investigations.
+
 ## [0.32.0] - 2026-07-20
 
 ### Added
@@ -736,7 +744,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/mochow13/keen-code/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/mochow13/keen-code/compare/v0.31.2...v0.32.0
 [0.31.2]: https://github.com/mochow13/keen-code/compare/v0.31.1...v0.31.2
 [0.31.1]: https://github.com/mochow13/keen-code/compare/v0.31.0...v0.31.1
