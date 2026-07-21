@@ -137,16 +137,32 @@ func FormatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string 
 	if endCall.Error != "" {
 		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s → %s failed: %s", startCall.Name, inputDisplay, endCall.Error))
 	}
+	if startCall.Name == "delegate_task" {
+		completed, failed, completedByAgent, failedByAgent, ok := delegateResultCounts(endCall.Output)
+		if ok {
+			status := fmt.Sprintf("%d completed", completed)
+			if agents := formatAgentCounts(completedByAgent); agents != "" {
+				status += " (" + agents + ")"
+			}
+			if failed > 0 {
+				status += fmt.Sprintf(", %d failed", failed)
+				if agents := formatAgentCounts(failedByAgent); agents != "" {
+					status += " (" + agents + ")"
+				}
+				return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s → %s", startCall.Name, status))
+			}
+			return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s → %s", startCall.Name, status))
+		}
+	}
 	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s → %s", startCall.Name, inputDisplay))
 }
 
 var toolDisplayFields = map[string][]string{
-	"read_file":     {"path"},
-	"write_file":    {"path"},
-	"edit_file":     {"path"},
-	"grep":          {"path", "pattern"},
-	"glob":          {"path", "pattern"},
-	"delegate_task": {"agent"},
+	"read_file":  {"path"},
+	"write_file": {"path"},
+	"edit_file":  {"path"},
+	"grep":       {"path", "pattern"},
+	"glob":       {"path", "pattern"},
 }
 
 func FormatToolInput(toolName string, input map[string]any, workingDir string) string {
@@ -156,6 +172,9 @@ func FormatToolInput(toolName string, input map[string]any, workingDir string) s
 
 	if toolName == "call_mcp_tool" {
 		return formatMCPToolInput(input)
+	}
+	if toolName == "delegate_task" {
+		return formatDelegateTaskInput(input)
 	}
 
 	fields, ok := toolDisplayFields[toolName]
@@ -210,6 +229,91 @@ func formatMCPToolInput(input map[string]any) string {
 		return ""
 	}
 	return server + "/" + tool
+}
+
+func formatDelegateTaskInput(input map[string]any) string {
+	tasks, ok := input["tasks"].([]any)
+	if !ok {
+		return "0 tasks"
+	}
+	label := "tasks"
+	if len(tasks) == 1 {
+		label = "task"
+	}
+
+	agentCounts := make(map[string]int)
+	for _, task := range tasks {
+		task, ok := task.(map[string]any)
+		if !ok {
+			continue
+		}
+		agent, _ := task["agent"].(string)
+		if agent != "" {
+			agentCounts[agent]++
+		}
+	}
+	if len(agentCounts) == 0 {
+		return fmt.Sprintf("%d %s", len(tasks), label)
+	}
+
+	return fmt.Sprintf("%d %s (%s)", len(tasks), label, formatAgentCounts(agentCounts))
+}
+
+func delegateResultCounts(output any) (completed, failed int, completedByAgent, failedByAgent map[string]int, ok bool) {
+	result, ok := output.(map[string]any)
+	if !ok {
+		return 0, 0, nil, nil, false
+	}
+	completed, completedOK := intValue(result["completed"])
+	failed, failedOK := intValue(result["failed"])
+	completedByAgent, completedAgentsOK := agentCountsValue(result["completed_by_agent"])
+	failedByAgent, failedAgentsOK := agentCountsValue(result["failed_by_agent"])
+	return completed, failed, completedByAgent, failedByAgent, completedOK && failedOK && completedAgentsOK && failedAgentsOK
+}
+
+func agentCountsValue(value any) (map[string]int, bool) {
+	counts := make(map[string]int)
+	switch value := value.(type) {
+	case map[string]int:
+		for agent, count := range value {
+			counts[agent] = count
+		}
+	case map[string]any:
+		for agent, value := range value {
+			count, ok := intValue(value)
+			if !ok {
+				return nil, false
+			}
+			counts[agent] = count
+		}
+	default:
+		return nil, false
+	}
+	return counts, true
+}
+
+func formatAgentCounts(agentCounts map[string]int) string {
+	agents := make([]string, 0, len(agentCounts))
+	for agent := range agentCounts {
+		agents = append(agents, agent)
+	}
+	sort.Strings(agents)
+	parts := make([]string, 0, len(agents))
+	for _, agent := range agents {
+		parts = append(parts, fmt.Sprintf("%s ×%d", agent, agentCounts[agent]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func intValue(value any) (int, bool) {
+	switch value := value.(type) {
+	case int:
+		return value, true
+	case float64:
+		return int(value), value == float64(int(value))
+	default:
+		return 0, false
+	}
 }
 
 func formatToolPathForUI(path, workingDir string) string {

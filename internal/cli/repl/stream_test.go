@@ -273,6 +273,37 @@ func TestStreamHandler_HandleDone_AdjacentToolStartEnd_CollapsedToOneLine(t *tes
 	}
 }
 
+func TestStreamHandler_DelegateTaskShowsBatchAndPartialFailure(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")
+	input := map[string]any{"tasks": []any{
+		map[string]any{"agent": "explorer", "task": "one"},
+		map[string]any{"agent": "explorer", "task": "two"},
+		map[string]any{"agent": "reviewer", "task": "three"},
+	}}
+	sh.HandleToolStart(&llm.ToolCall{Name: "delegate_task", Input: input})
+
+	view := sh.View(80)
+	if !strings.Contains(view, "3 tasks (explorer ×2, reviewer ×1)") {
+		t.Fatalf("expected running batch summary, got %q", view)
+	}
+
+	sh.HandleToolEnd(&llm.ToolCall{
+		Name:  "delegate_task",
+		Input: input,
+		Output: map[string]any{
+			"completed": 2, "failed": 1,
+			"completed_by_agent": map[string]int{"explorer": 1, "reviewer": 1},
+			"failed_by_agent":    map[string]int{"explorer": 1},
+		},
+	})
+	view = sh.View(120)
+	want := "2 completed (explorer ×1, reviewer ×1), 1 failed (explorer ×1)"
+	if !strings.Contains(view, want) || !strings.Contains(view, "✗") {
+		t.Fatalf("expected partial failure summary, got %q", view)
+	}
+}
+
 func TestStreamHandler_CallMCPToolNeverShowsArguments(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")

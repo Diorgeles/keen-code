@@ -48,11 +48,12 @@ func (r *Runner) Run(ctx context.Context, agent, task string, timeoutSeconds int
 	if r.Config == nil {
 		return Result{Agent: profile.Name, Status: "error", Error: "LLM config not initialized"}, fmt.Errorf("LLM config not initialized")
 	}
-	if r.NewClient == nil {
-		r.NewClient = llm.NewClient
+	newClient := r.NewClient
+	if newClient == nil {
+		newClient = llm.NewClient
 	}
 
-	client, err := r.NewClient(cloneConfig(r.Config))
+	client, err := newClient(cloneConfig(r.Config))
 	if err != nil {
 		return Result{Agent: profile.Name, Status: "error", Error: err.Error()}, err
 	}

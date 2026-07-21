@@ -159,15 +159,61 @@ func TestFormatToolInput_CallMCPToolShowsOnlyServerAndTool(t *testing.T) {
 	}
 }
 
-func TestFormatToolInput_DelegateTaskShowsOnlyAgent(t *testing.T) {
+func TestFormatToolInput_DelegateTaskShowsTaskAndAgentCounts(t *testing.T) {
 	got := FormatToolInput("delegate_task", map[string]any{
-		"agent":           "explorer",
-		"task":            "Inspect internal/subagents and summarize the design.",
-		"timeout_seconds": 120,
+		"tasks": []any{
+			map[string]any{"agent": "explorer", "task": "Inspect internal/subagents."},
+			map[string]any{"agent": "reviewer", "task": "Review tests."},
+			map[string]any{"agent": "explorer", "task": "Inspect internal/tools."},
+		},
 	}, "/tmp/project")
 
-	if got != "agent=explorer" {
-		t.Fatalf("expected delegate_task input to show only agent, got %q", got)
+	if got != "3 tasks (explorer ×2, reviewer ×1)" {
+		t.Fatalf("unexpected delegate_task input display %q", got)
+	}
+}
+
+func TestFormatToolDone_DelegateTaskShowsResultCounts(t *testing.T) {
+	start := &llm.ToolCall{Name: "delegate_task", Input: map[string]any{
+		"tasks": []any{
+			map[string]any{"agent": "explorer", "task": "one"},
+			map[string]any{"agent": "reviewer", "task": "two"},
+			map[string]any{"agent": "explorer", "task": "three"},
+		},
+	}}
+	tests := []struct {
+		name       string
+		output     map[string]any
+		wantStatus string
+		wantMarker string
+	}{
+		{
+			name: "success",
+			output: map[string]any{
+				"completed": 3, "failed": 0,
+				"completed_by_agent": map[string]int{"explorer": 2, "reviewer": 1},
+				"failed_by_agent":    map[string]int{},
+			},
+			wantStatus: "3 completed (explorer ×2, reviewer ×1)", wantMarker: "✓",
+		},
+		{
+			name: "partial failure",
+			output: map[string]any{
+				"completed": 2, "failed": 1,
+				"completed_by_agent": map[string]int{"explorer": 1, "reviewer": 1},
+				"failed_by_agent":    map[string]int{"explorer": 1},
+			},
+			wantStatus: "2 completed (explorer ×1, reviewer ×1), 1 failed (explorer ×1)", wantMarker: "✗",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatToolDone(start, &llm.ToolCall{Name: "delegate_task", Output: tt.output}, "/tmp/project")
+			if !strings.Contains(got, tt.wantStatus) || !strings.Contains(got, tt.wantMarker) {
+				t.Fatalf("FormatToolDone() = %q, want marker %q and status %q", got, tt.wantMarker, tt.wantStatus)
+			}
+		})
 	}
 }
 
