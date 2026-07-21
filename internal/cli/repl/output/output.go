@@ -4,11 +4,24 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
 	"github.com/user/keen-code/internal/llm"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+)
+
+const (
+	maxDisplayPathRunes    = 60
+	maxDisplayPatternRunes = 80
+	maxDisplayValueRunes   = 60
+	maxDisplayErrorRunes   = 160
+	maxGenericInputFields  = 3
 )
 
 type OutputBuilder struct {
@@ -127,99 +140,391 @@ func (ob *OutputBuilder) AddToolEnd(toolCall *llm.ToolCall) {
 	ob.lines = append(ob.lines, FormatToolEnd(toolCall))
 }
 
+var toolDisplayNames = map[string]string{
+	"read_file":     "Read",
+	"write_file":    "Write",
+	"edit_file":     "Edit",
+	"grep":          "Search",
+	"glob":          "Find",
+	"bash":          "Run",
+	"web_fetch":     "Fetch",
+	"call_mcp_tool": "MCP",
+	"delegate_task": "Delegate",
+}
+
+var toolLabelCaser = cases.Title(language.English)
+
+func toolDisplayName(name string) string {
+	if label, ok := toolDisplayNames[name]; ok {
+		return label
+	}
+	return toolLabelCaser.String(strings.ReplaceAll(name, "_", " "))
+}
+
 func FormatToolStart(toolCall *llm.ToolCall, workingDir string) string {
-	inputDisplay := FormatToolInput(toolCall.Name, toolCall.Input, workingDir)
-	return "  " + repltheme.ToolStartStyle.Render(fmt.Sprintf("⚙ %s → %s...", toolCall.Name, inputDisplay))
+	detail := formatToolInputDetail(toolCall.Name, toolCall.Input, workingDir)
+	return "  " + renderToolStatus("●", toolDisplayName(toolCall.Name), detail, nil, nil, false) + repltheme.ToolMetaStyle.Render("...")
 }
 
 func FormatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string {
-	inputDisplay := FormatToolInput(startCall.Name, startCall.Input, workingDir)
+	detail := formatToolInputDetail(startCall.Name, startCall.Input, workingDir)
+	metadata, failed := formatToolResultMetadata(startCall.Name, endCall)
+	var errText *string
 	if endCall.Error != "" {
-		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s → %s failed: %s", startCall.Name, inputDisplay, endCall.Error))
+		e := compactDisplayValue(endCall.Error, maxDisplayErrorRunes)
+		errText = &e
 	}
-	if startCall.Name == "delegate_task" {
-		completed, failed, completedByAgent, failedByAgent, ok := delegateResultCounts(endCall.Output)
-		if ok {
-			status := fmt.Sprintf("%d completed", completed)
-			if agents := formatAgentCounts(completedByAgent); agents != "" {
-				status += " (" + agents + ")"
-			}
-			if failed > 0 {
-				status += fmt.Sprintf(", %d failed", failed)
-				if agents := formatAgentCounts(failedByAgent); agents != "" {
-					status += " (" + agents + ")"
-				}
-				return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s → %s", startCall.Name, status))
-			}
-			return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s → %s", startCall.Name, status))
+	if failed {
+		return "  " + renderToolStatus("✗", toolDisplayName(startCall.Name), detail, metadata, errText, true)
+	}
+	return "  " + renderToolStatus("✓", toolDisplayName(startCall.Name), detail, metadata, errText, false)
+}
+
+func FormatToolEnd(toolCall *llm.ToolCall) string {
+	metadata, failed := formatToolResultMetadata(toolCall.Name, toolCall)
+	var errText *string
+	if toolCall.Error != "" {
+		e := compactDisplayValue(toolCall.Error, maxDisplayErrorRunes)
+		errText = &e
+	}
+	if failed {
+		return "  " + renderToolStatus("✗", toolDisplayName(toolCall.Name), "", metadata, errText, true)
+	}
+	return "  " + renderToolStatus("✓", toolDisplayName(toolCall.Name), "", metadata, errText, false)
+}
+
+func renderToolStatus(marker, label, detail string, metadata []string, errText *string, failed bool) string {
+	var b strings.Builder
+	b.WriteString(repltheme.ToolNameStyle.Render(marker + " " + label))
+	if detail != "" {
+		b.WriteString(" ")
+		b.WriteString(repltheme.ToolMetaStyle.Render("→"))
+		b.WriteString(" ")
+		if failed && errText == nil {
+			b.WriteString(repltheme.ToolErrorStyle.Render(detail))
+		} else {
+			b.WriteString(detail)
 		}
 	}
-	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s → %s", startCall.Name, inputDisplay))
+	for _, meta := range metadata {
+		if meta == "" {
+			continue
+		}
+		b.WriteString(" ")
+		b.WriteString(repltheme.ToolMetaStyle.Render("· " + meta))
+	}
+	if errText != nil {
+		b.WriteString(" ")
+		b.WriteString(repltheme.ToolMetaStyle.Render("· "))
+		b.WriteString(repltheme.ToolErrorStyle.Render(*errText))
+	}
+	return b.String()
 }
 
-var toolDisplayFields = map[string][]string{
-	"read_file":  {"path"},
-	"write_file": {"path"},
-	"edit_file":  {"path"},
-	"grep":       {"path", "pattern"},
-	"glob":       {"path", "pattern"},
-}
-
-func FormatToolInput(toolName string, input map[string]any, workingDir string) string {
+func formatToolInputDetail(toolName string, input map[string]any, workingDir string) string {
 	if input == nil {
 		return ""
 	}
 
-	if toolName == "call_mcp_tool" {
+	switch toolName {
+	case "call_mcp_tool":
 		return formatMCPToolInput(input)
-	}
-	if toolName == "delegate_task" {
+	case "delegate_task":
 		return formatDelegateTaskInput(input)
-	}
-
-	fields, ok := toolDisplayFields[toolName]
-	if !ok {
-		return jsonMarshalCompact(input)
-	}
-
-	displayInput := make(map[string]any, len(fields))
-	for _, field := range fields {
-		value, ok := input[field]
-		if !ok {
-			continue
+	case "read_file", "write_file", "edit_file":
+		if path, ok := input["path"].(string); ok && path != "" {
+			return compactDisplayPath(formatToolPathForUI(path, workingDir))
 		}
-		if field == "path" {
-			if path, ok := value.(string); ok {
-				displayInput[field] = formatToolPathForUI(path, workingDir)
-			}
-			continue
+		return ""
+	case "grep", "glob":
+		return formatSearchInput(input, workingDir)
+	case "bash":
+		if command, ok := input["command"].(string); ok && command != "" {
+			return compactDisplayValue(command, maxDisplayValueRunes)
 		}
-		displayInput[field] = value
-	}
-	return jsonMarshalCompact(displayInput)
-}
-
-func FormatToolEnd(toolCall *llm.ToolCall) string {
-	if toolCall.Error != "" {
-		return "  " + repltheme.ToolErrorStyle.Render(fmt.Sprintf("✗ %s failed: %s", toolCall.Name, toolCall.Error))
-	}
-	return "  " + repltheme.ToolSuccessStyle.Render(fmt.Sprintf("✓ %s ➜ [%s]", toolCall.Name, toolCall.Duration))
-}
-
-func jsonMarshalCompact(v map[string]any) string {
-	if v == nil {
+		return ""
+	case "web_fetch":
+		if url, ok := input["url"].(string); ok && url != "" {
+			return compactDisplayValue(url, maxDisplayValueRunes)
+		}
 		return ""
 	}
-	keys := make([]string, 0, len(v))
-	for k := range v {
+
+	return formatGenericInput(input)
+}
+
+func formatSearchInput(input map[string]any, workingDir string) string {
+	pattern, _ := input["pattern"].(string)
+	if pattern != "" {
+		pattern = strconv.Quote(compactDisplayValue(pattern, maxDisplayPatternRunes))
+	}
+	path, _ := input["path"].(string)
+	if path != "" {
+		path = compactDisplayPath(formatToolPathForUI(path, workingDir))
+	}
+
+	switch {
+	case pattern != "" && path != "":
+		return pattern + " in " + path
+	case pattern != "":
+		return pattern
+	case path != "":
+		return path
+	default:
+		return ""
+	}
+}
+
+func formatGenericInput(input map[string]any) string {
+	keys := make([]string, 0, len(input))
+	for k := range input {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s=%v", k, v[k]))
+
+	parts := make([]string, 0, maxGenericInputFields+1)
+	for _, key := range keys {
+		if len(parts) >= maxGenericInputFields {
+			parts = append(parts, fmt.Sprintf("+%d", len(keys)-maxGenericInputFields))
+			break
+		}
+		if rendered, ok := formatGenericValue(input[key]); ok {
+			parts = append(parts, key+"="+rendered)
+		}
 	}
-	return strings.Join(parts, " • ")
+	return strings.Join(parts, " ")
+}
+
+func formatGenericValue(value any) (string, bool) {
+	switch v := value.(type) {
+	case string:
+		if v == "" {
+			return "", false
+		}
+		return strconv.Quote(compactDisplayValue(v, maxDisplayValueRunes)), true
+	case int, int64, float64, bool:
+		return fmt.Sprintf("%v", v), true
+	case map[string]any:
+		return "{…}", true
+	case []any:
+		return fmt.Sprintf("[%d]", len(v)), true
+	case nil:
+		return "", false
+	default:
+		return "{…}", true
+	}
+}
+
+func formatToolResultMetadata(toolName string, endCall *llm.ToolCall) ([]string, bool) {
+	if endCall.Error != "" {
+		return withDuration(nil, endCall.Duration), true
+	}
+
+	var metadata []string
+	if result, ok := endCall.Output.(map[string]any); ok {
+		switch toolName {
+		case "read_file":
+			metadata = readFileMetadata(result)
+		case "grep":
+			metadata = grepMetadata(result)
+		case "glob":
+			if count, ok := intValue(result["count"]); ok {
+				metadata = append(metadata, pluralize(count, "file"))
+			}
+		case "write_file":
+			if created, ok := result["created"].(bool); ok {
+				if created {
+					metadata = append(metadata, "created")
+				} else {
+					metadata = append(metadata, "updated")
+				}
+			}
+			if bytes, ok := intValue(result["bytes_written"]); ok {
+				metadata = append(metadata, formatByteCount(bytes))
+			}
+		case "edit_file":
+			if count, ok := intValue(result["replacementCount"]); ok {
+				metadata = append(metadata, pluralize(count, "replacement"))
+			}
+		case "web_fetch":
+			if content, ok := result["content"].(string); ok {
+				metadata = append(metadata, formatByteCount(len(content)))
+			}
+		case "bash":
+			if code, ok := intValue(result["exit_code"]); ok && code != 0 {
+				metadata = append(metadata, fmt.Sprintf("exit %d", code))
+			}
+		case "delegate_task":
+			summary, failed := delegateTaskSummary(result)
+			if summary != "" {
+				metadata = append([]string{summary}, metadata...)
+				if failed {
+					return withDuration(metadata, endCall.Duration), true
+				}
+			}
+		case "call_mcp_tool":
+			if truncated, _ := result["truncated"].(bool); truncated {
+				metadata = append(metadata, "truncated")
+			}
+		}
+	}
+
+	return withDuration(metadata, endCall.Duration), false
+}
+
+func readFileMetadata(result map[string]any) []string {
+	var metadata []string
+	if lines, ok := intValue(result["total_lines"]); ok {
+		metadata = append(metadata, pluralize(lines, "line"))
+	}
+	if bytes, ok := intValue(result["bytes_read"]); ok {
+		metadata = append(metadata, formatByteCount(bytes))
+	}
+	if truncated, _ := result["truncated"].(bool); truncated {
+		metadata = append(metadata, "truncated")
+	}
+	return metadata
+}
+
+func grepMetadata(result map[string]any) []string {
+	var metadata []string
+	mode, _ := result["output_mode"].(string)
+	count, ok := intValue(result["count"])
+	if !ok {
+		return metadata
+	}
+	if mode == "file" {
+		metadata = append(metadata, pluralize(count, "file"))
+	} else {
+		metadata = append(metadata, pluralize(count, "match"))
+	}
+	return metadata
+}
+
+func delegateTaskSummary(result map[string]any) (string, bool) {
+	completed, failed, completedByAgent, failedByAgent, ok := delegateResultCounts(result)
+	if !ok {
+		return "", false
+	}
+
+	status := fmt.Sprintf("%d completed", completed)
+	if agents := formatAgentCounts(completedByAgent); agents != "" {
+		status += " (" + agents + ")"
+	}
+	if failed > 0 {
+		status += fmt.Sprintf(", %d failed", failed)
+		if agents := formatAgentCounts(failedByAgent); agents != "" {
+			status += " (" + agents + ")"
+		}
+		return status, true
+	}
+	return status, false
+}
+
+func withDuration(metadata []string, duration time.Duration) []string {
+	if duration > 0 {
+		metadata = append(metadata, formatToolDuration(duration))
+	}
+	return metadata
+}
+
+func formatToolDuration(duration time.Duration) string {
+	if duration < time.Millisecond {
+		return "0ms"
+	}
+	switch {
+	case duration >= time.Minute:
+		return fmt.Sprintf("%dm%ds", int(duration/time.Minute), int((duration%time.Minute)/time.Second))
+	case duration >= 10*time.Second:
+		return fmt.Sprintf("%ds", int(duration/time.Second))
+	case duration >= time.Second:
+		return fmt.Sprintf("%.1fs", float64(duration)/float64(time.Second))
+	case duration >= time.Millisecond:
+		return fmt.Sprintf("%dms", duration.Milliseconds())
+	default:
+		return "0ms"
+	}
+}
+
+func formatByteCount(bytes int) string {
+	switch {
+	case bytes >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(1<<20))
+	case bytes >= 1<<10:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(1<<10))
+	default:
+		return pluralize(bytes, "byte")
+	}
+}
+
+func pluralize(count int, noun string) string {
+	if count == 1 {
+		return fmt.Sprintf("1 %s", noun)
+	}
+	if noun == "match" {
+		return fmt.Sprintf("%d matches", count)
+	}
+	return fmt.Sprintf("%d %ss", count, noun)
+}
+
+func escapeControlChars(value string) string {
+	return strings.NewReplacer(
+		"\n", `\n`,
+		"\r", `\r`,
+		"\t", `\t`,
+	).Replace(value)
+}
+
+func compactMiddle(value string, maxRunes int) string {
+	if maxRunes < 1 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	if maxRunes == 1 {
+		return "…"
+	}
+	remaining := maxRunes - 1
+	prefix := (remaining + 1) / 2
+	suffix := remaining - prefix
+	return string(runes[:prefix]) + "…" + string(runes[len(runes)-suffix:])
+}
+
+func compactDisplayValue(value string, maxRunes int) string {
+	return compactMiddle(escapeControlChars(value), maxRunes)
+}
+
+func compactDisplayPath(path string) string {
+	path = escapeControlChars(path)
+	if utf8.RuneCountInString(path) <= maxDisplayPathRunes {
+		return path
+	}
+
+	if idx := strings.LastIndexByte(path, '/'); idx > 0 && idx < len(path)-1 {
+		base := path[idx+1:]
+		dir := path[:idx]
+		dirRunes := []rune(dir)
+		baseRunes := utf8.RuneCountInString(base)
+		kept := maxDisplayPathRunes - baseRunes - 4
+		if kept >= 1 {
+			if kept > len(dirRunes) {
+				kept = len(dirRunes)
+			}
+			return string(dirRunes[:kept]) + "/…/" + base
+		}
+		if baseRunes+2 <= maxDisplayPathRunes {
+			return "…/" + base
+		}
+		return compactMiddle(base, maxDisplayPathRunes)
+	}
+
+	return compactMiddle(path, maxDisplayPathRunes)
+}
+
+func FormatToolInput(toolName string, input map[string]any, workingDir string) string {
+	return formatToolInputDetail(toolName, input, workingDir)
 }
 
 func formatMCPToolInput(input map[string]any) string {
@@ -228,7 +533,7 @@ func formatMCPToolInput(input map[string]any) string {
 	if server == "" || tool == "" {
 		return ""
 	}
-	return server + "/" + tool
+	return compactDisplayValue(server+"/"+tool, maxDisplayValueRunes)
 }
 
 func formatDelegateTaskInput(input map[string]any) string {

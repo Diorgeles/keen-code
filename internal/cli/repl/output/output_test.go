@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -104,7 +105,7 @@ func TestFormatToolInput_ShowsRelativePathToWorkingDir(t *testing.T) {
 		"path": filepath.Join(workingDir, "internal", "cli", "repl", "output.go"),
 	}, workingDir)
 
-	if got != "path=internal/cli/repl/output.go" {
+	if got != "internal/cli/repl/output.go" {
 		t.Fatalf("expected relative path display, got %q", got)
 	}
 }
@@ -112,7 +113,7 @@ func TestFormatToolInput_ShowsRelativePathToWorkingDir(t *testing.T) {
 func TestFormatToolInput_KeepsRelativePathInput(t *testing.T) {
 	got := FormatToolInput("read_file", map[string]any{"path": "internal/cli/repl/output.go"}, "/tmp/project")
 
-	if got != "path=internal/cli/repl/output.go" {
+	if got != "internal/cli/repl/output.go" {
 		t.Fatalf("expected relative input path to remain unchanged, got %q", got)
 	}
 }
@@ -124,12 +125,12 @@ func TestFormatToolInput_WriteFileShowsOnlyRelativePath(t *testing.T) {
 		"content": "ignored",
 	}, workingDir)
 
-	if got != "path=README.md" {
+	if got != "README.md" {
 		t.Fatalf("expected write_file UI to show only relative path, got %q", got)
 	}
 }
 
-func TestFormatToolInput_SeparatesArgumentsWithDots(t *testing.T) {
+func TestFormatToolInput_GrepShowsQuotedPatternInPath(t *testing.T) {
 	got := FormatToolInput("grep", map[string]any{
 		"include":     "*.go",
 		"output_mode": "content",
@@ -137,9 +138,9 @@ func TestFormatToolInput_SeparatesArgumentsWithDots(t *testing.T) {
 		"pattern":     "FormatToolInput",
 	}, "/tmp/project")
 
-	expected := "path=internal/cli/repl • pattern=FormatToolInput"
+	expected := `"FormatToolInput" in internal/cli/repl`
 	if got != expected {
-		t.Fatalf("expected dot-separated tool arguments, got %q", got)
+		t.Fatalf("expected quoted pattern with path, got %q", got)
 	}
 }
 
@@ -218,10 +219,246 @@ func TestFormatToolDone_DelegateTaskShowsResultCounts(t *testing.T) {
 }
 
 func TestFormatToolEnd_DoesNotAddTrailingNewline(t *testing.T) {
-	got := FormatToolEnd(&llm.ToolCall{Name: "call_mcp_tool", Duration: 5})
+	got := FormatToolEnd(&llm.ToolCall{Name: "call_mcp_tool", Duration: 5 * 1e6})
 
 	if strings.HasSuffix(got, "\n") {
 		t.Fatalf("expected no trailing newline in tool end, got %q", got)
+	}
+}
+
+func TestFormatToolInput_CompactsLongPath(t *testing.T) {
+	longPath := "internal/cli/repl/" + strings.Repeat("deeply-nested-dir/", 8) + "output.go"
+	got := FormatToolInput("read_file", map[string]any{"path": longPath}, "/tmp/project")
+
+	if !strings.HasSuffix(got, "output.go") {
+		t.Fatalf("expected basename to be preserved, got %q", got)
+	}
+	if !strings.Contains(got, "…") {
+		t.Fatalf("expected compacted path to contain ellipsis, got %q", got)
+	}
+	if len([]rune(got)) > maxDisplayPathRunes {
+		t.Fatalf("expected path capped at %d runes, got %d: %q", maxDisplayPathRunes, len([]rune(got)), got)
+	}
+}
+
+func TestFormatToolInput_CompactsLongPattern(t *testing.T) {
+	longPattern := "(?i)^" + strings.Repeat("(alternation|", 20) + "value" + strings.Repeat(")*", 20) + "$"
+	got := FormatToolInput("grep", map[string]any{"pattern": longPattern, "path": "internal"}, "/tmp/project")
+
+	if !strings.HasPrefix(got, `"(?i)^(altern`) {
+		t.Fatalf("expected pattern prefix preserved, got %q", got)
+	}
+	if !strings.Contains(got, "…") {
+		t.Fatalf("expected compacted pattern to contain ellipsis, got %q", got)
+	}
+	if !strings.HasSuffix(got, "in internal") {
+		t.Fatalf("expected path suffix, got %q", got)
+	}
+}
+
+func TestFormatToolInput_EscapesControlCharacters(t *testing.T) {
+	got := FormatToolInput("grep", map[string]any{"pattern": "line1\nline2\ttab"}, "/tmp/project")
+
+	if strings.ContainsAny(got, "\n\t") {
+		t.Fatalf("expected control characters to be escaped, got %q", got)
+	}
+	if !strings.Contains(got, `line1\\nline2\\ttab`) {
+		t.Fatalf("expected escaped control characters in output, got %q", got)
+	}
+}
+
+func TestFormatToolInput_GenericFallbackIsBounded(t *testing.T) {
+	got := FormatToolInput("unknown_tool", map[string]any{
+		"alpha": "one",
+		"beta":  2,
+		"gamma": true,
+		"delta": "four",
+		"zeta":  5,
+		"omega": 6,
+	}, "/tmp/project")
+
+	if !strings.Contains(got, `alpha="one"`) || !strings.Contains(got, "beta=2") || !strings.Contains(got, `delta="four"`) {
+		t.Fatalf("expected first sorted scalar fields, got %q", got)
+	}
+	if !strings.Contains(got, "+3") {
+		t.Fatalf("expected overflow count, got %q", got)
+	}
+	if strings.Contains(got, "gamma") || strings.Contains(got, "zeta") || strings.Contains(got, "omega") {
+		t.Fatalf("expected overflow fields to be hidden, got %q", got)
+	}
+}
+
+func TestFormatToolInput_GenericFallbackCompactsCollections(t *testing.T) {
+	got := FormatToolInput("unknown_tool", map[string]any{
+		"options":  map[string]any{"nested": true},
+		"patterns": []any{"a", "b", "c"},
+	}, "/tmp/project")
+
+	if !strings.Contains(got, "options={…}") {
+		t.Fatalf("expected nested map summary, got %q", got)
+	}
+	if !strings.Contains(got, "patterns=[3]") {
+		t.Fatalf("expected array count summary, got %q", got)
+	}
+}
+
+func TestToolDisplayName_FallbackCapitalizes(t *testing.T) {
+	if got := toolDisplayName("some_custom_tool"); got != "Some Custom Tool" {
+		t.Fatalf("expected title-cased fallback label, got %q", got)
+	}
+	if got := toolDisplayName("read_file"); got != "Read" {
+		t.Fatalf("expected mapped label, got %q", got)
+	}
+}
+
+func TestFormatToolInput_GenericFallbackLongStringCompacted(t *testing.T) {
+	got := FormatToolInput("unknown_tool", map[string]any{"query": strings.Repeat("x", 200)}, "/tmp/project")
+
+	if !strings.Contains(got, "…") {
+		t.Fatalf("expected long generic value to be compacted, got %q", got)
+	}
+	if len([]rune(got)) > maxDisplayValueRunes+len(`query=""`)+1 {
+		t.Fatalf("expected compacted generic value, got %d runes: %q", len([]rune(got)), got)
+	}
+}
+
+func TestFormatToolDone_ShowsResultMetadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		tool     string
+		input    map[string]any
+		output   map[string]any
+		contains []string
+	}{
+		{
+			name:   "read_file",
+			tool:   "read_file",
+			input:  map[string]any{"path": "go.mod"},
+			output: map[string]any{"total_lines": 42, "bytes_read": 2048, "truncated": false},
+			contains: []string{
+				"✓ Read", "go.mod", "42 lines", "2.0 KB", "8ms",
+			},
+		},
+		{
+			name:   "grep",
+			tool:   "grep",
+			input:  map[string]any{"pattern": "foo", "path": "internal"},
+			output: map[string]any{"count": 6, "output_mode": "content"},
+			contains: []string{
+				"✓ Search", `"foo" in internal`, "6 matches",
+			},
+		},
+		{
+			name:   "glob",
+			tool:   "glob",
+			input:  map[string]any{"pattern": "**/*.go"},
+			output: map[string]any{"count": 84},
+			contains: []string{
+				"✓ Find", "84 files",
+			},
+		},
+		{
+			name:   "write_file created",
+			tool:   "write_file",
+			input:  map[string]any{"path": "README.md"},
+			output: map[string]any{"created": true, "bytes_written": 512},
+			contains: []string{
+				"✓ Write", "created", "512 bytes",
+			},
+		},
+		{
+			name:   "edit_file",
+			tool:   "edit_file",
+			input:  map[string]any{"path": "output.go"},
+			output: map[string]any{"replacementCount": 2},
+			contains: []string{
+				"✓ Edit", "2 replacements",
+			},
+		},
+		{
+			name:   "web_fetch",
+			tool:   "web_fetch",
+			input:  map[string]any{"url": "https://example.com"},
+			output: map[string]any{"status_code": 200, "content": strings.Repeat("a", 4096)},
+			contains: []string{
+				"✓ Fetch", "4.0 KB",
+			},
+		},
+		{
+			name:   "bash non-zero exit",
+			tool:   "bash",
+			input:  map[string]any{"command": "go test ./..."},
+			output: map[string]any{"exit_code": 1},
+			contains: []string{
+				"✓ Run", "exit 1",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start := &llm.ToolCall{Name: tt.tool, Input: tt.input}
+			end := &llm.ToolCall{Name: tt.tool, Output: tt.output, Duration: 8 * 1e6}
+			got := FormatToolDone(start, end, "/tmp/project")
+			for _, want := range tt.contains {
+				if !strings.Contains(got, want) {
+					t.Fatalf("FormatToolDone() = %q, want it to contain %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatToolDone_ErrorShowsReasonAndDuration(t *testing.T) {
+	start := &llm.ToolCall{Name: "edit_file", Input: map[string]any{"path": "output.go"}}
+	end := &llm.ToolCall{Name: "edit_file", Error: "oldString not found", Duration: 2 * 1e6}
+	got := FormatToolDone(start, end, "/tmp/project")
+
+	for _, want := range []string{"✗ Edit", "output.go", "oldString not found", "2ms"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("FormatToolDone() = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
+func TestFormatToolEnd_OrphanEndShowsLabelAndDuration(t *testing.T) {
+	got := FormatToolEnd(&llm.ToolCall{Name: "read_file", Duration: 1500 * 1e6})
+
+	if !strings.Contains(got, "✓") || !strings.Contains(got, "Read") || !strings.Contains(got, "1.5s") {
+		t.Fatalf("expected label and duration, got %q", got)
+	}
+	if strings.Contains(got, "read_file") {
+		t.Fatalf("expected friendly label instead of canonical name, got %q", got)
+	}
+}
+
+func TestFormatToolStart_UsesFriendlyLabel(t *testing.T) {
+	got := FormatToolStart(&llm.ToolCall{Name: "grep", Input: map[string]any{"pattern": "foo", "path": "internal"}}, "/tmp/project")
+
+	if !strings.Contains(got, "●") || !strings.Contains(got, "Search") {
+		t.Fatalf("expected friendly running label, got %q", got)
+	}
+	if !strings.Contains(got, "→") || !strings.Contains(got, `"foo" in internal`) {
+		t.Fatalf("expected detail after arrow, got %q", got)
+	}
+}
+
+func TestFormatToolDuration(t *testing.T) {
+	tests := []struct {
+		duration time.Duration
+		want     string
+	}{
+		{0, "0ms"},
+		{500 * time.Microsecond, "0ms"},
+		{8 * time.Millisecond, "8ms"},
+		{1500 * time.Millisecond, "1.5s"},
+		{12 * time.Second, "12s"},
+		{95 * time.Second, "1m35s"},
+	}
+	for _, tt := range tests {
+		if got := formatToolDuration(tt.duration); got != tt.want {
+			t.Errorf("formatToolDuration(%v) = %q, want %q", tt.duration, got, tt.want)
+		}
 	}
 }
 
