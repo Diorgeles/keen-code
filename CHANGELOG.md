@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-07-22
+
+### Changed
+- Redesign REPL tool status display with friendly labels, structured metadata (line counts, byte sizes, match counts), ellipsis truncation, and duration formatting on all tool results.
+- Combine adjacent tool start/end into a single done line.
+- Bump subagent default timeout to 30 minutes.
+
 ## [0.34.0] - 2026-07-21
 
 ### Added
@@ -749,7 +756,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/mochow13/keen-code/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/mochow13/keen-code/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/mochow13/keen-code/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/mochow13/keen-code/compare/v0.31.2...v0.32.0
