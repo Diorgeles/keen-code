@@ -19,11 +19,11 @@ func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 	sh.HandleChunk("done")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		appState:      replappstate.New(nil, workingDir),
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:   streamState{handler: sh},
+		loading:  loadingState{showSpinner: true},
+		width:    80,
+		appState: replappstate.New(nil, workingDir),
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 	m.startAssistantTurnMemory()
 	relativeFile := filepath.Join("nested", "a.go")

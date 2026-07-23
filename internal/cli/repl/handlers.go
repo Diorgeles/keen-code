@@ -40,26 +40,26 @@ func (m *replModel) handleLLMUsage(usage *llm.TokenUsage) (replModel, tea.Cmd) {
 }
 
 func (m *replModel) handleLLMChunk(chunk string) (replModel, tea.Cmd) {
-	m.streamHandler.HandleChunk(chunk)
+	m.stream.handler.HandleChunk(chunk)
 	return *m, tea.Batch(m.afterStreamUpdate(), m.waitForAsyncEvent())
 }
 
 func (m *replModel) handleLLMReasoningChunk(chunk string) (replModel, tea.Cmd) {
-	m.streamHandler.HandleReasoningChunk(chunk)
+	m.stream.handler.HandleReasoningChunk(chunk)
 	return *m, tea.Batch(m.afterStreamUpdate(), m.waitForAsyncEvent())
 }
 
 func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 	m.flushStreamRender()
-	if m.isCompacting {
+	if m.compaction.active {
 		return m.handleCompactionDone()
 	}
-	segments := cloneStreamSegments(m.streamHandler.segments)
+	segments := cloneStreamSegments(m.stream.handler.segments)
 	m.recordHistoricalToolActivity(segments)
 	m.stopLoading()
 	m.clearStreamCancel()
 	m.adjustTextareaHeight()
-	responseLines, response := m.streamHandler.HandleDone()
+	responseLines, response := m.stream.handler.HandleDone()
 	assistantMessage := llm.Message{
 		Role:       llm.RoleAssistant,
 		Content:    response,
@@ -81,14 +81,14 @@ func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
 
 func (m *replModel) handleLLMIncomplete(err error) (replModel, tea.Cmd) {
 	m.flushStreamRender()
-	segments := cloneStreamSegments(m.streamHandler.segments)
+	segments := cloneStreamSegments(m.stream.handler.segments)
 	m.recordHistoricalToolActivity(segments)
-	partialResponse := m.streamHandler.GetResponse()
+	partialResponse := m.stream.handler.GetResponse()
 	m.stopLoading()
 	m.clearStreamCancel()
 	turnMemory := m.consumeTurnMemory()
 	m.adjustTextareaHeight()
-	pendingLines, errMsg := m.streamHandler.HandleError(err)
+	pendingLines, errMsg := m.stream.handler.HandleError(err)
 	assistantMessage := llm.Message{
 		Role:       llm.RoleAssistant,
 		Content:    partialResponse,
@@ -110,17 +110,17 @@ func (m *replModel) handleLLMIncomplete(err error) (replModel, tea.Cmd) {
 
 func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 	m.flushStreamRender()
-	if m.isCompacting {
+	if m.compaction.active {
 		return m.handleCompactionError(err)
 	}
-	segments := cloneStreamSegments(m.streamHandler.segments)
+	segments := cloneStreamSegments(m.stream.handler.segments)
 	m.recordHistoricalToolActivity(segments)
-	partialResponse := m.streamHandler.GetResponse()
+	partialResponse := m.stream.handler.GetResponse()
 	m.stopLoading()
 	m.clearStreamCancel()
 	turnMemory := m.consumeTurnMemory()
 	m.adjustTextareaHeight()
-	pendingLines, errMsg := m.streamHandler.HandleError(err)
+	pendingLines, errMsg := m.stream.handler.HandleError(err)
 	assistantMessage := llm.Message{
 		Role:       llm.RoleAssistant,
 		Content:    partialResponse,
@@ -148,10 +148,10 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 
 func (m *replModel) handleLLMRetry(err error, attempt int) (replModel, tea.Cmd) {
 	m.flushStreamRender()
-	m.streamHandler.RewindForRetry()
-	m.rebuildTurnMemoryFromSegments(m.streamHandler.segments)
-	m.loadingText = fmt.Sprintf("Retrying (attempt %d)...", attempt)
-	m.streamHandler.SetLoadingText(m.loadingText)
+	m.stream.handler.RewindForRetry()
+	m.rebuildTurnMemoryFromSegments(m.stream.handler.segments)
+	m.loading.text = fmt.Sprintf("Retrying (attempt %d)...", attempt)
+	m.stream.handler.SetLoadingText(m.loading.text)
 	m.updateViewportContent()
 	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
@@ -159,11 +159,11 @@ func (m *replModel) handleLLMRetry(err error, attempt int) (replModel, tea.Cmd) 
 
 func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
 	m.flushStreamRender()
-	segments := cloneStreamSegments(m.streamHandler.segments)
-	responseLines, summary := m.streamHandler.HandleDone()
-	m.isCompacting = false
+	segments := cloneStreamSegments(m.stream.handler.segments)
+	responseLines, summary := m.stream.handler.HandleDone()
+	m.compaction.active = false
 	m.stopLoading()
-	m.compactionCancel = nil
+	m.compaction.cancel = nil
 	m.clearStreamCancel()
 	if err := m.appState.ApplyCompaction(summary); err != nil {
 		return m.handleCompactionError(err)
@@ -186,8 +186,8 @@ func (m *replModel) handleCompactionDone() (replModel, tea.Cmd) {
 
 func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
 	m.flushStreamRender()
-	if m.streamHandler != nil && m.streamHandler.IsActive() {
-		responseLines, _ := m.streamHandler.HandleError(err)
+	if m.stream.handler != nil && m.stream.handler.IsActive() {
+		responseLines, _ := m.stream.handler.HandleError(err)
 		for _, line := range responseLines {
 			m.output.AddLine(line)
 		}
@@ -195,9 +195,9 @@ func (m *replModel) handleCompactionError(err error) (replModel, tea.Cmd) {
 			m.output.AddEmptyLine()
 		}
 	}
-	m.isCompacting = false
+	m.compaction.active = false
 	m.stopLoading()
-	m.compactionCancel = nil
+	m.compaction.cancel = nil
 	m.clearStreamCancel()
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -219,9 +219,9 @@ func (m *replModel) handleToolStart(toolCall *llm.ToolCall) (replModel, tea.Cmd)
 	if toolCall.Name == "bash" {
 		command, _ := toolCall.Input["command"].(string)
 		summary, _ := toolCall.Input["summary"].(string)
-		m.streamHandler.HandleBashStart(command, summary)
+		m.stream.handler.HandleBashStart(command, summary)
 	} else {
-		m.streamHandler.HandleToolStart(toolCall)
+		m.stream.handler.HandleToolStart(toolCall)
 	}
 	m.updateViewportContent()
 	m.scrollToBottomIfFollowing()
@@ -231,12 +231,12 @@ func (m *replModel) handleToolStart(toolCall *llm.ToolCall) (replModel, tea.Cmd)
 func (m *replModel) handleToolEnd(toolCall *llm.ToolCall) (replModel, tea.Cmd) {
 	m.flushStreamRender()
 	if toolCall.Name == "bash" {
-		m.streamHandler.HandleBashEnd(toolCall)
+		m.stream.handler.HandleBashEnd(toolCall)
 	} else {
-		m.streamHandler.HandleToolEnd(toolCall)
+		m.stream.handler.HandleToolEnd(toolCall)
 	}
-	m.loadingText = nextLoadingText()
-	m.streamHandler.SetLoadingText(m.loadingText)
+	m.loading.text = nextLoadingText()
+	m.stream.handler.SetLoadingText(m.loading.text)
 	m.updateViewportContent()
 	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
@@ -323,7 +323,7 @@ func (m *replModel) handleSuggestionKeyMsg(keyMsg tea.KeyPressMsg) (bool, replMo
 		m.suggestion.MoveDown()
 		return true, *m, nil
 	case keyEsc:
-		if m.streamHandler == nil || !m.streamHandler.IsActive() {
+		if m.stream.handler == nil || !m.stream.handler.IsActive() {
 			m.suggestion.Refresh("")
 			m.adjustTextareaHeight()
 			return true, *m, nil
@@ -357,15 +357,15 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	if m.isCompacting {
-		if keyMsg.String() == keyEsc && m.compactionCancel != nil {
-			m.compactionCancel()
-			m.compactionCancel = nil
+	if m.compaction.active {
+		if keyMsg.String() == keyEsc && m.compaction.cancel != nil {
+			m.compaction.cancel()
+			m.compaction.cancel = nil
 		}
 		return *m, nil
 	}
 
-	if m.streamHandler != nil && m.streamHandler.HasPendingPermission() {
+	if m.stream.handler != nil && m.stream.handler.HasPendingPermission() {
 		switch keyMsg.String() {
 		case "up", "down", keyEnter, keyEsc:
 			return m.handlePermissionKeyMsg(keyMsg)
@@ -410,7 +410,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			m.scrollToBottomIfFollowing()
 			return *m, nil
 		}
-		if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
+		if m.btw.streamHandler != nil && m.btw.streamHandler.IsActive() {
 			m.cancelBtwStream()
 			m.updateViewportContent()
 			m.scrollToBottomIfFollowing()
@@ -420,7 +420,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			m.cancelBangCommand()
 			return *m, nil
 		}
-		if m.streamHandler != nil && m.streamHandler.IsActive() {
+		if m.stream.handler != nil && m.stream.handler.IsActive() {
 			m.interruptStream(interruptedPromptText)
 			return *m, nil
 		}
@@ -445,7 +445,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			m.scrollToBottomIfFollowing()
 			return *m, nil
 		}
-		if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
+		if m.btw.streamHandler != nil && m.btw.streamHandler.IsActive() {
 			m.cancelBtwStream()
 			m.updateViewportContent()
 			m.scrollToBottomIfFollowing()
@@ -455,7 +455,7 @@ func (m *replModel) handleKeyMsg(msg tea.Msg) (replModel, tea.Cmd) {
 			m.cancelBangCommand()
 			return *m, nil
 		}
-		if m.streamHandler != nil && m.streamHandler.IsActive() {
+		if m.stream.handler != nil && m.stream.handler.IsActive() {
 			m.interruptStream(interruptedPromptText)
 			return *m, nil
 		}
@@ -555,19 +555,19 @@ func (m *replModel) refreshFileSuggestions(input string) bool {
 
 func (m *replModel) interruptStream(message string) {
 	m.flushStreamRender()
-	if m.streamCancel != nil {
-		m.streamCancel()
+	if m.stream.cancel != nil {
+		m.stream.cancel()
 		m.clearStreamCancel()
 	}
 
 	m.stopLoading()
 
-	segments := cloneStreamSegments(m.streamHandler.segments)
+	segments := cloneStreamSegments(m.stream.handler.segments)
 	m.recordHistoricalToolActivity(segments)
-	partialResponse := m.streamHandler.GetResponse()
+	partialResponse := m.stream.handler.GetResponse()
 	turnMemory := m.consumeTurnMemory()
 
-	for _, line := range m.streamHandler.HandleInterrupt() {
+	for _, line := range m.stream.handler.HandleInterrupt() {
 		m.output.AddLine(line)
 	}
 	m.output.AddStyledLine("\n  "+message, repltheme.InterruptedStyle)
@@ -626,21 +626,21 @@ func (m *replModel) handleSessionPickerKeyMsg(msg tea.Msg) (replModel, tea.Cmd) 
 func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.Cmd) {
 	switch msg.String() {
 	case "up":
-		m.streamHandler.MovePendingCursor(-1)
+		m.stream.handler.MovePendingCursor(-1)
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 	case "down":
-		m.streamHandler.MovePendingCursor(1)
+		m.stream.handler.MovePendingCursor(1)
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 	case keyEnter:
-		req := m.streamHandler.GetPendingPermissionRequest()
+		req := m.stream.handler.GetPendingPermissionRequest()
 		if req == nil {
 			return *m, nil
 		}
-		choice := m.streamHandler.GetPendingChoice()
+		choice := m.stream.handler.GetPendingChoice()
 		if choice == replpermissions.ChoiceAskWhatToDo {
-			m.streamHandler.ResolvePendingPermission(replpermissions.StatusRedirected)
+			m.stream.handler.ResolvePendingPermission(replpermissions.StatusRedirected)
 			m.permissionRequester.SendResponse(replpermissions.ChoiceDeny, req.ToolName)
 			m.interruptStream(interruptedPromptText)
 			m.updateViewportContent()
@@ -656,16 +656,16 @@ func (m *replModel) handlePermissionKeyMsg(msg tea.KeyPressMsg) (replModel, tea.
 		case replpermissions.ChoiceDeny:
 			status = replpermissions.StatusDenied
 		}
-		m.streamHandler.ResolvePendingPermission(status)
+		m.stream.handler.ResolvePendingPermission(status)
 		m.permissionRequester.SendResponse(choice, req.ToolName)
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 	case keyEsc:
-		req := m.streamHandler.GetPendingPermissionRequest()
+		req := m.stream.handler.GetPendingPermissionRequest()
 		if req == nil {
 			return *m, nil
 		}
-		m.streamHandler.ResolvePendingPermission(replpermissions.StatusDenied)
+		m.stream.handler.ResolvePendingPermission(replpermissions.StatusDenied)
 		m.permissionRequester.SendResponse(replpermissions.ChoiceDeny, req.ToolName)
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
@@ -688,7 +688,7 @@ func (m replModel) handleLLMStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 		return m, nil, true
 	}
 
-	if m.streamHandler == nil || !m.streamHandler.IsActive() {
+	if m.stream.handler == nil || !m.stream.handler.IsActive() {
 		switch msg.(type) {
 		case llmChunkMsg, llmReasoningChunkMsg, llmDoneMsg, llmIncompleteMsg, llmErrorMsg, llmRetryMsg, llmToolStartMsg, llmToolEndMsg, llmUsageMsg:
 			return m, nil, true
@@ -743,7 +743,7 @@ func (m *replModel) handleUpdateCheckMsg(msg updateCheckMsg) {
 }
 
 func (m replModel) handleBtwStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
-	if m.btwStreamHandler == nil || !m.btwStreamHandler.IsActive() {
+	if m.btw.streamHandler == nil || !m.btw.streamHandler.IsActive() {
 		switch msg.(type) {
 		case btwChunkMsg, btwDoneMsg, btwErrorMsg:
 			return m, nil, true
@@ -753,25 +753,25 @@ func (m replModel) handleBtwStreamMsg(msg tea.Msg) (replModel, tea.Cmd, bool) {
 
 	switch msg := msg.(type) {
 	case btwChunkMsg:
-		m.btwStreamHandler.HandleChunk(string(msg))
-		return m, tea.Batch(m.afterStreamUpdate(), waitForBtwEvent(m.btwStreamHandler.eventCh)), true
+		m.btw.streamHandler.HandleChunk(string(msg))
+		return m, tea.Batch(m.afterStreamUpdate(), waitForBtwEvent(m.btw.streamHandler.eventCh)), true
 	case btwDoneMsg:
 		m.flushStreamRender()
-		responseLines, _ := m.btwStreamHandler.HandleDone()
-		m.btwShowSpinner = false
-		m.btwLines = responseLines
+		responseLines, _ := m.btw.streamHandler.HandleDone()
+		m.btw.showSpinner = false
+		m.btw.lines = responseLines
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 		return m, nil, true
 	case btwErrorMsg:
 		m.flushStreamRender()
-		pendingLines, errMsg := m.btwStreamHandler.HandleError(msg.err)
-		m.btwShowSpinner = false
+		pendingLines, errMsg := m.btw.streamHandler.HandleError(msg.err)
+		m.btw.showSpinner = false
 		lines := pendingLines
 		if msg.err != nil && !errors.Is(msg.err, context.Canceled) {
 			lines = append(lines, "  "+repltheme.ErrorStyle.Render(errMsg))
 		}
-		m.btwLines = lines
+		m.btw.lines = lines
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 		return m, nil, true

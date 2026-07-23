@@ -177,22 +177,22 @@ func nextLoadingSpinner() spinner.Spinner {
 }
 
 func (m *replModel) startLoading(text string) {
-	m.lastTurnElapsedMsg = ""
-	m.showSpinner = true
-	m.spinner.Spinner = nextLoadingSpinner()
-	m.loadingText = text
-	m.loadingStartedAt = time.Now()
+	m.loading.lastTurnElapsedMsg = ""
+	m.loading.showSpinner = true
+	m.loading.spinner.Spinner = nextLoadingSpinner()
+	m.loading.text = text
+	m.loading.startedAt = time.Now()
 }
 
 func (m *replModel) stopLoading() {
-	if !m.loadingStartedAt.IsZero() {
-		elapsed := time.Since(m.loadingStartedAt)
-		m.lastTurnElapsedMsg = " ✔ " + pickTurnElapsedVerb() + " " + formatTurnElapsed(elapsed)
+	if !m.loading.startedAt.IsZero() {
+		elapsed := time.Since(m.loading.startedAt)
+		m.loading.lastTurnElapsedMsg = " ✔ " + pickTurnElapsedVerb() + " " + formatTurnElapsed(elapsed)
 	} else {
-		m.lastTurnElapsedMsg = ""
+		m.loading.lastTurnElapsedMsg = ""
 	}
-	m.showSpinner = false
-	m.loadingStartedAt = time.Time{}
+	m.loading.showSpinner = false
+	m.loading.startedAt = time.Time{}
 }
 
 func waitForMCPStartup(runtime keenmcp.Runtime) tea.Cmd {
@@ -360,10 +360,10 @@ func (m *replModel) handleMCPConnectDone(msg mcpConnectDoneMsg) {
 }
 
 func (m replModel) loadingElapsedText() string {
-	if m.loadingStartedAt.IsZero() {
+	if m.loading.startedAt.IsZero() {
 		return "0:00"
 	}
-	return formatLoadingElapsed(time.Since(m.loadingStartedAt))
+	return formatLoadingElapsed(time.Since(m.loading.startedAt))
 }
 
 func formatLoadingElapsed(d time.Duration) string {
@@ -666,21 +666,21 @@ func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpe
 }
 
 func (m *replModel) spinnerHeight() int {
-	if m.showSpinner {
+	if m.loading.showSpinner {
 		return 2
 	}
 	return 0
 }
 
-func (m *replModel) copyNotificationHeight() int {
-	if m.copyNotification == "" || m.showSpinner {
+func (m *replModel) notificationHeight() int {
+	if m.notification.text == "" || m.loading.showSpinner {
 		return 0
 	}
 	return 2
 }
 
 func (m *replModel) elapsedTimeHeight() int {
-	if !m.showSpinner && m.copyNotification == "" && m.lastTurnElapsedMsg != "" {
+	if !m.loading.showSpinner && m.notification.text == "" && m.loading.lastTurnElapsedMsg != "" {
 		return 2
 	}
 	return 0
@@ -690,7 +690,7 @@ func (m *replModel) adjustTextareaHeight() {
 	if m.height <= 0 {
 		return
 	}
-	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.copyNotificationHeight() - m.elapsedTimeHeight() - m.suggestion.Height() - m.queuedHeight())
+	m.viewport.SetHeight(m.height - m.textarea.Height() - 4 - m.spinnerHeight() - m.notificationHeight() - m.elapsedTimeHeight() - m.suggestion.Height() - m.queuedHeight())
 }
 
 func (m replModel) isAtTopOfInput() bool {
@@ -750,42 +750,42 @@ func (m *replModel) handleViewportFocusKeyMsg(msg tea.KeyPressMsg) bool {
 }
 
 func (m *replModel) startStreamContext() context.Context {
-	if m.streamCancel != nil {
-		m.streamCancel()
+	if m.stream.cancel != nil {
+		m.stream.cancel()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	m.streamCancel = cancel
+	m.stream.cancel = cancel
 	return ctx
 }
 
 func (m *replModel) clearStreamCancel() {
-	m.streamCancel = nil
+	m.stream.cancel = nil
 }
 
 func (m *replModel) cancelBtwStream() {
-	if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
-		m.btwStreamHandler.HandleInterrupt()
+	if m.btw.streamHandler != nil && m.btw.streamHandler.IsActive() {
+		m.btw.streamHandler.HandleInterrupt()
 	}
-	if m.btwStreamCancel != nil {
-		m.btwStreamCancel()
-		m.btwStreamCancel = nil
+	if m.btw.streamCancel != nil {
+		m.btw.streamCancel()
+		m.btw.streamCancel = nil
 	}
-	m.btwLines = nil
-	m.btwShowSpinner = false
+	m.btw.lines = nil
+	m.btw.showSpinner = false
 }
 
 func (m *replModel) flushBtwToOutput() {
-	if m.btwLines == nil {
+	if m.btw.lines == nil {
 		return
 	}
-	m.output.AddLine(renderBtwLeftBorder(renderBtwQuestionHeader(m.btwQuestion)))
-	for _, line := range m.btwLines {
+	m.output.AddLine(renderBtwLeftBorder(renderBtwQuestionHeader(m.btw.question)))
+	for _, line := range m.btw.lines {
 		m.output.AddLine(renderBtwLeftBorder(line))
 	}
 	m.output.AddEmptyLine()
-	m.btwLines = nil
-	m.btwQuestion = ""
+	m.btw.lines = nil
+	m.btw.question = ""
 }
 
 func (m *replModel) cancelAdversaryStream() {
@@ -868,18 +868,18 @@ func (m *replModel) scrollToBottomIfFollowing() {
 // batch the update for a later streamRenderMsg. Callers must still schedule the
 // next async event wait themselves.
 func (m *replModel) afterStreamUpdate() tea.Cmd {
-	if m.streamRenderInterval <= 0 {
+	if m.stream.renderInterval <= 0 {
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 		return nil
 	}
 
-	if m.streamRenderPending {
+	if m.stream.renderPending {
 		return nil
 	}
 
-	m.streamRenderPending = true
-	return tea.Tick(m.streamRenderInterval, func(time.Time) tea.Msg {
+	m.stream.renderPending = true
+	return tea.Tick(m.stream.renderInterval, func(time.Time) tea.Msg {
 		return streamRenderMsg{}
 	})
 }
@@ -888,10 +888,10 @@ func (m *replModel) afterStreamUpdate() tea.Cmd {
 // be called at stream boundaries (done/error/tool events) and on user input so
 // the UI never lags behind the final state.
 func (m *replModel) flushStreamRender() {
-	if !m.streamRenderPending {
+	if !m.stream.renderPending {
 		return
 	}
-	m.streamRenderPending = false
+	m.stream.renderPending = false
 	m.updateViewportContent()
 	m.scrollToBottomIfFollowing()
 }
@@ -935,7 +935,7 @@ func (m *replModel) applyWindowSize(msg tea.WindowSizeMsg) {
 		m.output.SetWidth(msg.Width)
 	}
 	m.viewport.SetWidth(msg.Width)
-	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.copyNotificationHeight() - m.elapsedTimeHeight() - m.suggestion.Height() - m.queuedHeight())
+	m.viewport.SetHeight(msg.Height - m.textarea.Height() - 4 - m.spinnerHeight() - m.notificationHeight() - m.elapsedTimeHeight() - m.suggestion.Height() - m.queuedHeight())
 
 	if !m.initialScreenDone && msg.Width > 0 {
 		for _, line := range buildInitialScreen(m.ctx, m.lastSession, m.width) {

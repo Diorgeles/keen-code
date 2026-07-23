@@ -54,65 +54,65 @@ type replContext struct {
 }
 
 type replModel struct {
-	textarea                  textarea.Model
-	viewport                  viewport.Model
-	ctx                       *replContext
-	mode                      llm.AgentMode
-	appState                  *replappstate.AppState
-	output                    *reploutput.OutputBuilder
-	modelSelection            *replwidgets.Model
-	permissionRequester       *replpermissions.Requester
-	projectPerms              *config.ProjectPermissions
-	diffEmitter               *repltooling.DiffEmitter
-	sessions                  *replSessionState
-	sessionPicker             *replwidgets.SessionPicker
-	suggestion                replwidgets.SuggestionModel
-	fileSearcher              *replfilesearch.FileSearcher
-	quitting                  bool
-	streamHandler             *StreamHandler
-	mdRenderer                *replmarkdown.Renderer
-	width                     int
-	height                    int
-	spinner                   spinner.Model
-	showSpinner               bool
-	loadingText               string
-	loadingStartedAt          time.Time
-	lastTurnElapsedMsg        string
-	userScrolled              bool
-	streamCancel              context.CancelFunc
-	turnMemory                *turnMemoryAccumulator
-	isCompacting              bool
-	compactionCancel          context.CancelFunc
-	contextStatus             contextStatus
-	showThinking              bool
-	history                   replhistory.InputHistory
-	selection                 viewportSelection
-	inputSelection            inputSelection
-	btwLines                  []string
-	btwQuestion               string
-	btwStreamHandler          *StreamHandler
-	btwStreamCancel           context.CancelFunc
-	btwShowSpinner            bool
-	btwSpinner                spinner.Model
-	bang                      bangState
-	adversary                 adversaryState
-	lastSession               *session.Summary
-	projectPermsErr           error
-	initialScreenDone         bool
-	copyNotification          string
-	copyNotificationExpiresAt time.Time
-	queuedInputs              []string
-
-	// Streamed tokens arrive faster than the terminal can redraw. Batch
-	// viewport rebuilds to a short window so updates are smooth and complete.
-	streamRenderPending  bool
-	streamRenderInterval time.Duration
+	textarea            textarea.Model
+	viewport            viewport.Model
+	ctx                 *replContext
+	mode                llm.AgentMode
+	appState            *replappstate.AppState
+	output              *reploutput.OutputBuilder
+	modelSelection      *replwidgets.Model
+	permissionRequester *replpermissions.Requester
+	projectPerms        *config.ProjectPermissions
+	diffEmitter         *repltooling.DiffEmitter
+	sessions            *replSessionState
+	sessionPicker       *replwidgets.SessionPicker
+	suggestion          replwidgets.SuggestionModel
+	fileSearcher        *replfilesearch.FileSearcher
+	quitting            bool
+	stream              streamState
+	mdRenderer          *replmarkdown.Renderer
+	width               int
+	height              int
+	userScrolled        bool
+	turnMemory          *turnMemoryAccumulator
+	compaction          compactionState
+	contextStatus       contextStatus
+	showThinking        bool
+	history             replhistory.InputHistory
+	selection           viewportSelection
+	inputSelection      inputSelection
+	loading             loadingState
+	btw                 btwState
+	bang                bangState
+	adversary           adversaryState
+	lastSession         *session.Summary
+	projectPermsErr     error
+	initialScreenDone   bool
+	notification        notificationState
+	queuedInputs        []string
 }
 
 type bangState struct {
 	active bool
 	events <-chan tea.Msg
 	cancel context.CancelFunc
+}
+
+type loadingState struct {
+	spinner            spinner.Model
+	showSpinner        bool
+	text               string
+	startedAt          time.Time
+	lastTurnElapsedMsg string
+}
+
+type btwState struct {
+	lines         []string
+	question      string
+	streamHandler *StreamHandler
+	streamCancel  context.CancelFunc
+	showSpinner   bool
+	spinner       spinner.Model
 }
 
 type adversaryState struct {
@@ -123,6 +123,26 @@ type adversaryState struct {
 	showSpinner    bool
 	spinner        spinner.Model
 	modelSelection *replwidgets.Model
+}
+
+type streamState struct {
+	handler *StreamHandler
+	cancel  context.CancelFunc
+
+	// Streamed tokens arrive faster than the terminal can redraw. Batch
+	// viewport rebuilds to a short window so updates are smooth and complete.
+	renderPending  bool
+	renderInterval time.Duration
+}
+
+type compactionState struct {
+	active bool
+	cancel context.CancelFunc
+}
+
+type notificationState struct {
+	text      string
+	expiresAt time.Time
 }
 
 func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) replModel {
@@ -207,9 +227,8 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		mode:                llm.ModeBuild,
 		appState:            appState,
 		output:              output,
-		spinner:             s,
-		btwSpinner:          bs,
-		streamHandler:       NewStreamHandler(mdRenderer),
+		loading:             loadingState{spinner: s},
+		stream:              streamState{handler: NewStreamHandler(mdRenderer), renderInterval: streamRenderInterval},
 		mdRenderer:          mdRenderer,
 		permissionRequester: permissionRequester,
 		projectPerms:        projectPerms,
@@ -218,20 +237,22 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 		suggestion:          replwidgets.NewSuggestionModel(),
 		fileSearcher:        fileSearcher,
 		showThinking:        true,
-		btwStreamHandler:    NewStreamHandler(mdRenderer),
+		btw: btwState{
+			spinner:       bs,
+			streamHandler: NewStreamHandler(mdRenderer),
+		},
 		adversary: adversaryState{
 			spinner:       as,
 			streamHandler: NewStreamHandler(mdRenderer),
 		},
-		lastSession:          lastSession,
-		projectPermsErr:      projectPermsErr,
-		streamRenderInterval: streamRenderInterval,
+		lastSession:     lastSession,
+		projectPermsErr: projectPermsErr,
 	}
 	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
 		model.showThinking = *ctx.globalCfg.ShowThinking
 	}
-	model.streamHandler.workingDir = ctx.workingDir
-	model.streamHandler.showThinking = model.showThinking
+	model.stream.handler.workingDir = ctx.workingDir
+	model.stream.handler.showThinking = model.showThinking
 
 	if ctx.resumeSession != nil {
 		model.sessions.setSession(ctx.resumeSession.Session)
@@ -274,7 +295,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	if input == replcommands.Adversary || strings.HasPrefix(input, replcommands.Adversary+" ") {
-		if m.showSpinner {
+		if m.loading.showSpinner {
 			if len(m.queuedInputs) < maxQueuedInputs {
 				m.queuedInputs = append(m.queuedInputs, input)
 				m.textarea.Reset()
@@ -297,7 +318,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 	}
 
 	if strings.HasPrefix(input, "!") {
-		if m.showSpinner || m.bang.active {
+		if m.loading.showSpinner || m.bang.active {
 			return *m, m.showNotification("Operation not permitted")
 		}
 		m.history.Push(input)
@@ -317,7 +338,7 @@ func (m *replModel) handleEnterKey() (replModel, tea.Cmd) {
 		return *m, m.showNotification("Queue cleared")
 	}
 
-	if m.streamHandler.IsActive() || m.isCompacting {
+	if m.stream.handler.IsActive() || m.compaction.active {
 		if m.isQueueable(input) {
 			if len(m.queuedInputs) < maxQueuedInputs {
 				m.queuedInputs = append(m.queuedInputs, input)
@@ -388,7 +409,7 @@ func (m *replModel) submitInput(input string, fromQueue bool) (replModel, tea.Cm
 
 	m.startLoading(nextLoadingText())
 	m.startAssistantTurnMemory()
-	m.streamHandler.Start(eventCh, m.loadingText)
+	m.stream.handler.Start(eventCh, m.loading.text)
 	if !fromQueue {
 		m.textarea.Reset()
 	}
@@ -397,13 +418,13 @@ func (m *replModel) submitInput(input string, fromQueue bool) (replModel, tea.Cm
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 
-	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
+	return *m, tea.Batch(m.loading.spinner.Tick, m.waitForAsyncEvent())
 }
 
 func (m *replModel) showNotification(msg string) tea.Cmd {
 	expiresAt := time.Now().Add(copyNotificationTimeout)
-	m.copyNotification = msg
-	m.copyNotificationExpiresAt = expiresAt
+	m.notification.text = msg
+	m.notification.expiresAt = expiresAt
 	m.adjustTextareaHeight()
 	return clearCopyNotificationCmd(expiresAt)
 }
@@ -454,13 +475,13 @@ func (m *replModel) updateViewportContent() {
 		content.WriteString(m.output.Join())
 	}
 
-	if m.streamHandler != nil && m.streamHandler.IsActive() {
-		content.WriteString(m.streamHandler.View(contentWidth))
+	if m.stream.handler != nil && m.stream.handler.IsActive() {
+		content.WriteString(m.stream.handler.View(contentWidth))
 	}
 
-	if m.btwStreamHandler != nil && m.btwStreamHandler.IsActive() {
+	if m.btw.streamHandler != nil && m.btw.streamHandler.IsActive() {
 		content.WriteString(m.renderBtwInline(contentWidth))
-	} else if m.btwLines != nil {
+	} else if m.btw.lines != nil {
 		content.WriteString(m.renderBtwInlineFinished(contentWidth))
 	}
 
@@ -488,7 +509,7 @@ func (m *replModel) updateViewportContent() {
 }
 
 func (m replModel) waitForAsyncEvent() tea.Cmd {
-	if m.streamHandler == nil || !m.streamHandler.IsActive() || m.streamHandler.eventCh == nil {
+	if m.stream.handler == nil || !m.stream.handler.IsActive() || m.stream.handler.eventCh == nil {
 		return nil
 	}
 	var permissionCh <-chan *replpermissions.Request
@@ -500,7 +521,7 @@ func (m replModel) waitForAsyncEvent() tea.Cmd {
 		diffCh = m.diffEmitter.GetDiffChan()
 	}
 	return waitForAsyncEvent(
-		m.streamHandler.eventCh,
+		m.stream.handler.eventCh,
 		permissionCh,
 		diffCh,
 	)
@@ -559,21 +580,21 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 		m.handleMCPConnectDone(msg)
 		return m, nil
 	case copyNotificationExpiredMsg:
-		if m.copyNotificationExpiresAt.UnixNano() == msg.expiresAt {
-			m.copyNotification = ""
-			m.copyNotificationExpiresAt = time.Time{}
+		if m.notification.expiresAt.UnixNano() == msg.expiresAt {
+			m.notification.text = ""
+			m.notification.expiresAt = time.Time{}
 			m.adjustTextareaHeight()
 		}
 		return m, nil
 	case diffReadyMsg:
-		m.streamHandler.HandleDiff(msg.req.Lines)
+		m.stream.handler.HandleDiff(msg.req.Lines)
 		close(msg.req.Done)
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 		return m, m.waitForAsyncEvent()
 
 	case permissionReadyMsg:
-		m.streamHandler.HandlePermissionRequest(msg.req)
+		m.stream.handler.HandlePermissionRequest(msg.req)
 		m.updateViewportContent()
 		m.scrollToBottomIfFollowing()
 		return m, m.waitForAsyncEvent()
@@ -696,18 +717,18 @@ func (m replModel) consumeAdversaryModelSelectionResult(msg tea.Msg) (replModel,
 }
 
 func (m replModel) handleSpinnerTick(msg spinner.TickMsg) (replModel, tea.Cmd, bool) {
-	if !m.showSpinner && !m.btwShowSpinner && !m.adversary.showSpinner {
+	if !m.loading.showSpinner && !m.btw.showSpinner && !m.adversary.showSpinner {
 		return m, nil, false
 	}
 
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
-	if m.showSpinner {
-		m.spinner, cmd = m.spinner.Update(msg)
+	if m.loading.showSpinner {
+		m.loading.spinner, cmd = m.loading.spinner.Update(msg)
 		cmds = append(cmds, cmd)
 	}
-	if m.btwShowSpinner {
-		m.btwSpinner, cmd = m.btwSpinner.Update(msg)
+	if m.btw.showSpinner {
+		m.btw.spinner, cmd = m.btw.spinner.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 	if m.adversary.showSpinner {
@@ -730,25 +751,25 @@ func (m replModel) View() tea.View {
 		view.WriteString(viewportView)
 		view.WriteString("\n")
 
-		if m.showSpinner {
+		if m.loading.showSpinner {
 			elapsed := time.Duration(0)
-			if !m.loadingStartedAt.IsZero() {
-				elapsed = time.Since(m.loadingStartedAt)
+			if !m.loading.startedAt.IsZero() {
+				elapsed = time.Since(m.loading.startedAt)
 			}
-			spinnerText := " " + m.spinner.View() + " " + renderLoadingText(m.loadingText, elapsed)
-			if m.copyNotification != "" {
-				spinnerText += "  " + repltheme.AccentStyle.Render(m.copyNotification)
+			spinnerText := " " + m.loading.spinner.View() + " " + renderLoadingText(m.loading.text, elapsed)
+			if m.notification.text != "" {
+				spinnerText += "  " + repltheme.AccentStyle.Render(m.notification.text)
 			}
 			view.WriteString("\n")
 			view.WriteString(spinnerText)
 			view.WriteString("\n")
-		} else if m.copyNotification != "" {
+		} else if m.notification.text != "" {
 			view.WriteString("\n")
-			view.WriteString("  " + repltheme.AccentStyle.Render(m.copyNotification))
+			view.WriteString("  " + repltheme.AccentStyle.Render(m.notification.text))
 			view.WriteString("\n")
-		} else if m.lastTurnElapsedMsg != "" {
+		} else if m.loading.lastTurnElapsedMsg != "" {
 			view.WriteString("\n")
-			view.WriteString(repltheme.TurnElapsedStyle.Render(m.lastTurnElapsedMsg))
+			view.WriteString(repltheme.TurnElapsedStyle.Render(m.loading.lastTurnElapsedMsg))
 			view.WriteString("\n")
 		}
 
@@ -819,7 +840,7 @@ func (m replModel) inputMetaView() string {
 	contextText := renderContextStatus(m.contextStatus)
 
 	timerText := ""
-	if m.showSpinner {
+	if m.loading.showSpinner {
 		timerText = repltheme.LoadingTimerStyle.Render("⏱ " + m.loadingElapsedText())
 	}
 

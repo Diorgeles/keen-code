@@ -26,14 +26,14 @@ func TestHandleLLMChunk(t *testing.T) {
 	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
+		stream:  streamState{handler: sh},
+		loading: loadingState{showSpinner: true},
+		width:   80,
 	}
 
 	newM, cmd := m.handleLLMChunk("hello")
 
-	if !newM.showSpinner {
+	if !newM.loading.showSpinner {
 		t.Error("expected showSpinner to remain true after chunk")
 	}
 	if sh.GetResponse() != "hello" {
@@ -70,8 +70,8 @@ func TestContextStatus_UpdatesOnUsageEvent(t *testing.T) {
 	}
 
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.showSpinner = true
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.loading.showSpinner = true
 
 	updatedAfterChunk, _ := m.handleLLMChunk("hello")
 	if updatedAfterChunk.contextStatus.Percent != 0 {
@@ -91,16 +91,16 @@ func TestHandleLLMDone(t *testing.T) {
 	sh.HandleChunk("response line 1\nresponse line 2")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		appState:      replappstate.New(nil, t.TempDir()),
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:   streamState{handler: sh},
+		loading:  loadingState{showSpinner: true},
+		width:    80,
+		appState: replappstate.New(nil, t.TempDir()),
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, cmd := m.handleLLMDone()
 
-	if newM.showSpinner {
+	if newM.loading.showSpinner {
 		t.Error("expected showSpinner to be false after done")
 	}
 
@@ -129,17 +129,17 @@ func TestHandleLLMError(t *testing.T) {
 	sh.Start(eventCh, "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		appState:      replappstate.New(nil, t.TempDir()),
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:   streamState{handler: sh},
+		loading:  loadingState{showSpinner: true},
+		width:    80,
+		appState: replappstate.New(nil, t.TempDir()),
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 
 	testErr := errors.New("stream failed")
 	newM, cmd := m.handleLLMError(testErr)
 
-	if newM.showSpinner {
+	if newM.loading.showSpinner {
 		t.Error("expected showSpinner to be false after error")
 	}
 
@@ -160,11 +160,11 @@ func TestHandleKeyMsg_Enter(t *testing.T) {
 	ta := textarea.New()
 	ta.SetValue(replcommands.Help)
 	m := replModel{
-		textarea:      ta,
-		width:         80,
-		streamHandler: NewStreamHandler(nil),
-		ctx:           &replContext{},
-		output:        reploutput.NewOutputBuilder(80, ""),
+		textarea: ta,
+		width:    80,
+		stream:   streamState{handler: NewStreamHandler(nil)},
+		ctx:      &replContext{},
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -225,12 +225,12 @@ func TestHandleKeyMsg_CtrlC_WithInputClearsAndDoesNotQuit(t *testing.T) {
 func TestHandleKeyMsg_CtrlC_WithActiveStreamInterrupts(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.streamHandler.HandleChunk("partial response")
-	m.showSpinner = true
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.stream.handler.HandleChunk("partial response")
+	m.loading.showSpinner = true
 
 	canceled := false
-	m.streamCancel = func() {
+	m.stream.cancel = func() {
 		canceled = true
 	}
 
@@ -239,13 +239,13 @@ func TestHandleKeyMsg_CtrlC_WithActiveStreamInterrupts(t *testing.T) {
 	if !canceled {
 		t.Error("expected stream cancel function to be called on ctrl+c")
 	}
-	if newM.streamCancel != nil {
+	if newM.stream.cancel != nil {
 		t.Error("expected stream cancel function to be cleared after ctrl+c")
 	}
-	if newM.streamHandler.IsActive() {
+	if newM.stream.handler.IsActive() {
 		t.Error("expected stream handler to be inactive after ctrl+c interruption")
 	}
-	if newM.showSpinner {
+	if newM.loading.showSpinner {
 		t.Error("expected spinner to be hidden after ctrl+c interruption")
 	}
 	if !strings.Contains(newM.output.Join(), "partial response") {
@@ -262,12 +262,12 @@ func TestHandleKeyMsg_CtrlC_WithActiveStreamInterrupts(t *testing.T) {
 func TestHandleKeyMsg_CtrlC_SecondCtrlCQuitsAfterInterrupt(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.showSpinner = true
-	m.streamCancel = func() {}
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.loading.showSpinner = true
+	m.stream.cancel = func() {}
 
 	interrupted, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	if interrupted.streamHandler.IsActive() {
+	if interrupted.stream.handler.IsActive() {
 		t.Fatal("expected stream to be interrupted before second ctrl+c")
 	}
 
@@ -286,12 +286,12 @@ func TestHandleKeyMsg_CtrlC_SecondCtrlCQuitsAfterInterrupt(t *testing.T) {
 func TestHandleKeyMsg_Esc_WithActiveStreamInterrupts(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.streamHandler.HandleChunk("partial response")
-	m.showSpinner = true
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.stream.handler.HandleChunk("partial response")
+	m.loading.showSpinner = true
 
 	canceled := false
-	m.streamCancel = func() {
+	m.stream.cancel = func() {
 		canceled = true
 	}
 
@@ -300,13 +300,13 @@ func TestHandleKeyMsg_Esc_WithActiveStreamInterrupts(t *testing.T) {
 	if !canceled {
 		t.Error("expected stream cancel function to be called on esc")
 	}
-	if newM.streamCancel != nil {
+	if newM.stream.cancel != nil {
 		t.Error("expected stream cancel function to be cleared after esc")
 	}
-	if newM.streamHandler.IsActive() {
+	if newM.stream.handler.IsActive() {
 		t.Error("expected stream handler to be inactive after esc interruption")
 	}
-	if newM.showSpinner {
+	if newM.loading.showSpinner {
 		t.Error("expected spinner to be hidden after esc interruption")
 	}
 	if !strings.Contains(newM.output.Join(), "partial response") {
@@ -362,10 +362,10 @@ func TestHandleKeyMsg_Esc_WithInputClearsAndDoesNotQuit(t *testing.T) {
 
 func TestHandleKeyMsg_Esc_CancelsCompactionBeforeSuggestions(t *testing.T) {
 	m := newTestModel()
-	m.isCompacting = true
+	m.compaction.active = true
 	m.suggestion.Refresh("/c")
 	cancelled := false
-	m.compactionCancel = func() {
+	m.compaction.cancel = func() {
 		cancelled = true
 	}
 
@@ -374,7 +374,7 @@ func TestHandleKeyMsg_Esc_CancelsCompactionBeforeSuggestions(t *testing.T) {
 	if !cancelled {
 		t.Fatal("expected esc to cancel compaction")
 	}
-	if newM.compactionCancel != nil {
+	if newM.compaction.cancel != nil {
 		t.Fatal("expected cancel func to be cleared after esc")
 	}
 	if !newM.suggestion.Visible() {
@@ -387,7 +387,7 @@ func TestHandleKeyMsg_Esc_CancelsCompactionBeforeSuggestions(t *testing.T) {
 
 func TestHandleKeyMsg_IgnoresTypingDuringCompaction(t *testing.T) {
 	m := newTestModel()
-	m.isCompacting = true
+	m.compaction.active = true
 	m.textarea.SetValue("draft")
 
 	newM, cmd := m.handleKeyMsg(tea.KeyPressMsg{Code: 'x', Text: "x"})
@@ -564,9 +564,9 @@ func TestHandleLLMChunk_MultipleCalls(t *testing.T) {
 	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
+		stream:  streamState{handler: sh},
+		loading: loadingState{showSpinner: true},
+		width:   80,
 	}
 
 	m, _ = m.handleLLMChunk("Hello")
@@ -577,8 +577,8 @@ func TestHandleLLMChunk_MultipleCalls(t *testing.T) {
 		t.Errorf("expected 'Hello World', got '%s'", sh.GetResponse())
 	}
 
-	if !m.showSpinner {
-		t.Error("showSpinner should remain true during streaming")
+	if !m.loading.showSpinner {
+		t.Error("loading.showSpinner should remain true during streaming")
 	}
 }
 
@@ -588,11 +588,11 @@ func TestHandleLLMDone_EmptyResponse(t *testing.T) {
 	sh.Start(eventCh, "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		appState:      replappstate.New(nil, t.TempDir()),
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:   streamState{handler: sh},
+		loading:  loadingState{showSpinner: true},
+		width:    80,
+		appState: replappstate.New(nil, t.TempDir()),
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, _ := m.handleLLMDone()
@@ -613,11 +613,11 @@ func TestHandleLLMError_ResetsHandler(t *testing.T) {
 	sh.HandleChunk("partial content")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		appState:      replappstate.New(nil, t.TempDir()),
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:   streamState{handler: sh},
+		loading:  loadingState{showSpinner: true},
+		width:    80,
+		appState: replappstate.New(nil, t.TempDir()),
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, _ := m.handleLLMError(errors.New("fail"))
@@ -640,11 +640,11 @@ func TestHandleLLMError_MaterializesMessageAndTurnMemory(t *testing.T) {
 	sh.HandleChunk("partial response")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		appState:      replappstate.New(nil, workingDir),
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:   streamState{handler: sh},
+		loading:  loadingState{showSpinner: true},
+		width:    80,
+		appState: replappstate.New(nil, workingDir),
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 	m.startAssistantTurnMemory()
 	sh.HandleToolEnd(&llm.ToolCall{
@@ -680,12 +680,11 @@ func TestHandleLLMError_ContextCanceled_DoesNotAddErrorLine(t *testing.T) {
 	sh.HandleChunk("partial content")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		appState:      replappstate.New(nil, t.TempDir()),
-		output:        reploutput.NewOutputBuilder(80, ""),
-		streamCancel:  func() {},
+		stream:   streamState{handler: sh, cancel: func() {}},
+		loading:  loadingState{showSpinner: true},
+		width:    80,
+		appState: replappstate.New(nil, t.TempDir()),
+		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 
 	newM, cmd := m.handleLLMError(context.Canceled)
@@ -696,7 +695,7 @@ func TestHandleLLMError_ContextCanceled_DoesNotAddErrorLine(t *testing.T) {
 	if strings.Contains(newM.output.Join(), "context canceled") {
 		t.Error("expected cancellation to not render an error line")
 	}
-	if newM.streamCancel != nil {
+	if newM.stream.cancel != nil {
 		t.Error("expected stream cancel function to be cleared")
 	}
 	if cmd != nil {
@@ -710,10 +709,10 @@ func TestHandleToolStart(t *testing.T) {
 	sh.Start(eventCh, "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:  streamState{handler: sh},
+		loading: loadingState{showSpinner: true},
+		width:   80,
+		output:  reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{
@@ -723,7 +722,7 @@ func TestHandleToolStart(t *testing.T) {
 
 	newM, cmd := m.handleToolStart(toolCall)
 
-	if !newM.showSpinner {
+	if !newM.loading.showSpinner {
 		t.Error("expected showSpinner to remain true after tool start")
 	}
 
@@ -750,10 +749,10 @@ func TestHandleToolStart_BashKeepsSpinnerActive(t *testing.T) {
 	sh.Start(eventCh, "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:  streamState{handler: sh},
+		loading: loadingState{showSpinner: true},
+		width:   80,
+		output:  reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{
@@ -763,7 +762,7 @@ func TestHandleToolStart_BashKeepsSpinnerActive(t *testing.T) {
 
 	newM, cmd := m.handleToolStart(toolCall)
 
-	if !newM.showSpinner {
+	if !newM.loading.showSpinner {
 		t.Error("expected showSpinner to remain true for running bash")
 	}
 	if cmd == nil {
@@ -780,9 +779,9 @@ func TestHandleToolEnd(t *testing.T) {
 	sh.Start(eventCh, "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		width:         80,
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream: streamState{handler: sh},
+		width:  80,
+		output: reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{
@@ -817,9 +816,9 @@ func TestHandleToolEnd_WithError(t *testing.T) {
 	sh.Start(eventCh, "Loading...")
 
 	m := replModel{
-		streamHandler: sh,
-		width:         80,
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream: streamState{handler: sh},
+		width:  80,
+		output: reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{
@@ -857,8 +856,8 @@ func TestHandleLLMStreamMsg_ToolEnd_ReturnsSpinnerTick(t *testing.T) {
 	sh.Start(eventCh, "Loading...")
 
 	m := newTestModel()
-	m.streamHandler = sh
-	m.showSpinner = true
+	m.stream.handler = sh
+	m.loading.showSpinner = true
 
 	toolCall := &llm.ToolCall{
 		Name:   "test_tool",
@@ -872,7 +871,7 @@ func TestHandleLLMStreamMsg_ToolEnd_ReturnsSpinnerTick(t *testing.T) {
 		t.Error("expected tool end msg to be handled")
 	}
 
-	if !updated.showSpinner {
+	if !updated.loading.showSpinner {
 		t.Error("expected showSpinner to remain true after tool end")
 	}
 
@@ -887,7 +886,7 @@ func TestHandleBtwStreamMsg_Chunk(t *testing.T) {
 	btwSh.Start(eventCh, "Loading...")
 
 	m := newTestModel()
-	m.btwStreamHandler = btwSh
+	m.btw.streamHandler = btwSh
 
 	updated, cmd, handled := m.handleBtwStreamMsg(btwChunkMsg("hello"))
 
@@ -910,20 +909,20 @@ func TestHandleBtwStreamMsg_Done(t *testing.T) {
 	btwSh.HandleChunk("answer text")
 
 	m := newTestModel()
-	m.btwStreamHandler = btwSh
-	m.btwShowSpinner = true
-	m.btwQuestion = "what?"
+	m.btw.streamHandler = btwSh
+	m.btw.showSpinner = true
+	m.btw.question = "what?"
 
 	updated, cmd, handled := m.handleBtwStreamMsg(btwDoneMsg{})
 
 	if !handled {
 		t.Fatal("expected btw done msg to be handled")
 	}
-	if updated.btwShowSpinner {
+	if updated.btw.showSpinner {
 		t.Fatal("expected btw spinner to stop after done")
 	}
-	if updated.btwLines == nil {
-		t.Fatal("expected btwLines to be set after done")
+	if updated.btw.lines == nil {
+		t.Fatal("expected btw lines to be set after done")
 	}
 	if cmd != nil {
 		t.Fatal("expected nil cmd after btw done")
@@ -936,20 +935,20 @@ func TestHandleBtwStreamMsg_Error(t *testing.T) {
 	btwSh.Start(eventCh, "Loading...")
 
 	m := newTestModel()
-	m.btwStreamHandler = btwSh
-	m.btwShowSpinner = true
-	m.btwQuestion = "question"
+	m.btw.streamHandler = btwSh
+	m.btw.showSpinner = true
+	m.btw.question = "question"
 
 	updated, cmd, handled := m.handleBtwStreamMsg(btwErrorMsg{err: errors.New("oops")})
 
 	if !handled {
 		t.Fatal("expected btw error msg to be handled")
 	}
-	if updated.btwShowSpinner {
+	if updated.btw.showSpinner {
 		t.Fatal("expected btw spinner to stop after error")
 	}
-	if updated.btwLines == nil {
-		t.Fatal("expected btwLines to be set after error")
+	if updated.btw.lines == nil {
+		t.Fatal("expected btw lines to be set after error")
 	}
 	if cmd != nil {
 		t.Fatal("expected nil cmd after btw error")
@@ -960,7 +959,7 @@ func TestHandleBtwStreamMsg_InactiveHandlerSwallowsMessages(t *testing.T) {
 	btwSh := NewStreamHandler(nil)
 
 	m := newTestModel()
-	m.btwStreamHandler = btwSh
+	m.btw.streamHandler = btwSh
 
 	_, _, handled := m.handleBtwStreamMsg(btwChunkMsg("orphan"))
 

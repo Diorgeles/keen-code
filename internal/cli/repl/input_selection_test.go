@@ -67,8 +67,8 @@ func TestInputSelection_MouseDragCopiesOnRelease(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected copy command on input mouse release")
 	}
-	if updated.copyNotification != copyNotificationMessage {
-		t.Fatalf("expected copy notification, got %q", updated.copyNotification)
+	if updated.notification.text != copyNotificationMessage {
+		t.Fatalf("expected copy notification, got %q", updated.notification.text)
 	}
 	if got := updated.inputSelection.selectedText(); got != "hello" {
 		t.Fatalf("expected input selection to remain, got %q", got)

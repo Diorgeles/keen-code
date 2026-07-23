@@ -228,7 +228,7 @@ func (m replModel) inputSelectionLocalPosition(x, y int) (int, int) {
 
 func (m replModel) inputAreaTop() int {
 	top := m.viewport.Height()
-	if m.showSpinner {
+	if m.loading.showSpinner {
 		top += 2
 	}
 	return top

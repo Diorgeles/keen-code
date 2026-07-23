@@ -42,7 +42,7 @@ func TestHandleEnterKey_ActiveStream(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("some input")
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	newM, cmd := m.handleEnterKey()
 
@@ -61,7 +61,7 @@ func TestHandleEnterKey_ActiveStream_AdjustsViewportHeight(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("some input")
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 	m.adjustTextareaHeight()
 
 	before := m.viewport.Height()
@@ -175,22 +175,22 @@ func TestHandleEnterKey_CompactCommandStartsCompaction(t *testing.T) {
 
 	newM, cmd := m.handleEnterKey()
 
-	if !newM.isCompacting {
+	if !newM.compaction.active {
 		t.Fatal("expected compaction mode to start")
 	}
-	if !newM.showSpinner {
+	if !newM.loading.showSpinner {
 		t.Fatal("expected spinner to be visible during compaction")
 	}
-	if newM.loadingText != "Compacting..." {
-		t.Fatalf("expected compaction loading text, got %q", newM.loadingText)
+	if newM.loading.text != "Compacting..." {
+		t.Fatalf("expected compaction loading text, got %q", newM.loading.text)
 	}
 	if newM.textarea.Value() != "" {
 		t.Fatal("expected textarea to be reset")
 	}
-	if newM.compactionCancel == nil {
+	if newM.compaction.cancel == nil {
 		t.Fatal("expected compaction cancel func to be set")
 	}
-	if !newM.streamHandler.IsActive() {
+	if !newM.stream.handler.IsActive() {
 		t.Fatal("expected compaction to use the stream handler")
 	}
 	if cmd == nil {
@@ -349,11 +349,11 @@ func TestHandleMCPConnectDoneGeneratesAndEnablesSkill(t *testing.T) {
 			"deepwiki": {{Name: "ask", Description: "Ask DeepWiki", InputSchema: map[string]any{"type": "object"}}},
 		},
 	}
-	m.showSpinner = true
+	m.loading.showSpinner = true
 
 	m.handleMCPConnectDone(mcpConnectDoneMsg{Server: "deepwiki"})
 
-	if m.showSpinner {
+	if m.loading.showSpinner {
 		t.Fatal("expected spinner to stop")
 	}
 	if !strings.Contains(ansi.Strip(m.output.Join()), "MCP server connected: deepwiki") {
@@ -1095,15 +1095,15 @@ func TestStartModelSelection_CallsOnComplete(t *testing.T) {
 func TestHandleShowThinkingCommand_On(t *testing.T) {
 	m := newTestModel()
 	m.showThinking = false
-	m.streamHandler.showThinking = false
+	m.stream.handler.showThinking = false
 
 	result := m.handleShowThinkingCommand("/show-thinking on")
 
 	if !result.showThinking {
 		t.Error("expected showThinking to be true after /show-thinking on")
 	}
-	if !result.streamHandler.showThinking {
-		t.Error("expected streamHandler.showThinking to be true after /show-thinking on")
+	if !result.stream.handler.showThinking {
+		t.Error("expected stream.handler.showThinking to be true after /show-thinking on")
 	}
 	if !strings.Contains(result.output.Join(), "Thinking tokens shown") {
 		t.Fatalf("expected confirmation message, got %q", result.output.Join())
@@ -1118,8 +1118,8 @@ func TestHandleShowThinkingCommand_Off(t *testing.T) {
 	if result.showThinking {
 		t.Error("expected showThinking to be false after /show-thinking off")
 	}
-	if result.streamHandler.showThinking {
-		t.Error("expected streamHandler.showThinking to be false after /show-thinking off")
+	if result.stream.handler.showThinking {
+		t.Error("expected stream.handler.showThinking to be false after /show-thinking off")
 	}
 	if !strings.Contains(result.output.Join(), "Thinking tokens hidden") {
 		t.Fatalf("expected confirmation message, got %q", result.output.Join())
@@ -1136,7 +1136,7 @@ func TestHandleShowThinkingCommand_NoArgShowsStatus(t *testing.T) {
 
 	m2 := newTestModel()
 	m2.showThinking = false
-	m2.streamHandler.showThinking = false
+	m2.stream.handler.showThinking = false
 
 	result2 := m2.handleShowThinkingCommand("/show-thinking")
 	if !strings.Contains(result2.output.Join(), "hidden") {
@@ -1170,16 +1170,16 @@ func TestHandleEnterKey_BtwCommandStartsStream(t *testing.T) {
 	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
 	m.appState = replappstate.New(&mockLLMClient{}, "")
 	m.appState.AddMessage(llm.RoleUser, "context message")
-	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btw.streamHandler = NewStreamHandler(nil)
 	m.textarea.SetValue("/btw what is this?")
 
 	newM, cmd := m.handleEnterKey()
 
-	if !newM.btwShowSpinner {
+	if !newM.btw.showSpinner {
 		t.Fatal("expected btw spinner to be visible")
 	}
-	if newM.btwQuestion != "what is this?" {
-		t.Fatalf("expected btw question %q, got %q", "what is this?", newM.btwQuestion)
+	if newM.btw.question != "what is this?" {
+		t.Fatalf("expected btw question %q, got %q", "what is this?", newM.btw.question)
 	}
 	if newM.textarea.Value() != "" {
 		t.Fatal("expected textarea to be reset")
@@ -1193,14 +1193,14 @@ func TestHandleEnterKey_BtwCommandDuringActiveStream(t *testing.T) {
 	m := newTestModel()
 	m.ctx.cfg = &config.ResolvedConfig{APIKey: "key", Model: "model"}
 	m.appState = replappstate.New(&mockLLMClient{}, "")
-	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btw.streamHandler = NewStreamHandler(nil)
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 	m.textarea.SetValue("/btw quick question")
 
 	newM, cmd := m.handleEnterKey()
 
-	if !newM.btwShowSpinner {
+	if !newM.btw.showSpinner {
 		t.Fatal("expected btw to work even during active main stream")
 	}
 	if cmd == nil {
@@ -1210,12 +1210,12 @@ func TestHandleEnterKey_BtwCommandDuringActiveStream(t *testing.T) {
 
 func TestHandleEnterKey_BtwCommandNoQuestion(t *testing.T) {
 	m := newTestModel()
-	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btw.streamHandler = NewStreamHandler(nil)
 	m.textarea.SetValue("/btw")
 
 	newM, cmd := m.handleEnterKey()
 
-	if newM.btwShowSpinner {
+	if newM.btw.showSpinner {
 		t.Fatal("expected btw spinner not to show without question")
 	}
 	if cmd != nil {
@@ -1235,12 +1235,12 @@ func TestHandleEnterKey_BtwCommandNoQuestion(t *testing.T) {
 
 func TestHandleEnterKey_BtwCommandNoQuestionShowsUsage(t *testing.T) {
 	m := newTestModel()
-	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btw.streamHandler = NewStreamHandler(nil)
 	m.textarea.SetValue("/btw")
 
 	newM, cmd := m.handleEnterKey()
 
-	if newM.btwShowSpinner {
+	if newM.btw.showSpinner {
 		t.Fatal("expected btw spinner not to show without question")
 	}
 	if cmd != nil {
@@ -1311,12 +1311,12 @@ func (f *fakeMCPRuntime) CallTool(_ context.Context, _, _ string, _ map[string]a
 func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {
 	m := newTestModel()
 	m.ctx.cfg = &config.ResolvedConfig{}
-	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btw.streamHandler = NewStreamHandler(nil)
 	m.textarea.SetValue("/btw question")
 
 	newM, cmd := m.handleEnterKey()
 
-	if newM.btwShowSpinner {
+	if newM.btw.showSpinner {
 		t.Fatal("expected btw not to activate when client is not ready")
 	}
 	if cmd != nil {
@@ -1336,27 +1336,27 @@ func TestHandleEnterKey_BtwCommandClientNotReady(t *testing.T) {
 
 func TestCancelBtwStream_ClearsState(t *testing.T) {
 	m := newTestModel()
-	m.btwShowSpinner = true
-	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btw.showSpinner = true
+	m.btw.streamHandler = NewStreamHandler(nil)
 	eventCh := make(chan llm.StreamEvent)
-	m.btwStreamHandler.Start(eventCh, "Loading...")
-	m.btwLines = []string{"some lines"}
+	m.btw.streamHandler.Start(eventCh, "Loading...")
+	m.btw.lines = []string{"some lines"}
 
 	m.cancelBtwStream()
 
-	if m.btwShowSpinner {
+	if m.btw.showSpinner {
 		t.Fatal("expected btw spinner to be cleared")
 	}
-	if m.btwLines != nil {
-		t.Fatal("expected btwLines to be nil")
+	if m.btw.lines != nil {
+		t.Fatal("expected btw lines to be nil")
 	}
 }
 
 func TestCancelBtwStream_CancelsContext(t *testing.T) {
 	m := newTestModel()
-	m.btwStreamHandler = NewStreamHandler(nil)
+	m.btw.streamHandler = NewStreamHandler(nil)
 	cancelled := false
-	m.btwStreamCancel = func() {
+	m.btw.streamCancel = func() {
 		cancelled = true
 	}
 
@@ -1365,22 +1365,22 @@ func TestCancelBtwStream_CancelsContext(t *testing.T) {
 	if !cancelled {
 		t.Fatal("expected btw cancel function to be called")
 	}
-	if m.btwStreamCancel != nil {
-		t.Fatal("expected btwStreamCancel to be nil after cancel")
+	if m.btw.streamCancel != nil {
+		t.Fatal("expected btw streamCancel to be nil after cancel")
 	}
 }
 
 func TestHandleEnterKey_QueueFullNotification(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 	m.queuedInputs = []string{"msg1", "msg2", "msg3", "msg4", "msg5"}
 
 	m.textarea.SetValue("overflow")
 	newM, cmd := m.handleEnterKey()
 
-	if newM.copyNotification != "Queue is full" {
-		t.Errorf("expected 'Queue is full' notification, got %q", newM.copyNotification)
+	if newM.notification.text != "Queue is full" {
+		t.Errorf("expected 'Queue is full' notification, got %q", newM.notification.text)
 	}
 	if cmd == nil {
 		t.Error("expected clear notification cmd")
@@ -1396,13 +1396,13 @@ func TestHandleEnterKey_QueueFullNotification(t *testing.T) {
 func TestHandleEnterKey_NonQueueableSlashCommandNotification(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	m.textarea.SetValue("/clear")
 	newM, _ := m.handleEnterKey()
 
-	if newM.copyNotification != "Operation not permitted" {
-		t.Errorf("expected 'Operation not permitted' for known command, got %q", newM.copyNotification)
+	if newM.notification.text != "Operation not permitted" {
+		t.Errorf("expected 'Operation not permitted' for known command, got %q", newM.notification.text)
 	}
 	if newM.textarea.Value() != "/clear" {
 		t.Error("expected textarea to be preserved for non-queueable command")
@@ -1415,13 +1415,13 @@ func TestHandleEnterKey_NonQueueableSlashCommandNotification(t *testing.T) {
 func TestHandleEnterKey_UnknownSkillNotification(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	m.textarea.SetValue("/nosuchskill arg")
 	newM, _ := m.handleEnterKey()
 
-	if newM.copyNotification != "No such skill found" {
-		t.Errorf("expected 'No such skill found' for unknown skill, got %q", newM.copyNotification)
+	if newM.notification.text != "No such skill found" {
+		t.Errorf("expected 'No such skill found' for unknown skill, got %q", newM.notification.text)
 	}
 	if newM.textarea.Value() != "/nosuchskill arg" {
 		t.Error("expected textarea to be preserved for unknown skill")
@@ -1431,7 +1431,7 @@ func TestHandleEnterKey_UnknownSkillNotification(t *testing.T) {
 func TestHandleEnterKey_MultilineNormalPromptQueued(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	m.textarea.SetValue("line1\nline2")
 	newM, _ := m.handleEnterKey()
@@ -1439,15 +1439,15 @@ func TestHandleEnterKey_MultilineNormalPromptQueued(t *testing.T) {
 	if len(newM.queuedInputs) != 1 || newM.queuedInputs[0] != "line1\nline2" {
 		t.Errorf("expected multiline normal prompt to be queued, got %v", newM.queuedInputs)
 	}
-	if newM.copyNotification != "" {
-		t.Errorf("expected no notification for queued multiline, got %q", newM.copyNotification)
+	if newM.notification.text != "" {
+		t.Errorf("expected no notification for queued multiline, got %q", newM.notification.text)
 	}
 }
 
 func TestHandleEnterKey_MultilineSlashNotQueued(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	m.textarea.SetValue("/skill\ntext")
 	newM, _ := m.handleEnterKey()
@@ -1455,8 +1455,8 @@ func TestHandleEnterKey_MultilineSlashNotQueued(t *testing.T) {
 	if len(newM.queuedInputs) != 0 {
 		t.Errorf("expected multiline slash input to not be queued, got %v", newM.queuedInputs)
 	}
-	if newM.copyNotification != "No such skill found" {
-		t.Errorf("expected 'No such skill found' for multiline slash, got %q", newM.copyNotification)
+	if newM.notification.text != "No such skill found" {
+		t.Errorf("expected 'No such skill found' for multiline slash, got %q", newM.notification.text)
 	}
 }
 
@@ -1490,7 +1490,7 @@ func TestDrainQueuedInput_EmptyQueueNoOp(t *testing.T) {
 func TestInterruptStream_PreservesQueue(t *testing.T) {
 	m := newTestModel()
 	m.queuedInputs = []string{"queued1", "queued2"}
-	m.streamCancel = func() {}
+	m.stream.cancel = func() {}
 
 	m.interruptStream("interrupted")
 
@@ -1502,7 +1502,7 @@ func TestInterruptStream_PreservesQueue(t *testing.T) {
 func TestHandleLLMError_CanceledPreservesQueue(t *testing.T) {
 	m := newTestModel()
 	m.queuedInputs = []string{"next msg"}
-	m.streamHandler.Start(make(chan llm.StreamEvent), "Loading...")
+	m.stream.handler.Start(make(chan llm.StreamEvent), "Loading...")
 	m.startLoading("Loading...")
 
 	newM, _ := m.handleLLMError(context.Canceled)
@@ -1569,7 +1569,7 @@ func TestRenderQueuedInputs_TruncatesLongMessages(t *testing.T) {
 func TestHandleEnterKey_EmptyQueueClearsQueue(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 	m.queuedInputs = []string{"msg1", "msg2"}
 
 	m.textarea.SetValue("/emptyq")
@@ -1578,8 +1578,8 @@ func TestHandleEnterKey_EmptyQueueClearsQueue(t *testing.T) {
 	if len(newM.queuedInputs) != 0 {
 		t.Errorf("expected queue to be cleared, got %v", newM.queuedInputs)
 	}
-	if newM.copyNotification != "Queue cleared" {
-		t.Errorf("expected 'Queue cleared' notification, got %q", newM.copyNotification)
+	if newM.notification.text != "Queue cleared" {
+		t.Errorf("expected 'Queue cleared' notification, got %q", newM.notification.text)
 	}
 }
 
@@ -1590,14 +1590,14 @@ func TestHandleEnterKey_EmptyQueueEmpty(t *testing.T) {
 	m.textarea.SetValue("/emptyq")
 	newM, _ := m.handleEnterKey()
 
-	if newM.copyNotification != "Queue is empty" {
-		t.Errorf("expected 'Queue is empty' notification, got %q", newM.copyNotification)
+	if newM.notification.text != "Queue is empty" {
+		t.Errorf("expected 'Queue is empty' notification, got %q", newM.notification.text)
 	}
 }
 
 func TestHandleEnterKey_AdversaryQueuedWhenBusy(t *testing.T) {
 	m := newTestModel()
-	m.showSpinner = true
+	m.loading.showSpinner = true
 	m.queuedInputs = nil
 
 	m.textarea.SetValue("/adversary focus on error handling")
@@ -1616,7 +1616,7 @@ func TestHandleEnterKey_AdversaryQueuedWhenBusy(t *testing.T) {
 
 func TestHandleEnterKey_AdversaryQueuedWhenBusy_AdjustsViewportHeight(t *testing.T) {
 	m := newTestModel()
-	m.showSpinner = true
+	m.loading.showSpinner = true
 	m.adjustTextareaHeight()
 
 	before := m.viewport.Height()
@@ -1631,14 +1631,14 @@ func TestHandleEnterKey_AdversaryQueuedWhenBusy_AdjustsViewportHeight(t *testing
 
 func TestHandleEnterKey_AdversaryQueueFull(t *testing.T) {
 	m := newTestModel()
-	m.showSpinner = true
+	m.loading.showSpinner = true
 	m.queuedInputs = []string{"msg1", "msg2", "msg3", "msg4", "msg5"}
 
 	m.textarea.SetValue("/adversary review")
 	newM, _ := m.handleEnterKey()
 
-	if newM.copyNotification != "Queue is full" {
-		t.Errorf("expected 'Queue is full' for /adversary, got %q", newM.copyNotification)
+	if newM.notification.text != "Queue is full" {
+		t.Errorf("expected 'Queue is full' for /adversary, got %q", newM.notification.text)
 	}
 	if len(newM.queuedInputs) != 5 {
 		t.Errorf("expected queue to remain at 5, got %d", len(newM.queuedInputs))

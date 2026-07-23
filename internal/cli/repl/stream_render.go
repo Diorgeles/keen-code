@@ -370,18 +370,18 @@ func (m *replModel) renderBtwInline(width int) string {
 	var view strings.Builder
 	view.WriteString("\n\n")
 
-	header := renderBtwQuestionHeader(m.btwQuestion)
+	header := renderBtwQuestionHeader(m.btw.question)
 	view.WriteString(renderBtwLeftBorder(header))
 	view.WriteString("\n")
 
-	streamView := strings.TrimLeft(m.btwStreamHandler.View(contentWidth), "\n")
+	streamView := strings.TrimLeft(m.btw.streamHandler.View(contentWidth), "\n")
 	for _, line := range strings.Split(streamView, "\n") {
 		view.WriteString(renderBtwLeftBorder(line))
 		view.WriteString("\n")
 	}
 
-	if m.btwShowSpinner {
-		view.WriteString(renderBtwLeftBorder(m.btwSpinner.View()))
+	if m.btw.showSpinner {
+		view.WriteString(renderBtwLeftBorder(m.btw.spinner.View()))
 		view.WriteString("\n")
 	}
 
@@ -392,11 +392,11 @@ func (m *replModel) renderBtwInlineFinished(width int) string {
 	var view strings.Builder
 	view.WriteString("\n")
 
-	header := renderBtwQuestionHeader(m.btwQuestion)
+	header := renderBtwQuestionHeader(m.btw.question)
 	view.WriteString(renderBtwLeftBorder(header))
 	view.WriteString("\n")
 
-	for _, line := range m.btwLines {
+	for _, line := range m.btw.lines {
 		view.WriteString(renderBtwLeftBorder(line))
 		view.WriteString("\n")
 	}

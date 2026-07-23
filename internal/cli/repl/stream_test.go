@@ -1057,14 +1057,14 @@ func TestPermissionTranscript_ResolvedBeforeDone(t *testing.T) {
 func TestHandleKeyMsg_PermissionEnter_ResolvesAllowed(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	req := makeTestPermissionRequest(false)
-	m.streamHandler.HandlePermissionRequest(req)
+	m.stream.handler.HandlePermissionRequest(req)
 
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
 
-	if newM.streamHandler.HasPendingPermission() {
+	if newM.stream.handler.HasPendingPermission() {
 		t.Error("expected permission to be resolved after Enter")
 	}
 	if req.Status != replpermissions.StatusAllowed {
@@ -1075,14 +1075,14 @@ func TestHandleKeyMsg_PermissionEnter_ResolvesAllowed(t *testing.T) {
 func TestHandleKeyMsg_PermissionEsc_Denies(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	req := makeTestPermissionRequest(false)
-	m.streamHandler.HandlePermissionRequest(req)
+	m.stream.handler.HandlePermissionRequest(req)
 
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEsc})
 
-	if newM.streamHandler.HasPendingPermission() {
+	if newM.stream.handler.HasPendingPermission() {
 		t.Error("expected permission to be resolved after Esc")
 	}
 	if req.Status != replpermissions.StatusDenied {
@@ -1093,10 +1093,10 @@ func TestHandleKeyMsg_PermissionEsc_Denies(t *testing.T) {
 func TestHandleKeyMsg_PermissionEnter_AllowSession(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	req := makeTestPermissionRequest(false)
-	m.streamHandler.HandlePermissionRequest(req)
+	m.stream.handler.HandlePermissionRequest(req)
 
 	m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyDown})
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -1112,14 +1112,14 @@ func TestHandleKeyMsg_PermissionEnter_AllowSession(t *testing.T) {
 func TestHandleKeyMsg_NonPermissionKey_PassesToTextarea(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	req := makeTestPermissionRequest(false)
-	m.streamHandler.HandlePermissionRequest(req)
+	m.stream.handler.HandlePermissionRequest(req)
 
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: 'a', Text: "a"})
 
-	if !newM.streamHandler.HasPendingPermission() {
+	if !newM.stream.handler.HasPendingPermission() {
 		t.Error("expected permission to still be pending after non-permission key")
 	}
 }
@@ -1128,17 +1128,17 @@ func TestHandleKeyMsg_Enter_WhenPermissionPending_DoesNotSubmit(t *testing.T) {
 	m := newTestModel()
 	m.textarea.SetValue("some user input")
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	req := makeTestPermissionRequest(false)
-	m.streamHandler.HandlePermissionRequest(req)
+	m.stream.handler.HandlePermissionRequest(req)
 
 	newM, _ := m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if newM.textarea.Value() != "some user input" {
 		t.Error("expected textarea to keep its value when Enter resolves permission")
 	}
-	if newM.streamHandler.HasPendingPermission() {
+	if newM.stream.handler.HasPendingPermission() {
 		t.Error("expected permission to be resolved")
 	}
 }

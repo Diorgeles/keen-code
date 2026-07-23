@@ -188,8 +188,8 @@ func (m *replModel) startModelSelection() replModel {
 }
 
 func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
-	if m.compactionCancel != nil {
-		m.compactionCancel()
+	if m.compaction.cancel != nil {
+		m.compaction.cancel()
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -209,17 +209,17 @@ func (m *replModel) startCompaction(extraPrompt string) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	m.compactionCancel = cancel
-	m.isCompacting = true
+	m.compaction.cancel = cancel
+	m.compaction.active = true
 	m.startLoading("Compacting...")
 	m.clearTurnMemory()
-	m.streamHandler.Start(eventCh, m.loadingText)
+	m.stream.handler.Start(eventCh, m.loading.text)
 	m.userScrolled = false
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 
-	return *m, tea.Batch(m.spinner.Tick, m.waitForAsyncEvent())
+	return *m, tea.Batch(m.loading.spinner.Tick, m.waitForAsyncEvent())
 }
 
 func (m *replModel) handleThinkingCommand(input string) (replModel, tea.Cmd) {
@@ -393,12 +393,12 @@ func (m *replModel) handleShowThinkingCommand(input string) replModel {
 	switch arg {
 	case "on":
 		m.showThinking = true
-		m.streamHandler.showThinking = true
+		m.stream.handler.showThinking = true
 		m.saveShowThinking(true)
 		m.output.AddStyledLine("  ✓ Thinking tokens shown", repltheme.HighlightStyle)
 	case "off":
 		m.showThinking = false
-		m.streamHandler.showThinking = false
+		m.stream.handler.showThinking = false
 		m.saveShowThinking(false)
 		m.output.AddStyledLine("  ✓ Thinking tokens hidden", repltheme.HighlightStyle)
 	default:
@@ -452,7 +452,7 @@ func (m *replModel) handleMCPCommand(input string) (replModel, tea.Cmd) {
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
-	return *m, tea.Batch(m.spinner.Tick, m.connectMCPCmd(server))
+	return *m, tea.Batch(m.loading.spinner.Tick, m.connectMCPCmd(server))
 }
 
 func (m *replModel) addMCPStatus(statuses []keenmcp.ServerStatus) {
@@ -903,33 +903,33 @@ func (m *replModel) handleBtwCommand(input string) (replModel, tea.Cmd) {
 		return *m, nil
 	}
 
-	if m.btwStreamCancel != nil {
-		m.btwStreamCancel()
+	if m.btw.streamCancel != nil {
+		m.btw.streamCancel()
 	}
 	m.flushBtwToOutput()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	m.btwStreamCancel = cancel
+	m.btw.streamCancel = cancel
 
 	eventCh, err := m.appState.StreamBtw(ctx, question)
 	if err != nil {
 		cancel()
-		m.btwStreamCancel = nil
+		m.btw.streamCancel = nil
 		m.output.AddError(err.Error(), repltheme.ErrorStyle)
 		m.updateViewportContent()
 		m.viewport.GotoBottom()
 		return *m, nil
 	}
 
-	m.btwLines = nil
-	m.btwQuestion = question
-	m.btwStreamHandler.Start(eventCh, nextLoadingText())
-	m.btwShowSpinner = true
+	m.btw.lines = nil
+	m.btw.question = question
+	m.btw.streamHandler.Start(eventCh, nextLoadingText())
+	m.btw.showSpinner = true
 	m.userScrolled = false
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
 
-	return *m, tea.Batch(m.btwSpinner.Tick, waitForBtwEvent(eventCh))
+	return *m, tea.Batch(m.btw.spinner.Tick, waitForBtwEvent(eventCh))
 }
 
 func (m *replModel) handleBangCommand(input string) (replModel, tea.Cmd) {
@@ -961,7 +961,7 @@ func (m *replModel) handleBangCommand(input string) (replModel, tea.Cmd) {
 	m.adjustTextareaHeight()
 	m.updateViewportContent()
 	m.viewport.GotoBottom()
-	return *m, tea.Batch(m.spinner.Tick, waitForBangEvent(m.bang.events))
+	return *m, tea.Batch(m.loading.spinner.Tick, waitForBangEvent(m.bang.events))
 }
 
 func (m *replModel) handleAdversaryCommand(input string) (replModel, tea.Cmd) {
@@ -1093,7 +1093,7 @@ func (m *replModel) handleClearCommand() replModel {
 		m.permissionRequester.ResetSessionPermissions()
 	}
 	m.history.Reset()
-	m.lastTurnElapsedMsg = ""
+	m.loading.lastTurnElapsedMsg = ""
 	m.adjustTextareaHeight()
 
 	newOutput := reploutput.NewOutputBuilder(m.width, m.ctx.workingDir)

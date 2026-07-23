@@ -65,8 +65,8 @@ func TestReplSelectionMouseDragCopiesOnRelease(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected copy command on mouse release")
 	}
-	if updated.copyNotification != copyNotificationMessage {
-		t.Fatalf("expected copy notification, got %q", updated.copyNotification)
+	if updated.notification.text != copyNotificationMessage {
+		t.Fatalf("expected copy notification, got %q", updated.notification.text)
 	}
 	if got := updated.selection.selectedText(); got != "hello" {
 		t.Fatalf("expected selected text to remain available, got %q", got)
@@ -137,8 +137,8 @@ func TestReplInputSelectionMouseDragCopiesOnRelease(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("expected copy command on input mouse release")
 	}
-	if updated.copyNotification != copyNotificationMessage {
-		t.Fatalf("expected copy notification, got %q", updated.copyNotification)
+	if updated.notification.text != copyNotificationMessage {
+		t.Fatalf("expected copy notification, got %q", updated.notification.text)
 	}
 	if got := updated.inputSelection.selectedText(); got != "hello" {
 		t.Fatalf("expected input selection to remain, got %q", got)
@@ -191,7 +191,7 @@ func TestView_RendersInputSelection(t *testing.T) {
 
 func TestView_ShowsCopyNotification(t *testing.T) {
 	m := newTestModel()
-	m.copyNotification = copyNotificationMessage
+	m.notification.text = copyNotificationMessage
 
 	view := ansi.Strip(m.View().Content)
 	if !strings.Contains(view, copyNotificationMessage) {
@@ -202,27 +202,27 @@ func TestView_ShowsCopyNotification(t *testing.T) {
 func TestReplCopyNotificationExpires(t *testing.T) {
 	m := newTestModel()
 	expiresAt := time.Now().Add(copyNotificationTimeout)
-	m.copyNotification = copyNotificationMessage
-	m.copyNotificationExpiresAt = expiresAt
+	m.notification.text = copyNotificationMessage
+	m.notification.expiresAt = expiresAt
 
 	updated, cmd := m.updateNormalMode(copyNotificationExpiredMsg{expiresAt: expiresAt.UnixNano()})
 	if cmd != nil {
 		t.Fatal("expected no command for copy notification expiry")
 	}
-	if updated.copyNotification != "" {
-		t.Fatalf("expected copy notification to clear, got %q", updated.copyNotification)
+	if updated.notification.text != "" {
+		t.Fatalf("expected copy notification to clear, got %q", updated.notification.text)
 	}
 }
 
 func TestReplCopyNotificationIgnoresStaleExpiry(t *testing.T) {
 	m := newTestModel()
 	expiresAt := time.Now().Add(copyNotificationTimeout)
-	m.copyNotification = copyNotificationMessage
-	m.copyNotificationExpiresAt = expiresAt
+	m.notification.text = copyNotificationMessage
+	m.notification.expiresAt = expiresAt
 
 	updated, _ := m.updateNormalMode(copyNotificationExpiredMsg{expiresAt: expiresAt.Add(-time.Second).UnixNano()})
-	if updated.copyNotification != copyNotificationMessage {
-		t.Fatalf("expected copy notification to remain, got %q", updated.copyNotification)
+	if updated.notification.text != copyNotificationMessage {
+		t.Fatalf("expected copy notification to remain, got %q", updated.notification.text)
 	}
 }
 

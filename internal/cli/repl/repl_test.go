@@ -44,13 +44,13 @@ func newTestModel() replModel {
 		mode:                llm.ModeBuild,
 		appState:            replappstate.New(nil, ""),
 		output:              reploutput.NewOutputBuilder(80, ""),
-		streamHandler:       NewStreamHandler(nil),
+		stream:              streamState{handler: NewStreamHandler(nil)},
 		permissionRequester: replpermissions.NewRequester(nil),
 		projectPerms:        config.NewProjectPermissions(),
 		diffEmitter:         repltooling.NewDiffEmitter(),
 		sessions:            newReplSessionState(""),
-		spinner:             spinner.New(),
-		btwSpinner:          spinner.New(),
+		loading:             loadingState{spinner: spinner.New()},
+		btw:                 btwState{spinner: spinner.New()},
 		width:               80,
 		height:              30,
 		showThinking:        true,
@@ -115,10 +115,10 @@ func TestUpdate_InlinePermission_AllowsToolStartEvent(t *testing.T) {
 	sh.HandlePermissionRequest(req)
 
 	m := replModel{
-		streamHandler: sh,
-		showSpinner:   true,
-		width:         80,
-		output:        reploutput.NewOutputBuilder(80, ""),
+		stream:  streamState{handler: sh},
+		loading: loadingState{showSpinner: true},
+		width:   80,
+		output:  reploutput.NewOutputBuilder(80, ""),
 	}
 
 	toolCall := &llm.ToolCall{Name: "read_file", Input: map[string]any{"path": "../foo.txt"}}
@@ -129,7 +129,7 @@ func TestUpdate_InlinePermission_AllowsToolStartEvent(t *testing.T) {
 		t.Fatalf("expected *replModel, got %T", updatedModel)
 	}
 
-	if !updated.showSpinner {
+	if !updated.loading.showSpinner {
 		t.Error("expected showSpinner to remain true after tool start while permission is pending")
 	}
 
@@ -266,8 +266,8 @@ func TestUpdateViewportContent_UsesViewportWidthWhenModelStartsWithoutResize(t *
 	m := newTestModel()
 	m.width = 0
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.streamHandler.HandleReasoningChunk("thinking")
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.stream.handler.HandleReasoningChunk("thinking")
 
 	m.updateViewportContent()
 
@@ -414,7 +414,7 @@ func TestUpdate_RoutesToNormalMode(t *testing.T) {
 func TestUpdate_RoutesToPermissionHandling(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	req := &replpermissions.Request{
 		RequestID:    "1",
@@ -424,9 +424,9 @@ func TestUpdate_RoutesToPermissionHandling(t *testing.T) {
 		Status:       replpermissions.StatusPending,
 		ResponseChan: make(chan bool, 1),
 	}
-	m.streamHandler.HandlePermissionRequest(req)
+	m.stream.handler.HandlePermissionRequest(req)
 
-	if !m.streamHandler.HasPendingPermission() {
+	if !m.stream.handler.HasPendingPermission() {
 		t.Fatal("expected pending permission")
 	}
 
@@ -434,7 +434,7 @@ func TestUpdate_RoutesToPermissionHandling(t *testing.T) {
 	result, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown, Text: "down"})
 	updated := result.(*replModel)
 
-	if !updated.streamHandler.HasPendingPermission() {
+	if !updated.stream.handler.HasPendingPermission() {
 		t.Error("expected pending permission to remain after down key")
 	}
 }
@@ -451,25 +451,25 @@ func TestHandleLLMStreamMsg_UnknownMsg(t *testing.T) {
 func TestHandleLLMStreamMsg_RoutesChunk(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.showSpinner = true
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.loading.showSpinner = true
 
 	newM, _, handled := m.handleLLMStreamMsg(llmChunkMsg("hello"))
 
 	if !handled {
 		t.Error("expected chunk msg to be handled")
 	}
-	if !newM.showSpinner {
+	if !newM.loading.showSpinner {
 		t.Error("expected showSpinner to remain true after chunk")
 	}
 }
 
 func TestHandleLLMStreamMsg_StreamRenderFlushesWithoutMainStream(t *testing.T) {
 	m := newTestModel()
-	m.streamRenderPending = true
-	m.btwShowSpinner = true
-	m.btwQuestion = "why?"
-	m.btwLines = []string{"thinking"}
+	m.stream.renderPending = true
+	m.btw.showSpinner = true
+	m.btw.question = "why?"
+	m.btw.lines = []string{"thinking"}
 
 	newM, cmd, handled := m.handleLLMStreamMsg(streamRenderMsg{})
 
@@ -479,7 +479,7 @@ func TestHandleLLMStreamMsg_StreamRenderFlushesWithoutMainStream(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("expected nil cmd for stream render msg")
 	}
-	if newM.streamRenderPending {
+	if newM.stream.renderPending {
 		t.Fatal("expected pending stream render to be flushed")
 	}
 }
@@ -487,8 +487,8 @@ func TestHandleLLMStreamMsg_StreamRenderFlushesWithoutMainStream(t *testing.T) {
 func TestUpdateNormalMode_PermissionReadyRendersImmediately(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.showSpinner = true
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.loading.showSpinner = true
 
 	req := &replpermissions.Request{
 		RequestID:    "1",
@@ -501,10 +501,10 @@ func TestUpdateNormalMode_PermissionReadyRendersImmediately(t *testing.T) {
 
 	newM, cmd := m.updateNormalMode(permissionReadyMsg{req: req})
 
-	if !newM.streamHandler.HasPendingPermission() {
+	if !newM.stream.handler.HasPendingPermission() {
 		t.Fatal("expected pending permission to be rendered immediately")
 	}
-	if !newM.showSpinner {
+	if !newM.loading.showSpinner {
 		t.Fatal("expected spinner to remain active when permission prompt appears")
 	}
 	if cmd == nil {
@@ -515,8 +515,8 @@ func TestUpdateNormalMode_PermissionReadyRendersImmediately(t *testing.T) {
 func TestUpdateNormalMode_PermissionReadyPreservesUserScroll(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
-	m.showSpinner = true
+	m.stream.handler.Start(eventCh, "Loading...")
+	m.loading.showSpinner = true
 	offset := scrollViewportAwayFromBottom(t, &m)
 
 	req := &replpermissions.Request{
@@ -538,7 +538,7 @@ func TestUpdateNormalMode_PermissionReadyPreservesUserScroll(t *testing.T) {
 func TestUpdateNormalMode_DiffReadyRendersImmediately(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 
 	done := make(chan struct{})
 	req := repltooling.DiffRequest{
@@ -550,7 +550,7 @@ func TestUpdateNormalMode_DiffReadyRendersImmediately(t *testing.T) {
 
 	newM, cmd := m.updateNormalMode(diffReadyMsg{req: req})
 
-	if len(newM.streamHandler.segments) != 1 || newM.streamHandler.segments[0].kind != segmentDiff {
+	if len(newM.stream.handler.segments) != 1 || newM.stream.handler.segments[0].kind != segmentDiff {
 		t.Fatal("expected diff segment to be rendered immediately")
 	}
 	select {
@@ -566,7 +566,7 @@ func TestUpdateNormalMode_DiffReadyRendersImmediately(t *testing.T) {
 func TestUpdateNormalMode_DiffReadyPreservesUserScroll(t *testing.T) {
 	m := newTestModel()
 	eventCh := make(chan llm.StreamEvent)
-	m.streamHandler.Start(eventCh, "Loading...")
+	m.stream.handler.Start(eventCh, "Loading...")
 	offset := scrollViewportAwayFromBottom(t, &m)
 
 	done := make(chan struct{})
@@ -733,8 +733,8 @@ func TestInputMetaView_SuggestsCompactionAtSeventyPercent(t *testing.T) {
 
 func TestSpinnerHeight_IncludesCompactionSpinner(t *testing.T) {
 	m := newTestModel()
-	m.showSpinner = true
-	m.isCompacting = true
+	m.loading.showSpinner = true
+	m.compaction.active = true
 
 	if got := m.spinnerHeight(); got != 2 {
 		t.Fatalf("expected spinner height 2 during compaction, got %d", got)
@@ -743,17 +743,17 @@ func TestSpinnerHeight_IncludesCompactionSpinner(t *testing.T) {
 
 func TestCopyNotificationHeight(t *testing.T) {
 	m := newTestModel()
-	if got := m.copyNotificationHeight(); got != 0 {
+	if got := m.notificationHeight(); got != 0 {
 		t.Fatalf("expected notification height 0 when empty, got %d", got)
 	}
 
-	m.copyNotification = copyNotificationMessage
-	if got := m.copyNotificationHeight(); got != 2 {
+	m.notification.text = copyNotificationMessage
+	if got := m.notificationHeight(); got != 2 {
 		t.Fatalf("expected notification height 2, got %d", got)
 	}
 
-	m.showSpinner = true
-	if got := m.copyNotificationHeight(); got != 0 {
+	m.loading.showSpinner = true
+	if got := m.notificationHeight(); got != 0 {
 		t.Fatalf("expected notification height 0 when spinner is shown, got %d", got)
 	}
 }
@@ -768,7 +768,7 @@ func TestNotificationAdjustsViewportHeight(t *testing.T) {
 		t.Fatalf("expected viewport height %d with notification, got %d", baseHeight-2, got)
 	}
 
-	updated, _ := m.updateNormalMode(copyNotificationExpiredMsg{expiresAt: m.copyNotificationExpiresAt.UnixNano()})
+	updated, _ := m.updateNormalMode(copyNotificationExpiredMsg{expiresAt: m.notification.expiresAt.UnixNano()})
 	if got := updated.viewport.Height(); got != baseHeight {
 		t.Fatalf("expected viewport height %d after notification expires, got %d", baseHeight, got)
 	}
@@ -797,8 +797,8 @@ func TestFormatLoadingElapsed(t *testing.T) {
 
 func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
 	m := newTestModel()
-	m.showSpinner = true
-	m.loadingText = "Accio..."
+	m.loading.showSpinner = true
+	m.loading.text = "Accio..."
 	m.viewport.SetHeight(1)
 	m.viewport.SetContent("assistant output")
 
@@ -839,19 +839,19 @@ func TestView_RendersSpinnerOnLeftWithTopPadding(t *testing.T) {
 
 func TestHandleCompactionDone_StopsCompactionAndRefreshesOutput(t *testing.T) {
 	m := newTestModel()
-	m.isCompacting = true
-	m.showSpinner = true
-	m.compactionCancel = func() {}
+	m.compaction.active = true
+	m.loading.showSpinner = true
+	m.compaction.cancel = func() {}
 	m.contextStatus = contextStatus{KnownWindow: true, Percent: 10}
-	m.streamHandler.Start(make(chan llm.StreamEvent), "Compacting...")
-	m.streamHandler.HandleChunk("compacted summary")
+	m.stream.handler.Start(make(chan llm.StreamEvent), "Compacting...")
+	m.stream.handler.HandleChunk("compacted summary")
 
 	newM, cmd := m.handleCompactionDone()
 
-	if newM.isCompacting || newM.showSpinner {
+	if newM.compaction.active || newM.loading.showSpinner {
 		t.Fatal("expected compaction mode to stop")
 	}
-	if newM.compactionCancel != nil {
+	if newM.compaction.cancel != nil {
 		t.Fatal("expected compaction cancel func to be cleared")
 	}
 	if !strings.Contains(newM.output.Join(), "compacted summary") {
@@ -868,13 +868,13 @@ func TestHandleCompactionDone_StopsCompactionAndRefreshesOutput(t *testing.T) {
 
 func TestHandleCompactionError_CancelledShowsSoftMessage(t *testing.T) {
 	m := newTestModel()
-	m.isCompacting = true
-	m.showSpinner = true
-	m.compactionCancel = func() {}
+	m.compaction.active = true
+	m.loading.showSpinner = true
+	m.compaction.cancel = func() {}
 
 	newM, cmd := m.handleCompactionError(context.Canceled)
 
-	if newM.isCompacting || newM.showSpinner {
+	if newM.compaction.active || newM.loading.showSpinner {
 		t.Fatal("expected compaction mode to stop")
 	}
 	if !strings.Contains(newM.output.Join(), "Compaction cancelled.") {
