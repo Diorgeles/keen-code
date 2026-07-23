@@ -149,7 +149,7 @@ func TestAdjustTextareaHeight(t *testing.T) {
 	if m.textarea.Height() != inputMinHeight {
 		t.Errorf("expected textarea height %d for empty input, got %d", inputMinHeight, m.textarea.Height())
 	}
-	expectedVPHeight := m.height - m.textarea.Height() - 4
+	expectedVPHeight := m.height - m.textarea.Height() - 5
 	if m.viewport.Height() != expectedVPHeight {
 		t.Errorf("expected viewport height %d, got %d", expectedVPHeight, m.viewport.Height())
 	}
@@ -159,7 +159,7 @@ func TestAdjustTextareaHeight(t *testing.T) {
 	if m.textarea.Height() != 4 {
 		t.Errorf("expected textarea height 4 for 4-line input, got %d", m.textarea.Height())
 	}
-	expectedVPHeight = m.height - m.textarea.Height() - 4
+	expectedVPHeight = m.height - m.textarea.Height() - 5
 	if m.viewport.Height() != expectedVPHeight {
 		t.Errorf("expected viewport height %d, got %d", expectedVPHeight, m.viewport.Height())
 	}
@@ -254,8 +254,8 @@ func TestUpdateNormalMode_WindowResizeWhileModelSelectionActive(t *testing.T) {
 	if newM.height != 40 {
 		t.Errorf("expected height 40, got %d", newM.height)
 	}
-	if newM.viewport.Height() != 35 {
-		t.Errorf("expected viewport height 35, got %d", newM.viewport.Height())
+	if newM.viewport.Height() != 34 {
+		t.Errorf("expected viewport height 34, got %d", newM.viewport.Height())
 	}
 	if cmd != nil {
 		t.Error("expected nil cmd for window resize")
@@ -725,9 +725,12 @@ func TestInputMetaView_SuggestsCompactionAtSeventyPercent(t *testing.T) {
 		Percent:       70,
 	}
 
-	meta := m.inputMetaView()
-	if !strings.Contains(meta, "Try /compact") {
-		t.Fatalf("expected compaction hint, got %q", meta)
+	lines := strings.Split(m.inputMetaView(), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d", len(lines))
+	}
+	if !strings.Contains(lines[0], "Try /compact") {
+		t.Fatalf("expected compaction hint on location line, got %q", lines[0])
 	}
 }
 
