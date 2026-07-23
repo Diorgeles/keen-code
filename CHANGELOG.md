@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-07-23
+
+### Added
+- Git branch display in the REPL location line, refreshed on startup and after each completed turn.
+- Provider prefix on the model name in the REPL meta view.
+
+### Changed
+- Split the REPL meta view into location and context status lines with consistently styled separators.
+- Group REPL model state into sub-structs.
+
+### Fixed
+- Bump golang.org/x/text to v0.39.0 to address GO-2026-5970 (infinite loop on invalid input).
+- Bump google.golang.org/grpc to v1.82.1.
+
 ## [0.35.0] - 2026-07-22
 
 ### Changed
@@ -756,7 +770,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.35.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/mochow13/keen-code/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/mochow13/keen-code/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/mochow13/keen-code/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/mochow13/keen-code/compare/v0.32.0...v0.33.0
