@@ -11,9 +11,8 @@ import (
 )
 
 type delegateCall struct {
-	agent          string
-	task           string
-	timeoutSeconds int
+	agent string
+	task  string
 }
 
 type mockSubagentRunner struct {
@@ -27,9 +26,9 @@ type mockSubagentRunner struct {
 	release chan struct{}
 }
 
-func (m *mockSubagentRunner) RunDelegate(ctx context.Context, agent, task string, timeoutSeconds int) (any, error) {
+func (m *mockSubagentRunner) RunDelegate(ctx context.Context, agent, task string) (any, error) {
 	m.mu.Lock()
-	m.calls = append(m.calls, delegateCall{agent: agent, task: task, timeoutSeconds: timeoutSeconds})
+	m.calls = append(m.calls, delegateCall{agent: agent, task: task})
 	m.mu.Unlock()
 	if m.started != nil {
 		m.started <- struct{}{}
@@ -86,10 +85,13 @@ func TestDelegateTool_InputSchema(t *testing.T) {
 		t.Fatalf("item required = %v, want [agent task]", items["required"])
 	}
 	itemProperties := items["properties"].(map[string]any)
-	for _, name := range []string{"agent", "task", "timeout_seconds"} {
+	for _, name := range []string{"agent", "task"} {
 		if _, ok := itemProperties[name]; !ok {
 			t.Fatalf("item properties missing %q", name)
 		}
+	}
+	if _, ok := itemProperties["timeout_seconds"]; ok {
+		t.Fatal("item properties should not include timeout_seconds")
 	}
 }
 
@@ -98,7 +100,7 @@ func TestDelegateTool_ExecutePassesTasksToRunner(t *testing.T) {
 	tool := NewDelegateTool(runner)
 
 	result, err := tool.Execute(context.Background(), delegateTasks(
-		map[string]any{"agent": "explorer", "task": "Inspect internal/tools.", "timeout_seconds": 30},
+		map[string]any{"agent": "explorer", "task": "Inspect internal/tools."},
 	))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -107,7 +109,7 @@ func TestDelegateTool_ExecutePassesTasksToRunner(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
-	wantCall := delegateCall{agent: "explorer", task: "Inspect internal/tools.", timeoutSeconds: 30}
+	wantCall := delegateCall{agent: "explorer", task: "Inspect internal/tools."}
 	if calls[0] != wantCall {
 		t.Fatalf("call = %+v, want %+v", calls[0], wantCall)
 	}
@@ -207,7 +209,6 @@ func TestDelegateTool_ValidateInputRejectsInvalidInput(t *testing.T) {
 		{name: "too many tasks", input: map[string]any{"tasks": tooMany}, wantErr: "at most 10 tasks"},
 		{name: "missing agent", input: delegateTasks(map[string]any{"task": "Inspect docs."}), wantErr: "tasks[0].agent"},
 		{name: "missing task", input: delegateTasks(map[string]any{"agent": "explorer"}), wantErr: "tasks[0].task"},
-		{name: "non-integer timeout", input: delegateTasks(map[string]any{"agent": "explorer", "task": "Inspect docs.", "timeout_seconds": "30"}), wantErr: "cannot unmarshal"},
 	}
 
 	for _, tt := range tests {

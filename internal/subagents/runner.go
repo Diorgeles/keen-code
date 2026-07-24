@@ -33,11 +33,11 @@ type Result struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func (r *Runner) RunDelegate(ctx context.Context, agent, task string, timeoutSeconds int) (any, error) {
-	return r.Run(ctx, agent, task, timeoutSeconds)
+func (r *Runner) RunDelegate(ctx context.Context, agent, task string) (any, error) {
+	return r.Run(ctx, agent, task)
 }
 
-func (r *Runner) Run(ctx context.Context, agent, task string, timeoutSeconds int) (Result, error) {
+func (r *Runner) Run(ctx context.Context, agent, task string) (Result, error) {
 	profile, ok := Find(r.profiles(), strings.TrimSpace(agent))
 	if !ok {
 		return Result{Agent: agent, Status: "error", Error: "unknown subagent"}, fmt.Errorf("unknown subagent %q", agent)
@@ -58,12 +58,11 @@ func (r *Runner) Run(ctx context.Context, agent, task string, timeoutSeconds int
 		return Result{Agent: profile.Name, Status: "error", Error: err.Error()}, err
 	}
 
-	childCtx := ctx
-	cancel := func() {}
-	timeoutSeconds = effectiveTimeoutSeconds(timeoutSeconds, profile.TimeoutSeconds)
-	if timeoutSeconds > 0 {
-		childCtx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	timeoutSeconds := profile.TimeoutSeconds
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = defaultTimeoutSeconds
 	}
+	childCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
 	defer cancel()
 
 	messages := []llm.Message{
@@ -105,16 +104,6 @@ func (r *Runner) profiles() []Profile {
 		return r.GetProfiles()
 	}
 	return append([]Profile(nil), r.Profiles...)
-}
-
-func effectiveTimeoutSeconds(requested, profile int) int {
-	if requested > 0 {
-		return requested
-	}
-	if profile > 0 {
-		return profile
-	}
-	return defaultTimeoutSeconds
 }
 
 func collectResult(ctx context.Context, events <-chan llm.StreamEvent) (string, error) {

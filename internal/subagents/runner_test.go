@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
@@ -14,12 +15,16 @@ type recordingClient struct {
 	messages []llm.Message
 	registry *tools.Registry
 	options  []llm.StreamOptions
+	timeout  time.Duration
 }
 
 func (c *recordingClient) StreamChat(ctx context.Context, messages []llm.Message, registry *tools.Registry, opts ...llm.StreamOptions) (<-chan llm.StreamEvent, error) {
 	c.messages = llm.CloneMessages(messages)
 	c.registry = registry
 	c.options = append([]llm.StreamOptions(nil), opts...)
+	if deadline, ok := ctx.Deadline(); ok {
+		c.timeout = time.Until(deadline)
+	}
 	ch := make(chan llm.StreamEvent, 2)
 	ch <- llm.StreamEvent{Type: llm.StreamEventTypeChunk, Content: "summary"}
 	ch <- llm.StreamEvent{Type: llm.StreamEventTypeDone}
@@ -57,7 +62,7 @@ func TestRunnerUsesReadOnlyRegistryAndProfilePrompt(t *testing.T) {
 		Registry:  parentRegistry,
 	}
 
-	result, err := runner.Run(context.Background(), "explorer", "Inspect internal/subagents", 0)
+	result, err := runner.Run(context.Background(), "explorer", "Inspect internal/subagents")
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -102,7 +107,7 @@ func TestRunnerUsesLiveProfileProvider(t *testing.T) {
 	}
 
 	profiles = []Profile{{Name: "explorer", Description: "Explore", Instructions: "Fresh prompt."}}
-	result, err := runner.Run(context.Background(), "explorer", "Inspect files", 0)
+	result, err := runner.Run(context.Background(), "explorer", "Inspect files")
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
@@ -119,28 +124,45 @@ func TestRunnerReturnsErrorsForInvalidInputs(t *testing.T) {
 		Profiles: []Profile{{Name: "explorer", Description: "Explore", Instructions: "Prompt."}},
 		Config:   &config.ResolvedConfig{Provider: config.ProviderOpenAI, Model: "model", APIKey: "key"},
 	}
-	if result, err := runner.Run(context.Background(), "missing", "Task", 0); err == nil || result.Status != "error" {
+	if result, err := runner.Run(context.Background(), "missing", "Task"); err == nil || result.Status != "error" {
 		t.Fatalf("expected unknown subagent error, got result=%+v err=%v", result, err)
 	}
-	if result, err := runner.Run(context.Background(), "explorer", "", 0); err == nil || result.Status != "error" {
+	if result, err := runner.Run(context.Background(), "explorer", ""); err == nil || result.Status != "error" {
 		t.Fatalf("expected missing task error, got result=%+v err=%v", result, err)
 	}
 
 	runner.Config = nil
-	if result, err := runner.Run(context.Background(), "explorer", "Task", 0); err == nil || result.Status != "error" {
+	if result, err := runner.Run(context.Background(), "explorer", "Task"); err == nil || result.Status != "error" {
 		t.Fatalf("expected missing config error, got result=%+v err=%v", result, err)
 	}
 }
 
-func TestEffectiveTimeoutSeconds(t *testing.T) {
-	if got := effectiveTimeoutSeconds(5, 10); got != 5 {
-		t.Fatalf("expected requested timeout, got %d", got)
+func TestRunnerAppliesProfileTimeout(t *testing.T) {
+	newRunner := func(client *recordingClient, profileTimeout int) *Runner {
+		return &Runner{
+			WorkingDir: "/repo",
+			Config:     &config.ResolvedConfig{Provider: config.ProviderOpenAI, Model: "model", APIKey: "key"},
+			Profiles:   []Profile{{Name: "explorer", Description: "Explore", Instructions: "Prompt.", TimeoutSeconds: profileTimeout}},
+			NewClient:  func(*config.ResolvedConfig) (llm.LLMClient, error) { return client, nil },
+			Registry:   tools.NewRegistry(),
+		}
 	}
-	if got := effectiveTimeoutSeconds(0, 10); got != 10 {
-		t.Fatalf("expected profile timeout, got %d", got)
+
+	client := &recordingClient{}
+	if _, err := newRunner(client, 30).Run(context.Background(), "explorer", "Task"); err != nil {
+		t.Fatalf("Run returned error: %v", err)
 	}
-	if got := effectiveTimeoutSeconds(0, 0); got != defaultTimeoutSeconds {
-		t.Fatalf("expected default timeout, got %d", got)
+	if client.timeout <= 29*time.Second || client.timeout > 30*time.Second {
+		t.Fatalf("expected profile timeout near 30s, got %v", client.timeout)
+	}
+
+	client = &recordingClient{}
+	if _, err := newRunner(client, 0).Run(context.Background(), "explorer", "Task"); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	want := time.Duration(defaultTimeoutSeconds) * time.Second
+	if client.timeout <= want-time.Second || client.timeout > want {
+		t.Fatalf("expected default timeout near %v, got %v", want, client.timeout)
 	}
 }
 

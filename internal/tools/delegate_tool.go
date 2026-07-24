@@ -8,7 +8,7 @@ import (
 )
 
 type SubagentRunner interface {
-	RunDelegate(ctx context.Context, agent, task string, timeoutSeconds int) (any, error)
+	RunDelegate(ctx context.Context, agent, task string) (any, error)
 }
 
 const maxDelegateTasks = 10
@@ -18,9 +18,8 @@ type DelegateTool struct {
 }
 
 type delegateInput struct {
-	Agent          string `json:"agent"`
-	Task           string `json:"task"`
-	TimeoutSeconds int    `json:"timeout_seconds"`
+	Agent string `json:"agent"`
+	Task  string `json:"task"`
 }
 
 type delegateBatchInput struct {
@@ -67,10 +66,6 @@ func (t *DelegateTool) InputSchema() map[string]any {
 							"type":        "string",
 							"description": "Bounded task for the subagent. Include relevant directories or file paths when possible.",
 						},
-						"timeout_seconds": map[string]any{
-							"type":        "integer",
-							"description": "Optional child runtime timeout in seconds.",
-						},
 					},
 				},
 			},
@@ -96,7 +91,7 @@ func (t *DelegateTool) Execute(ctx context.Context, input any) (any, error) {
 	var wg sync.WaitGroup
 	for i, task := range parsed.Tasks {
 		wg.Go(func() {
-			result, runErr := t.runner.RunDelegate(ctx, task.Agent, task.Task, task.TimeoutSeconds)
+			result, runErr := t.runner.RunDelegate(ctx, task.Agent, task.Task)
 			results[i] = delegateResult{Agent: task.Agent, Result: result}
 			if runErr != nil {
 				results[i].Error = runErr.Error()
