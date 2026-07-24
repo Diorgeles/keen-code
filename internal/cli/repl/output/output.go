@@ -380,9 +380,6 @@ func readFileMetadata(result map[string]any) []string {
 	if bytes, ok := intValue(result["bytes_read"]); ok {
 		metadata = append(metadata, formatByteCount(bytes))
 	}
-	if truncated, _ := result["truncated"].(bool); truncated {
-		metadata = append(metadata, "truncated")
-	}
 	return metadata
 }
 
