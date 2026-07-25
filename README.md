@@ -38,6 +38,7 @@ Keen Code is also an experiment to play with the *new way of working* where engi
 - [Run Keen](#run-keen)
 - [Supported Providers](#supported-providers)
 - [Built-in Tools](#built-in-tools)
+- [Telemetry](#telemetry)
 - [How Keen Handles Context](#how-keen-handles-context)
 - [Further Reading](#further-reading)
 
@@ -51,6 +52,16 @@ Keen Code is also an experiment to play with the *new way of working* where engi
 - **Session management** — Persistent sessions with resume capability.
 - **Conservative context management** — Lean cross-turn memory via `TurnMemory` summaries instead of raw tool traces. More information can be found in [docs/turn-memory.md](docs/turn-memory.md). An analysis of the tradeoffs and rationale can be found in [docs/turn-memory-analysis.md](docs/turn-memory-analysis.md).
 - **User-triggered compaction** - When the context window is nearing the limit, use `/compact` to compact the context.
+
+## Telemetry
+
+Keen Code collects two minimal anonymous usage events for actual interactive and headless coding sessions: `keen_session_start` and `keen_session_end`. Help, version, and invalid command invocations are not counted. The events contain a random resettable installation ID, a session ID, Keen version, OS, architecture, interactive/headless mode, and session duration in milliseconds. Google Analytics derives coarse country from the request connection, so no separate country event or country value is sent.
+
+Keen Code never sends prompts, responses, code, paths, commands, repository details, model/provider details, or raw errors. Set `KEEN_TELEMETRY=off` or `DO_NOT_TRACK=1` to disable telemetry. It is also disabled automatically in CI.
+
+Telemetry delivery is fail-silent. The session-start event is emitted asynchronously, and the session-end event is emitted on normal exit. Each event has a one-second timeout. Forced termination, crashes, and network failures can still prevent delivery.
+
+A random UUID is stored with user-only permissions at `~/.keen/telemetry.json`; it is not derived from machine or user data. Delete that file to reset the identifier.
 
 ## How Keen Handles Context
 

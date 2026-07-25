@@ -33,6 +33,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KEEN_GA_MEASUREMENT_ID: ${{ secrets.KEEN_GA_MEASUREMENT_ID }}
+          KEEN_GA_API_SECRET: ${{ secrets.KEEN_GA_API_SECRET }}
 
   publish-npm:
     runs-on: ubuntu-latest
