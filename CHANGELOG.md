@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.36.2] - 2026-07-25
+
+### Changed
+- Align system prompt guidance with retained historical tool inputs and tool-level Git enforcement.
+- Remove dead turn-memory rebuilds from retry handling.
+
+### Fixed
+- Omit obsolete read-file truncation metadata from turn memory.
+
 ## [0.36.1] - 2026-07-24
 
 ### Changed
@@ -775,7 +784,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.36.1...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.36.2...HEAD
+[0.36.2]: https://github.com/mochow13/keen-code/compare/v0.36.1...v0.36.2
 [0.36.1]: https://github.com/mochow13/keen-code/compare/v0.36.0...v0.36.1
 [0.36.0]: https://github.com/mochow13/keen-code/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/mochow13/keen-code/compare/v0.34.0...v0.35.0
