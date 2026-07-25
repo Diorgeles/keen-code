@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-07-26
+
+### Added
+- Anonymous GA4 session start and end telemetry with coarse country reporting, privacy-focused fields, and standard opt-out controls.
+
 ## [0.36.3] - 2026-07-26
 
 ### Fixed
@@ -789,7 +794,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.36.3...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/mochow13/keen-code/compare/v0.36.3...v0.37.0
 [0.36.3]: https://github.com/mochow13/keen-code/compare/v0.36.2...v0.36.3
 [0.36.2]: https://github.com/mochow13/keen-code/compare/v0.36.1...v0.36.2
 [0.36.1]: https://github.com/mochow13/keen-code/compare/v0.36.0...v0.36.1
