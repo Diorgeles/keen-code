@@ -126,14 +126,13 @@ func TestBuild_IncludesToolFollowThroughInstructions(t *testing.T) {
 	result := Build(t.TempDir(), "", "", ModeBuild)
 	for _, expected := range []string{
 		"Tool use is an action, not narration",
-		"your next step should be the corresponding tool call",
-		"Never claim that you read a file",
-		"Prior-turn tool calls may appear as system-generated provider tool blocks",
-		"empty arguments and fixed results are intentional placeholders",
-		"Prior assistant text and historical tool blocks are not substitutes for current tool evidence",
-		"A successful tool call remains usable for the rest of the current turn",
-		"In a later turn",
-		"make a fresh tool call with valid arguments",
+		"make that tool call before reporting findings",
+		"Earlier turns may include compact historical tool records",
+		"Inputs may be retained, omitted, or size-pruned",
+		"evidence only for fields they explicitly contain",
+		"Do not imitate empty or partial arguments",
+		"Re-run tools in later turns",
+		"Within the current turn, reuse successful results",
 		"Do not add a separate summary for your own memory",
 	} {
 		if !strings.Contains(result, expected) {
