@@ -7,9 +7,9 @@ func TestFormatMessageForProvider_DoesNotAppendTurnMemory(t *testing.T) {
 		Role:    RoleAssistant,
 		Content: "Updated the parser.",
 		TurnMemory: &TurnMemory{ToolActivity: []HistoricalToolActivity{{
-			Tool:        "write_file",
-			Status:      "success",
-			FileChanged: "a.go",
+			Tool:   "write_file",
+			Input:  map[string]any{"path": "a.go", "content": "content"},
+			Status: "success",
 		}}},
 	}
 
@@ -85,7 +85,6 @@ func TestHistoricalToolResult_RetainsOnlyCompactOutcome(t *testing.T) {
 	}{
 		{name: "success", activity: HistoricalToolActivity{Status: "success"}, want: `{"status":"success"}`},
 		{name: "error", activity: HistoricalToolActivity{Status: "error"}, want: `{"status":"error"}`},
-		{name: "file changed", activity: HistoricalToolActivity{Status: "success", FileChanged: "a.go"}, want: `{"status":"success","file_changed":"a.go"}`},
 		{name: "exit code", activity: HistoricalToolActivity{Status: "success", ExitCode: &exitCode}, want: `{"status":"success","exit_code":1}`},
 	}
 

@@ -648,8 +648,8 @@ func TestHandleLLMError_MaterializesMessageAndTurnMemory(t *testing.T) {
 	}
 	m.startAssistantTurnMemory()
 	sh.HandleToolEnd(&llm.ToolCall{
-		Name:   "write_file",
-		Output: map[string]any{"file_changed": workingDir + "/foo.go"},
+		Name:  "write_file",
+		Input: map[string]any{"path": workingDir + "/foo.go", "content": "package foo"},
 	})
 
 	updated, _ := m.handleLLMError(errors.New("rate limit"))
@@ -668,8 +668,8 @@ func TestHandleLLMError_MaterializesMessageAndTurnMemory(t *testing.T) {
 	if msg.TurnMemory == nil {
 		t.Fatal("expected TurnMemory to be preserved, got nil")
 	}
-	if len(msg.TurnMemory.ToolActivity) != 1 || msg.TurnMemory.ToolActivity[0].FileChanged != "foo.go" {
-		t.Fatalf("expected changed file activity, got %#v", msg.TurnMemory.ToolActivity)
+	if len(msg.TurnMemory.ToolActivity) != 1 || msg.TurnMemory.ToolActivity[0].Input["path"] != "foo.go" || msg.TurnMemory.ToolActivity[0].Input["content"] != "package foo" {
+		t.Fatalf("expected write input activity, got %#v", msg.TurnMemory.ToolActivity)
 	}
 }
 

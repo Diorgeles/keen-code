@@ -5,6 +5,7 @@ import (
 	"maps"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/user/keen-code/internal/llm"
 )
@@ -19,6 +20,8 @@ var retainedHistoricalToolInputs = map[string]struct{}{
 	"bash":          {},
 	"delegate_task": {},
 	"call_mcp_tool": {},
+	"write_file":    {},
+	"edit_file":     {},
 }
 
 type turnMemoryAccumulator struct {
@@ -80,7 +83,7 @@ func historicalToolActivity(toolCall *llm.ToolCall, textOffset int, workingDir, 
 			input = cloneToolInput(input)
 			input["command"] = bashCommand
 		}
-		activity.Input = boundedHistoricalToolInput(input)
+		activity.Input = boundedHistoricalToolInput(input, truncatesHistoricalToolInput(toolCall.Name))
 	}
 
 	if toolCall.Name == "bash" {
@@ -89,23 +92,20 @@ func historicalToolActivity(toolCall *llm.ToolCall, textOffset int, workingDir, 
 			activity.ExitCode = &exitCode
 		}
 	}
-	if activity.Status != "success" {
-		return activity
-	}
-
-	if toolCall.Name == "write_file" || toolCall.Name == "edit_file" {
-		activity.FileChanged = relativizePath(extractStringField(toolCall.Output, "file_changed"), workingDir)
-	}
 	return activity
 }
 
-func boundedHistoricalToolInput(input map[string]any) map[string]any {
+func boundedHistoricalToolInput(input map[string]any, truncateOversizedStrings bool) map[string]any {
 	if len(input) == 0 {
 		return nil
 	}
 
 	bounded := make(map[string]any, len(input))
 	for key, value := range input {
+		if text, ok := value.(string); ok && truncateOversizedStrings {
+			bounded[key] = truncateUTF8(text, maxHistoricalToolInputFieldBytes)
+			continue
+		}
 		encoded, err := json.Marshal(value)
 		if err == nil && len(encoded) <= maxHistoricalToolInputFieldBytes {
 			bounded[key] = value
@@ -117,6 +117,16 @@ func boundedHistoricalToolInput(input map[string]any) map[string]any {
 	return bounded
 }
 
+func truncateUTF8(value string, maxBytes int) string {
+	if len(value) <= maxBytes {
+		return value
+	}
+	for maxBytes > 0 && !utf8.RuneStart(value[maxBytes]) {
+		maxBytes--
+	}
+	return value[:maxBytes]
+}
+
 func cloneToolInput(input map[string]any) map[string]any {
 	cloned := make(map[string]any, len(input)+1)
 	maps.Copy(cloned, input)
@@ -124,7 +134,11 @@ func cloneToolInput(input map[string]any) map[string]any {
 }
 
 func retainsPathInput(tool string) bool {
-	return tool == "read_file" || tool == "grep" || tool == "glob"
+	return tool == "read_file" || tool == "grep" || tool == "glob" || tool == "write_file" || tool == "edit_file"
+}
+
+func truncatesHistoricalToolInput(tool string) bool {
+	return tool == "write_file" || tool == "edit_file"
 }
 
 func (a *turnMemoryAccumulator) Build() *llm.TurnMemory {
@@ -133,15 +147,6 @@ func (a *turnMemoryAccumulator) Build() *llm.TurnMemory {
 	}
 
 	return llm.CloneTurnMemory(&llm.TurnMemory{ToolActivity: a.toolActivity})
-}
-
-func extractStringField(output any, key string) string {
-	result, ok := output.(map[string]any)
-	if !ok {
-		return ""
-	}
-	value, _ := result[key].(string)
-	return value
 }
 
 func extractIntField(output any, key string) (int, bool) {

@@ -80,13 +80,11 @@ func historicalToolResult(activity HistoricalToolActivity) string {
 		status = "error"
 	}
 	result := struct {
-		Status      string `json:"status"`
-		FileChanged string `json:"file_changed,omitempty"`
-		ExitCode    *int   `json:"exit_code,omitempty"`
+		Status   string `json:"status"`
+		ExitCode *int   `json:"exit_code,omitempty"`
 	}{
-		Status:      status,
-		FileChanged: activity.FileChanged,
-		ExitCode:    activity.ExitCode,
+		Status:   status,
+		ExitCode: activity.ExitCode,
 	}
 	return serializeJSON(result)
 }

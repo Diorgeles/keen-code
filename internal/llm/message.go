@@ -21,12 +21,11 @@ type TurnMemory struct {
 }
 
 type HistoricalToolActivity struct {
-	TextOffset  int            `json:"text_offset"`
-	Tool        string         `json:"tool"`
-	Input       map[string]any `json:"input,omitempty"`
-	Status      string         `json:"status"`
-	FileChanged string         `json:"file_changed,omitempty"`
-	ExitCode    *int           `json:"exit_code,omitempty"`
+	TextOffset int            `json:"text_offset"`
+	Tool       string         `json:"tool"`
+	Input      map[string]any `json:"input,omitempty"`
+	Status     string         `json:"status"`
+	ExitCode   *int           `json:"exit_code,omitempty"`
 }
 
 func CloneMessage(message Message) Message {

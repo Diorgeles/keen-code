@@ -2,7 +2,9 @@ package repl
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	replappstate "github.com/user/keen-code/internal/cli/repl/appstate"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
@@ -26,10 +28,9 @@ func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 		output:   reploutput.NewOutputBuilder(80, ""),
 	}
 	m.startAssistantTurnMemory()
-	relativeFile := filepath.Join("nested", "a.go")
 	sh.HandleToolEnd(&llm.ToolCall{
-		Name:   "edit_file",
-		Output: map[string]any{"file_changed": filepath.Join(workingDir, relativeFile)},
+		Name:  "edit_file",
+		Input: map[string]any{"path": filepath.Join(workingDir, "nested", "a.go"), "oldString": "old", "newString": "new"},
 	})
 	sh.HandleBashStart("go test ./...", "")
 	sh.HandleBashEnd(&llm.ToolCall{
@@ -50,27 +51,28 @@ func TestHandleLLMDone_AttachesTurnMemoryToAssistantMessage(t *testing.T) {
 	if len(activities) != 3 {
 		t.Fatalf("unexpected tool activity %#v", activities)
 	}
-	if activities[1].FileChanged != relativeFile {
-		t.Fatalf("unexpected file change %#v", activities[1])
+	if activities[1].Input["path"] != filepath.Join("nested", "a.go") || activities[1].Input["oldString"] != "old" || activities[1].Input["newString"] != "new" {
+		t.Fatalf("unexpected edit activity %#v", activities[1])
 	}
 	if activities[2].Input["command"] != "go test ./..." || activities[2].Status != "success" || activities[2].ExitCode == nil || *activities[2].ExitCode != 1 {
 		t.Fatalf("unexpected bash activity %#v", activities[2])
 	}
 }
 
-func TestCollectHistoricalToolActivity_UsesRelativeChangedPath(t *testing.T) {
+func TestCollectHistoricalToolActivity_RetainsWriteInputWithoutChangedPath(t *testing.T) {
 	workingDir := t.TempDir()
 	targetPath := filepath.Join(workingDir, "dir", "file.go")
 	activities := collectHistoricalToolActivity([]streamSegment{{
 		kind: segmentToolEnd,
 		toolCall: &llm.ToolCall{
 			Name:   "write_file",
+			Input:  map[string]any{"path": targetPath, "content": "content"},
 			Output: map[string]any{"file_changed": targetPath},
 		},
 	}}, workingDir)
 
-	if len(activities) != 1 || activities[0].FileChanged != filepath.Join("dir", "file.go") {
-		t.Fatalf("expected relative changed file path, got %#v", activities)
+	if len(activities) != 1 || activities[0].Input["path"] != filepath.Join("dir", "file.go") || activities[0].Input["content"] != "content" || activities[0].Status != "success" {
+		t.Fatalf("expected retained write input and status-only outcome, got %#v", activities)
 	}
 }
 
@@ -86,6 +88,8 @@ func TestCollectHistoricalToolActivity_RelativizesRetainedPathInputs(t *testing.
 		{name: "read file", tool: "read_file", path: filepath.Join(workingDir, "dir", "file.go"), expected: filepath.Join("dir", "file.go")},
 		{name: "grep", tool: "grep", path: filepath.Join(workingDir, "internal"), expected: "internal"},
 		{name: "glob", tool: "glob", path: workingDir, expected: "."},
+		{name: "write file", tool: "write_file", path: filepath.Join(workingDir, "dir", "file.go"), expected: filepath.Join("dir", "file.go")},
+		{name: "edit file", tool: "edit_file", path: filepath.Join(workingDir, "dir", "file.go"), expected: filepath.Join("dir", "file.go")},
 		{name: "outside working directory", tool: "read_file", path: outsidePath, expected: outsidePath},
 	}
 
@@ -129,7 +133,7 @@ func TestCollectHistoricalToolActivity_RecordsOffsetsInputsAndStatus(t *testing.
 	if got[1].TextOffset != len("Inspecting. ") || got[1].Input["path"] != "a.go" || got[1].Status != "success" {
 		t.Fatalf("unexpected read activity %#v", got[1])
 	}
-	if got[2].TextOffset != got[1].TextOffset || got[2].Status != "error" || got[2].Input != nil {
+	if got[2].TextOffset != got[1].TextOffset || got[2].Status != "error" || got[2].Input["path"] != "a.go" {
 		t.Fatalf("unexpected edit activity %#v", got[2])
 	}
 	if got[3].TextOffset != len("Inspecting. Done.") || got[3].Input["command"] != "go test ./..." {
@@ -163,12 +167,12 @@ func TestCollectHistoricalToolActivity_RetainsMCPInput(t *testing.T) {
 
 func TestCollectHistoricalToolActivity_DoesNotInferRetainedOutcomesFromArguments(t *testing.T) {
 	activities := collectHistoricalToolActivity([]streamSegment{
-		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Input: map[string]any{"path": "a.go"}, Output: map[string]any{"path": "a.go"}}},
+		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Input: map[string]any{"path": "a.go", "content": "content"}, Output: map[string]any{"path": "a.go"}}},
 		{kind: segmentBash, command: "go test ./...", toolCall: &llm.ToolCall{Name: "bash", Input: map[string]any{"command": "go test ./..."}, Output: map[string]any{"exit_code": 1}}},
 	}, "")
 
-	if activities[0].FileChanged != "" {
-		t.Fatalf("expected file_changed to come only from tool output, got %#v", activities[0])
+	if activities[0].Input["path"] != "a.go" || activities[0].Input["content"] != "content" || activities[0].Status != "success" {
+		t.Fatalf("expected write input and status only, got %#v", activities[0])
 	}
 	if activities[1].Input["command"] != "go test ./..." || activities[1].Status != "success" || activities[1].ExitCode == nil || *activities[1].ExitCode != 1 {
 		t.Fatalf("expected successful tool status, command input, and exit code output, got %#v", activities[1])
@@ -217,15 +221,41 @@ func TestCollectHistoricalToolActivity_StripsOversizedMCPArguments(t *testing.T)
 	}
 }
 
-func TestCollectHistoricalToolActivity_RetainsOnlyAllowedToolInputs(t *testing.T) {
+func TestCollectHistoricalToolActivity_RetainsWriteAndEditInputs(t *testing.T) {
 	segments := []streamSegment{
 		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "read_file", Input: map[string]any{"path": "a.go"}}},
 		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Input: map[string]any{"path": "a.go", "content": "content"}}},
-		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "edit_file", Input: map[string]any{"path": "a.go", "oldString": "old", "newString": "new"}}},
+		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "edit_file", Input: map[string]any{"path": "a.go", "oldString": "old", "newString": "new", "shouldReplaceAll": true}}},
 	}
 
 	got := collectHistoricalToolActivity(segments, "")
-	if got[0].Input["path"] != "a.go" || got[1].Input != nil || got[2].Input != nil {
-		t.Fatalf("unexpected retained inputs %#v", got)
+	if got[0].Input["path"] != "a.go" || got[1].Input["path"] != "a.go" || got[1].Input["content"] != "content" {
+		t.Fatalf("unexpected retained read/write inputs %#v", got)
+	}
+	if got[2].Input["path"] != "a.go" || got[2].Input["oldString"] != "old" || got[2].Input["newString"] != "new" || got[2].Input["shouldReplaceAll"] != true {
+		t.Fatalf("unexpected retained edit input %#v", got[2])
+	}
+}
+
+func TestCollectHistoricalToolActivity_TruncatesOversizedWriteAndEditStrings(t *testing.T) {
+	oversizedASCII := strings.Repeat("a", maxHistoricalToolInputFieldBytes+1)
+	oversizedUTF8 := strings.Repeat("é", maxHistoricalToolInputFieldBytes/2+1)
+	segments := []streamSegment{
+		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Input: map[string]any{"path": "a.go", "content": oversizedASCII}}},
+		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "edit_file", Input: map[string]any{"path": "a.go", "oldString": oversizedASCII, "newString": oversizedUTF8}}},
+	}
+
+	got := collectHistoricalToolActivity(segments, "")
+	writeContent := got[0].Input["content"].(string)
+	oldString := got[1].Input["oldString"].(string)
+	newString := got[1].Input["newString"].(string)
+	if len(writeContent) != maxHistoricalToolInputFieldBytes || len(oldString) != maxHistoricalToolInputFieldBytes {
+		t.Fatalf("expected ASCII fields truncated to %d bytes, got %d and %d", maxHistoricalToolInputFieldBytes, len(writeContent), len(oldString))
+	}
+	if len(newString) > maxHistoricalToolInputFieldBytes || !utf8.ValidString(newString) || newString == "" {
+		t.Fatalf("expected valid bounded UTF-8 without marker, got %q", newString)
+	}
+	if strings.Contains(writeContent, "truncated") || strings.Contains(newString, "truncated") {
+		t.Fatalf("did not expect truncation marker, got %#v", got)
 	}
 }

@@ -64,7 +64,7 @@ refactoring code, explaining code, exploring codebases, writing tests, and more.
 
 # Tool history
 - Full tool inputs and outputs are available only during the current turn.
-- Earlier turns may include compact historical tool records. Inputs may be retained, omitted, or size-pruned; results contain only status and sometimes a changed path or non-zero exit code.
+- Earlier turns may include compact historical tool records. Inputs may be retained, omitted, or size-pruned; results contain only status and sometimes a non-zero exit code.
 - Treat these records as evidence only for fields they explicitly contain, not as complete transcripts or proof of current state. Do not imitate empty or partial arguments.
 - Re-run tools in later turns when you need omitted output or current mutable state. Within the current turn, reuse successful results unless state may have changed.
 
