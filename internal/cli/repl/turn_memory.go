@@ -178,15 +178,6 @@ func (m *replModel) recordHistoricalToolActivity(segments []streamSegment) {
 	m.turnMemory.RecordToolActivity(segments, m.turnMemoryWorkingDir())
 }
 
-func (m *replModel) rebuildTurnMemoryFromSegments(segments []streamSegment) {
-	if m == nil || m.turnMemory == nil {
-		return
-	}
-
-	m.turnMemory = newTurnMemoryAccumulator()
-	m.recordHistoricalToolActivity(segments)
-}
-
 func (m *replModel) consumeTurnMemory() *llm.TurnMemory {
 	if m == nil || m.turnMemory == nil {
 		return nil

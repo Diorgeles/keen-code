@@ -120,7 +120,6 @@ func RunHeadless(ctx context.Context, opts HeadlessRunOptions) (*HeadlessRunResu
 				lastUsage = event.Usage
 			case llm.StreamEventTypeRetry:
 				handler.RewindForRetry()
-				turnMemory = rebuildHeadlessTurnMemory(handler.segments, opts.WorkingDir)
 			case llm.StreamEventTypeDone:
 				return finishHeadlessRun(opts.Out, format, sessions, handler, turnMemory, lastUsage)
 			case llm.StreamEventTypeIncomplete:
@@ -169,12 +168,6 @@ func handleHeadlessToolEnd(handler *StreamHandler, toolCall *llm.ToolCall) {
 		return
 	}
 	handler.HandleToolEnd(toolCall)
-}
-
-func rebuildHeadlessTurnMemory(segments []streamSegment, workingDir string) *turnMemoryAccumulator {
-	memory := newTurnMemoryAccumulator()
-	memory.RecordToolActivity(segments, workingDir)
-	return memory
 }
 
 func finishHeadlessRun(out io.Writer, format string, sessions *replSessionState, handler *StreamHandler, turnMemory *turnMemoryAccumulator, usage *llm.TokenUsage) (*HeadlessRunResult, error) {

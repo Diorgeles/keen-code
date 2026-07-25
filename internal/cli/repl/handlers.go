@@ -149,7 +149,6 @@ func (m *replModel) handleLLMError(err error) (replModel, tea.Cmd) {
 func (m *replModel) handleLLMRetry(err error, attempt int) (replModel, tea.Cmd) {
 	m.flushStreamRender()
 	m.stream.handler.RewindForRetry()
-	m.rebuildTurnMemoryFromSegments(m.stream.handler.segments)
 	m.loading.text = fmt.Sprintf("Retrying (attempt %d)...", attempt)
 	m.stream.handler.SetLoadingText(m.loading.text)
 	m.updateViewportContent()

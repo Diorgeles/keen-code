@@ -161,21 +161,6 @@ func TestCollectHistoricalToolActivity_RetainsMCPInput(t *testing.T) {
 	}
 }
 
-func TestRebuildTurnMemoryFromSegments_KeepsSurvivingActivity(t *testing.T) {
-	workingDir := t.TempDir()
-	m := replModel{appState: replappstate.New(nil, workingDir)}
-	m.startAssistantTurnMemory()
-	m.turnMemory.toolActivity = []llm.HistoricalToolActivity{{Tool: "edit_file", FileChanged: "abandoned.go"}}
-
-	m.rebuildTurnMemoryFromSegments([]streamSegment{
-		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Output: map[string]any{"file_changed": "kept.go"}}},
-	})
-	memory := m.consumeTurnMemory()
-	if memory == nil || len(memory.ToolActivity) != 1 || memory.ToolActivity[0].FileChanged != "kept.go" {
-		t.Fatalf("expected only surviving activity, got %#v", memory)
-	}
-}
-
 func TestCollectHistoricalToolActivity_DoesNotInferRetainedOutcomesFromArguments(t *testing.T) {
 	activities := collectHistoricalToolActivity([]streamSegment{
 		{kind: segmentToolEnd, toolCall: &llm.ToolCall{Name: "write_file", Input: map[string]any{"path": "a.go"}, Output: map[string]any{"path": "a.go"}}},
