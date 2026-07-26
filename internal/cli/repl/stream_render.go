@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	reploutput "github.com/user/keen-code/internal/cli/repl/output"
 	repltheme "github.com/user/keen-code/internal/cli/repl/theme"
+	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -56,13 +57,16 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 		switch seg.kind {
 		case segmentToolStart:
 			if seg.toolCall != nil {
-				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
+				if sh.shouldHideToolStart(i) || (i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd) {
 					continue
 				}
 				lines = append(lines, renderToolStatusLines(reploutput.FormatToolStart(seg.toolCall, sh.workingDir), width)...)
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
+				if isHiddenToolFailure(seg.toolCall) {
+					continue
+				}
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
 					lines = append(lines, renderToolStatusLines(reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir), width)...)
 				} else {
@@ -104,13 +108,16 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 		switch seg.kind {
 		case segmentToolStart:
 			if seg.toolCall != nil {
-				if i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd {
+				if sh.shouldHideToolStart(i) || (i+1 < len(sh.segments) && sh.segments[i+1].kind == segmentToolEnd) {
 					continue
 				}
 				lines = append(lines, renderToolStatusLines(reploutput.FormatToolStart(seg.toolCall, sh.workingDir), sh.lastWidth)...)
 			}
 		case segmentToolEnd:
 			if seg.toolCall != nil {
+				if isHiddenToolFailure(seg.toolCall) {
+					continue
+				}
 				if i > 0 && sh.segments[i-1].kind == segmentToolStart && sh.segments[i-1].toolCall != nil {
 					lines = append(lines, renderToolStatusLines(reploutput.FormatToolDone(sh.segments[i-1].toolCall, seg.toolCall, sh.workingDir), sh.lastWidth)...)
 				} else {
@@ -136,6 +143,18 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 	}
 
 	return lines
+}
+
+func (sh *StreamHandler) shouldHideToolStart(index int) bool {
+	return index+1 < len(sh.segments) && sh.segments[index+1].kind == segmentToolEnd && isHiddenToolFailure(sh.segments[index+1].toolCall)
+}
+
+func isHiddenToolFailure(toolCall *llm.ToolCall) bool {
+	if toolCall == nil {
+		return false
+	}
+	return toolCall.Name == "read_file" && strings.HasPrefix(toolCall.Error, "not found: file ") ||
+		toolCall.Name == "edit_file" && strings.HasPrefix(toolCall.Error, "oldString not found")
 }
 
 func (sh *StreamHandler) renderAssistantViewLines(content string, width int) []string {

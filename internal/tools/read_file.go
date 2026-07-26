@@ -189,6 +189,9 @@ func readFileContent(path string) ([]byte, error) {
 
 	content, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("not found: file %q does not exist", path)
+		}
 		return nil, fmt.Errorf("read failed: %w", err)
 	}
 

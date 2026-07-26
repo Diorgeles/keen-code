@@ -273,6 +273,50 @@ func TestStreamHandler_HandleDone_AdjacentToolStartEnd_CollapsedToOneLine(t *tes
 	}
 }
 
+func TestStreamHandler_ReadFileNotFoundIsHidden(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+
+	sh.HandleChunk("Checking the file. ")
+	sh.HandleToolStart(&llm.ToolCall{Name: "read_file", Input: map[string]any{"path": "missing.go"}})
+	sh.HandleToolEnd(&llm.ToolCall{Name: "read_file", Error: `not found: file "missing.go" does not exist`})
+	sh.HandleChunk("It is absent.")
+
+	view := sh.View(80)
+	lines, _ := sh.HandleDone()
+	transcript := strings.Join(lines, "\n")
+	for _, rendered := range []string{view, transcript} {
+		if strings.Contains(rendered, "Read") || strings.Contains(rendered, "missing.go") || strings.Contains(rendered, "not found") {
+			t.Fatalf("expected missing read to be hidden, got %q", rendered)
+		}
+		if !strings.Contains(rendered, "Checking the file.") || !strings.Contains(rendered, "It is absent.") {
+			t.Fatalf("expected assistant text to remain, got %q", rendered)
+		}
+	}
+}
+
+func TestStreamHandler_EditFileOldStringNotFoundIsHidden(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(<-chan llm.StreamEvent), "Loading...")
+
+	sh.HandleChunk("Trying an edit. ")
+	sh.HandleToolStart(&llm.ToolCall{Name: "edit_file", Input: map[string]any{"path": "output.go"}})
+	sh.HandleToolEnd(&llm.ToolCall{Name: "edit_file", Error: "oldString not found"})
+	sh.HandleChunk("The target changed.")
+
+	view := sh.View(80)
+	lines, _ := sh.HandleDone()
+	transcript := strings.Join(lines, "\n")
+	for _, rendered := range []string{view, transcript} {
+		if strings.Contains(rendered, "Edit") || strings.Contains(rendered, "output.go") || strings.Contains(rendered, "oldString not found") {
+			t.Fatalf("expected failed edit to be hidden, got %q", rendered)
+		}
+		if !strings.Contains(rendered, "Trying an edit.") || !strings.Contains(rendered, "The target changed.") {
+			t.Fatalf("expected assistant text to remain, got %q", rendered)
+		}
+	}
+}
+
 func TestStreamHandler_DelegateTaskShowsBatchAndPartialFailure(t *testing.T) {
 	sh := NewStreamHandler(nil)
 	sh.Start(make(<-chan llm.StreamEvent), "Brewing...")

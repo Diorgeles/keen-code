@@ -259,7 +259,23 @@ func TestReadFileTool_Execute_FileNotFound(t *testing.T) {
 	input := map[string]any{"path": nonExistentFile}
 	_, err := tool.Execute(ctx, input)
 	if err == nil {
-		t.Error("expected error for non-existent file")
+		t.Fatal("expected error for non-existent file")
+	}
+	if got, want := err.Error(), fmt.Sprintf("not found: file %q does not exist", nonExistentFile); got != want {
+		t.Errorf("expected error %q, got %q", want, got)
+	}
+}
+
+func TestReadFileContent_FileRemovedBeforeRead(t *testing.T) {
+	tmpDir := t.TempDir()
+	nonExistentFile := filepath.Join(tmpDir, "nonexistent.txt")
+
+	_, err := readFileContent(nonExistentFile)
+	if err == nil {
+		t.Fatal("expected error for non-existent file")
+	}
+	if got, want := err.Error(), fmt.Sprintf("not found: file %q does not exist", nonExistentFile); got != want {
+		t.Errorf("expected error %q, got %q", want, got)
 	}
 }
 
