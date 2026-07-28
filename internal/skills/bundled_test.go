@@ -9,11 +9,7 @@ import (
 
 func expectedBundledSkillNames() []string {
 	return []string{
-		"clarify",
 		"commit",
-		"explain",
-		"fix-tests",
-		"refactor",
 		"review",
 	}
 }
