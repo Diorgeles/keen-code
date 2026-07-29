@@ -138,7 +138,7 @@ func TestFormatToolInput_GrepShowsQuotedPatternInPathBaseName(t *testing.T) {
 		"pattern":     "FormatToolInput",
 	}, "/tmp/project")
 
-	expected := `"FormatToolInput" in repl`
+	expected := `FormatToolInput in repl`
 	if got != expected {
 		t.Fatalf("expected quoted pattern with path base name, got %q", got)
 	}
@@ -239,7 +239,7 @@ func TestFormatToolInput_CompactsLongPattern(t *testing.T) {
 	longPattern := "(?i)^" + strings.Repeat("(alternation|", 20) + "value" + strings.Repeat(")*", 20) + "$"
 	got := FormatToolInput("grep", map[string]any{"pattern": longPattern, "path": "internal"}, "/tmp/project")
 
-	if !strings.HasPrefix(got, `"(?i)^(altern`) {
+	if !strings.HasPrefix(got, `(?i)^(altern`) {
 		t.Fatalf("expected pattern prefix preserved, got %q", got)
 	}
 	if !strings.Contains(got, "…") {
@@ -256,7 +256,7 @@ func TestFormatToolInput_EscapesControlCharacters(t *testing.T) {
 	if strings.ContainsAny(got, "\n\t") {
 		t.Fatalf("expected control characters to be escaped, got %q", got)
 	}
-	if !strings.Contains(got, `line1\\nline2\\ttab`) {
+	if !strings.Contains(got, `line1\nline2\ttab`) {
 		t.Fatalf("expected escaped control characters in output, got %q", got)
 	}
 }
@@ -271,13 +271,13 @@ func TestFormatToolInput_GenericFallbackIsBounded(t *testing.T) {
 		"omega": 6,
 	}, "/tmp/project")
 
-	if !strings.Contains(got, `alpha="one"`) || !strings.Contains(got, "beta=2") || !strings.Contains(got, `delta="four"`) {
+	if !strings.Contains(got, `alpha=one`) || !strings.Contains(got, "beta=2") {
 		t.Fatalf("expected first sorted scalar fields, got %q", got)
 	}
-	if !strings.Contains(got, "+3") {
+	if !strings.Contains(got, "+4") {
 		t.Fatalf("expected overflow count, got %q", got)
 	}
-	if strings.Contains(got, "gamma") || strings.Contains(got, "zeta") || strings.Contains(got, "omega") {
+	if strings.Contains(got, "gamma") || strings.Contains(got, "delta") || strings.Contains(got, "zeta") || strings.Contains(got, "omega") {
 		t.Fatalf("expected overflow fields to be hidden, got %q", got)
 	}
 }
@@ -311,7 +311,7 @@ func TestFormatToolInput_GenericFallbackLongStringCompacted(t *testing.T) {
 	if !strings.Contains(got, "…") {
 		t.Fatalf("expected long generic value to be compacted, got %q", got)
 	}
-	if len([]rune(got)) > maxDisplayValueRunes+len(`query=""`)+1 {
+	if len([]rune(got)) > maxDisplayValueRunes+len(`query=`)+1 {
 		t.Fatalf("expected compacted generic value, got %d runes: %q", len([]rune(got)), got)
 	}
 }
@@ -339,7 +339,7 @@ func TestFormatToolDone_ShowsResultMetadata(t *testing.T) {
 			input:  map[string]any{"pattern": "foo", "path": "internal"},
 			output: map[string]any{"count": 6, "output_mode": "content"},
 			contains: []string{
-				"✓ Search", `"foo" in internal`, "6 matches",
+				"✓ Search", `foo in internal`, "6 matches",
 			},
 		},
 		{
@@ -479,7 +479,7 @@ func TestFormatToolStart_UsesFriendlyLabel(t *testing.T) {
 	if !strings.Contains(got, "●") || !strings.Contains(got, "Search") {
 		t.Fatalf("expected friendly running label, got %q", got)
 	}
-	if !strings.Contains(got, "→") || !strings.Contains(got, `"foo" in internal`) {
+	if !strings.Contains(got, "→") || !strings.Contains(got, `foo in internal`) {
 		t.Fatalf("expected detail after arrow, got %q", got)
 	}
 }

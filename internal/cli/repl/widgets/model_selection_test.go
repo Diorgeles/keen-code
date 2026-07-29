@@ -411,17 +411,12 @@ func TestModelSelection_SwitchProviderPreservesHeaders(t *testing.T) {
 	if m.Step != StepModel {
 		t.Fatalf("expected StepModel, got %v", m.Step)
 	}
-	// Confirm model -> BaseURL step (DeepSeek supports custom base URL).
+	// Confirm model, then decline to update the existing provider config.
 	m, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.Step != StepBaseURL {
-		t.Fatalf("expected StepBaseURL, got %v", m.Step)
+	if m.Step != StepUpdateProviderConfigs {
+		t.Fatalf("expected StepUpdateProviderConfigs, got %v", m.Step)
 	}
-	// Confirm base URL -> API key step.
-	m, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.Step != StepAPIKey {
-		t.Fatalf("expected StepAPIKey, got %v", m.Step)
-	}
-	// Confirm API key.
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	m, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !cmdCalled(cmd) {
 		t.Fatal("expected completion command")
@@ -431,6 +426,89 @@ func TestModelSelection_SwitchProviderPreservesHeaders(t *testing.T) {
 	}
 	if len(resolved.Headers) != 2 || resolved.Headers["x-header-1"] != "val1" {
 		t.Fatalf("expected headers preserved, got %+v", resolved.Headers)
+	}
+}
+
+func TestModelSelection_ExistingAPIKeyPromptsBeforeUpdatingProviderConfig(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	registry := &providers.Registry{Providers: []providers.Provider{{
+		ID:   config.ProviderDeepSeek,
+		Name: "DeepSeek",
+		Models: []providers.Model{
+			{ID: "deepseek-v4-pro", Name: "DeepSeek V4 Pro"},
+			{ID: "deepseek-v4-chat", Name: "DeepSeek V4 Chat"},
+		},
+	}}}
+	global := config.DefaultGlobalConfig()
+	global.SetProviderConfig(config.ProviderDeepSeek, config.ProviderConfig{
+		APIKey:  "existing-key",
+		BaseURL: "https://api.deepseek.example/v1",
+		Models:  []string{"deepseek-v4-pro"},
+	})
+	resolved := &config.ResolvedConfig{}
+	completed := false
+	m := New(registry, global, config.NewLoader(), resolved, func(provider, model, apiKey string) error {
+		completed = true
+		return nil
+	})
+
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.Step != StepUpdateProviderConfigs {
+		t.Fatalf("expected StepUpdateProviderConfigs, got %v", m.Step)
+	}
+	if view := m.ViewString(); !strings.Contains(view, "Update provider configs?") {
+		t.Fatalf("expected update config prompt, got %q", view)
+	}
+
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !cmdCalled(cmd) || !completed {
+		t.Fatal("expected model selection to complete")
+	}
+	if resolved.APIKey != "existing-key" || resolved.BaseURL != "https://api.deepseek.example/v1" {
+		t.Fatalf("expected existing configs to be retained, got %+v", resolved)
+	}
+	if resolved.Model != "deepseek-v4-chat" {
+		t.Fatalf("expected selected model, got %q", resolved.Model)
+	}
+}
+
+func TestModelSelection_ExistingAPIKeyCanUpdateProviderConfig(t *testing.T) {
+	registry := &providers.Registry{Providers: []providers.Provider{{
+		ID:   config.ProviderDeepSeek,
+		Name: "DeepSeek",
+		Models: []providers.Model{
+			{ID: "deepseek-v4-pro", Name: "DeepSeek V4 Pro"},
+		},
+	}}}
+	global := config.DefaultGlobalConfig()
+	global.SetProviderConfig(config.ProviderDeepSeek, config.ProviderConfig{
+		APIKey:  "existing-key",
+		BaseURL: "https://api.deepseek.example/v1",
+		Models:  []string{"deepseek-v4-pro"},
+	})
+	m := New(registry, global, config.NewLoader(), &config.ResolvedConfig{}, func(provider, model, apiKey string) error {
+		return nil
+	})
+
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.Step != StepUpdateProviderConfigs {
+		t.Fatalf("expected StepUpdateProviderConfigs, got %v", m.Step)
+	}
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.Step != StepBaseURL {
+		t.Fatalf("expected StepBaseURL after selecting Yes, got %v", m.Step)
+	}
+	if m.BaseURLInput != "https://api.deepseek.example/v1" {
+		t.Fatalf("expected existing base URL, got %q", m.BaseURLInput)
+	}
+	m, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.Step != StepAPIKey {
+		t.Fatalf("expected StepAPIKey after confirming base URL, got %v", m.Step)
 	}
 }
 

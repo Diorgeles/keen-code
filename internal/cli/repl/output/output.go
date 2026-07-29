@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -17,11 +16,11 @@ import (
 )
 
 const (
-	maxDisplayPathRunes    = 60
-	maxDisplayPatternRunes = 80
-	maxDisplayValueRunes   = 60
-	maxDisplayErrorRunes   = 160
-	maxGenericInputFields  = 3
+	maxDisplayPathRunes    = 40
+	maxDisplayPatternRunes = 50
+	maxDisplayValueRunes   = 40
+	maxDisplayErrorRunes   = 80
+	maxGenericInputFields  = 2
 )
 
 type OutputBuilder struct {
@@ -278,7 +277,7 @@ func formatToolInputDetail(toolName string, input map[string]any, workingDir str
 func formatSearchInput(input map[string]any, workingDir string) string {
 	pattern, _ := input["pattern"].(string)
 	if pattern != "" {
-		pattern = strconv.Quote(compactDisplayValue(pattern, maxDisplayPatternRunes))
+		pattern = compactDisplayValue(pattern, maxDisplayPatternRunes)
 	}
 	path, _ := input["path"].(string)
 	if path != "" {
@@ -323,7 +322,7 @@ func formatGenericValue(value any) (string, bool) {
 		if v == "" {
 			return "", false
 		}
-		return strconv.Quote(compactDisplayValue(v, maxDisplayValueRunes)), true
+		return compactDisplayValue(v, maxDisplayValueRunes), true
 	case int, int64, float64, bool:
 		return fmt.Sprintf("%v", v), true
 	case map[string]any:

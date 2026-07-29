@@ -29,6 +29,7 @@ const (
 	StepProvider Step = iota
 	StepModel
 	StepThinking
+	StepUpdateProviderConfigs
 	StepBaseURL
 	StepAPIKey
 	StepAPIKeyHelper
@@ -49,29 +50,31 @@ type modelSelectionAPIKeyHelperResultMsg struct {
 }
 
 type Model struct {
-	Step             Step
-	SelectedProvider string
-	SelectedModel    string
-	APIKeyInput      string
-	BaseURLInput     string
-	BaseURLError     string
-	ProviderCursor   int
-	ModelCursor      int
-	ThinkingCursor   int
-	ThinkingOptions  []string
-	SelectedThinking string
-	OAuthStatus      string
-	OAuthURL         string
-	ProviderList     []providers.Provider
-	ModelList        []providers.Model
-	ErrorMessage     string
-	oauthCancel      context.CancelFunc
-	authManager      *keenauth.OAuthManager
-	registry         *providers.Registry
-	globalCfg        *config.GlobalConfig
-	loader           *config.Loader
-	resolvedCfg      *config.ResolvedConfig
-	onComplete       func(provider, model, apiKey string) error
+	Step                       Step
+	SelectedProvider           string
+	SelectedModel              string
+	APIKeyInput                string
+	BaseURLInput               string
+	BaseURLError               string
+	ProviderCursor             int
+	ModelCursor                int
+	ThinkingCursor             int
+	ThinkingOptions            []string
+	SelectedThinking           string
+	UpdateProviderConfigCursor int
+	updatingProviderConfig     bool
+	OAuthStatus                string
+	OAuthURL                   string
+	ProviderList               []providers.Provider
+	ModelList                  []providers.Model
+	ErrorMessage               string
+	oauthCancel                context.CancelFunc
+	authManager                *keenauth.OAuthManager
+	registry                   *providers.Registry
+	globalCfg                  *config.GlobalConfig
+	loader                     *config.Loader
+	resolvedCfg                *config.ResolvedConfig
+	onComplete                 func(provider, model, apiKey string) error
 }
 
 func New(registry *providers.Registry, globalCfg *config.GlobalConfig, loader *config.Loader, resolvedCfg *config.ResolvedConfig, onComplete func(provider, model, apiKey string) error) *Model {
@@ -123,6 +126,10 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.ProviderCursor = (m.ProviderCursor + 1) % len(m.ProviderList)
 		case "enter":
 			m.SelectedProvider = m.ProviderList[m.ProviderCursor].ID
+			m.APIKeyInput = ""
+			m.BaseURLInput = ""
+			m.BaseURLError = ""
+			m.updatingProviderConfig = false
 			provider, _ := m.registry.GetProvider(m.SelectedProvider)
 			m.ModelList = provider.Models
 			m.ModelCursor = 0
@@ -148,13 +155,8 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 				m.ThinkingOptions = modelMeta.ThinkingEfforts
 				m.ThinkingCursor = m.resolveThinkingCursor(m.ThinkingOptions)
 				m.Step = StepThinking
-			} else if !promptsForAPIKey(m.SelectedProvider) {
-				return m.complete()
-			} else if supportsBaseURL(m.SelectedProvider) {
-				m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
-				m.Step = StepBaseURL
 			} else {
-				m.Step = StepAPIKey
+				return m.continueAfterModelSelection()
 			}
 		case "esc":
 			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
@@ -168,15 +170,22 @@ func (m *Model) handleKeyMsg(msg tea.KeyPressMsg) (*Model, tea.Cmd) {
 			m.ThinkingCursor = (m.ThinkingCursor + 1) % len(m.ThinkingOptions)
 		case "enter":
 			m.SelectedThinking = m.ThinkingOptions[m.ThinkingCursor]
-			if !promptsForAPIKey(m.SelectedProvider) {
-				return m.complete()
+			return m.continueAfterModelSelection()
+		case "esc":
+			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
+		}
+
+	case StepUpdateProviderConfigs:
+		switch msg.String() {
+		case "up", "down":
+			m.UpdateProviderConfigCursor = 1 - m.UpdateProviderConfigCursor
+		case "enter":
+			if m.UpdateProviderConfigCursor == 0 {
+				m.updatingProviderConfig = true
+				m.beginProviderConfigUpdate()
+				return m, nil
 			}
-			if supportsBaseURL(m.SelectedProvider) {
-				m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
-				m.Step = StepBaseURL
-			} else {
-				m.Step = StepAPIKey
-			}
+			return m.complete()
 		case "esc":
 			return m, func() tea.Msg { return modelSelectionCancelMsg{} }
 		}
@@ -282,6 +291,28 @@ func (m *Model) handleOAuthComplete(msg modelSelectionOAuthCompleteMsg) (*Model,
 	return m, nil
 }
 
+func (m *Model) continueAfterModelSelection() (*Model, tea.Cmd) {
+	if !promptsForAPIKey(m.SelectedProvider) {
+		return m.complete()
+	}
+	if m.getExistingAPIKey(m.SelectedProvider) != "" {
+		m.UpdateProviderConfigCursor = 0
+		m.Step = StepUpdateProviderConfigs
+		return m, nil
+	}
+	m.beginProviderConfigUpdate()
+	return m, nil
+}
+
+func (m *Model) beginProviderConfigUpdate() {
+	if supportsBaseURL(m.SelectedProvider) {
+		m.BaseURLInput = m.getExistingBaseURL(m.SelectedProvider)
+		m.Step = StepBaseURL
+		return
+	}
+	m.Step = StepAPIKey
+}
+
 func (m *Model) resolveThinkingCursor(options []string) int {
 	currentEffort := ""
 	if m.resolvedCfg != nil {
@@ -338,15 +369,14 @@ func (m *Model) complete() (*Model, tea.Cmd) {
 	m.globalCfg.ThinkingEffort = storedEffort
 
 	providerCfg := config.ProviderConfig{
-		APIKey: apiKey,
-		Models: []string{m.SelectedModel},
+		APIKey:       apiKey,
+		Models:       []string{m.SelectedModel},
+		BaseURL:      existing.BaseURL,
+		Headers:      existing.Headers,
+		APIKeyHelper: existing.APIKeyHelper,
 	}
-	if supportsBaseURL(m.SelectedProvider) {
+	if supportsBaseURL(m.SelectedProvider) && (m.updatingProviderConfig || !exists) {
 		providerCfg.BaseURL = m.BaseURLInput
-	}
-	if exists {
-		providerCfg.Headers = existing.Headers
-		providerCfg.APIKeyHelper = existing.APIKeyHelper
 	}
 
 	if providerCfg.APIKeyHelper != "" {
@@ -421,6 +451,8 @@ func (m *Model) ViewString() string {
 		return m.renderModelSelection()
 	case StepThinking:
 		return m.renderThinkingSelection()
+	case StepUpdateProviderConfigs:
+		return m.renderUpdateProviderConfigs()
 	case StepBaseURL:
 		return m.renderBaseURLInput()
 	case StepAPIKey:
@@ -457,6 +489,17 @@ func (m *Model) renderThinkingSelection() string {
 	view.WriteString(repltheme.UserPromptStyle.Render("Select thinking effort:"))
 	view.WriteString("\n\n")
 	view.WriteString(m.renderList(m.ThinkingCursor, func(i int) string { return m.ThinkingOptions[i] }, len(m.ThinkingOptions)))
+	view.WriteString("\n" + repltheme.HintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
+	return view.String()
+}
+
+func (m *Model) renderUpdateProviderConfigs() string {
+	var view strings.Builder
+	view.WriteString(repltheme.UserPromptStyle.Render("Update provider configs?"))
+	view.WriteString("\n\n")
+	view.WriteString(m.renderList(m.UpdateProviderConfigCursor, func(i int) string {
+		return []string{"Yes", "No"}[i]
+	}, 2))
 	view.WriteString("\n" + repltheme.HintStyle.Render("[↑/↓ to navigate, Enter to select, Esc to cancel]"))
 	return view.String()
 }
