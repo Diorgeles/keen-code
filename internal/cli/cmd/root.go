@@ -135,20 +135,22 @@ func newRunCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			_, closeMCP, mcpErr := startMCPRuntime(context.Background())
+			mcpRuntime, closeMCP, mcpErr := startMCPRuntime(context.Background())
 			defer closeMCP()
 			if mcpErr != nil {
 				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "MCP unavailable: %v\n", mcpErr)
 			}
 
 			_, err = repl.RunHeadless(context.Background(), repl.HeadlessRunOptions{
-				WorkingDir: wd,
-				Config:     resolvedCfg,
-				Client:     client,
-				SessionID:  sessionID,
-				Prompt:     prompt,
-				Format:     format,
-				Out:        cmd.OutOrStdout(),
+				WorkingDir:   wd,
+				Config:       resolvedCfg,
+				GlobalConfig: globalCfg,
+				MCPRuntime:   mcpRuntime,
+				Client:       client,
+				SessionID:    sessionID,
+				Prompt:       prompt,
+				Format:       format,
+				Out:          cmd.OutOrStdout(),
 			})
 			return err
 		},

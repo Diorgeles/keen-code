@@ -5,6 +5,7 @@ import (
 
 	replmarkdown "github.com/user/keen-code/internal/cli/repl/markdown"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/subagents"
 	"github.com/user/keen-code/internal/tools"
 )
 
@@ -82,6 +83,32 @@ func (sh *StreamHandler) HandleToolStart(toolCall *llm.ToolCall) {
 
 func (sh *StreamHandler) HandleToolEnd(toolCall *llm.ToolCall) {
 	sh.segments = append(sh.segments, streamSegment{kind: segmentToolEnd, toolCall: toolCall})
+}
+
+func (sh *StreamHandler) HandleSubagentActivity(activity subagents.ToolActivity) {
+	key := activity.RunID + ":" + activity.CallID
+	switch activity.Event.Type {
+	case llm.StreamEventTypeToolStart:
+		sh.segments = append(sh.segments, streamSegment{
+			kind:        segmentSubagent,
+			agent:       activity.Agent,
+			activityKey: key,
+			toolCall:    activity.Event.ToolCall,
+		})
+	case llm.StreamEventTypeToolEnd:
+		for i := len(sh.segments) - 1; i >= 0; i-- {
+			if sh.segments[i].kind == segmentSubagent && sh.segments[i].activityKey == key {
+				sh.segments[i].endToolCall = activity.Event.ToolCall
+				return
+			}
+		}
+		sh.segments = append(sh.segments, streamSegment{
+			kind:        segmentSubagent,
+			agent:       activity.Agent,
+			activityKey: key,
+			endToolCall: activity.Event.ToolCall,
+		})
+	}
 }
 
 func (sh *StreamHandler) HandleBashStart(command, summary string) {

@@ -75,6 +75,14 @@ func (sh *StreamHandler) renderViewLines(width int) []string {
 			}
 		case segmentBash:
 			lines = append(lines, sh.renderBashSegment(seg, width)...)
+		case segmentSubagent:
+			if isHiddenToolFailure(seg.endToolCall) {
+				continue
+			}
+			line := reploutput.FormatSubagentTool(seg.agent, seg.toolCall, seg.endToolCall, sh.workingDir)
+			if line != "" {
+				lines = append(lines, renderToolStatusLines(line, width)...)
+			}
 		case segmentAssistant:
 			if seg.renderedLines == nil || i == lastAssistantIdx {
 				seg.renderedLines = sh.renderAssistantViewLines(seg.content, width)
@@ -126,6 +134,14 @@ func (sh *StreamHandler) renderTranscriptLines() []string {
 			}
 		case segmentBash:
 			lines = append(lines, sh.renderBashSegment(seg, 0)...)
+		case segmentSubagent:
+			if isHiddenToolFailure(seg.endToolCall) {
+				continue
+			}
+			line := reploutput.FormatSubagentTool(seg.agent, seg.toolCall, seg.endToolCall, sh.workingDir)
+			if line != "" {
+				lines = append(lines, renderToolStatusLines(line, sh.lastWidth)...)
+			}
 		case segmentAssistant:
 			lines = append(lines, sh.renderAssistantTranscriptLines(seg.content)...)
 		case segmentReasoning:

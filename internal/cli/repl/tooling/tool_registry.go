@@ -20,6 +20,8 @@ func SetupToolRegistry(
 	diffEmitter *DiffEmitter,
 	mcpRuntime keenmcp.Runtime,
 	cfg *config.ResolvedConfig,
+	globalCfg *config.GlobalConfig,
+	activity chan<- subagents.ToolActivity,
 ) {
 	gitAwareness := filesystem.NewGitAwareness()
 	_ = gitAwareness.LoadGitignore(filepath.Join(workingDir, ".gitignore"))
@@ -50,14 +52,22 @@ func SetupToolRegistry(
 		appState.RegisterTool(tools.NewCallMCPTool(mcpRuntime, permissionRequester))
 	}
 
+	toolFactory := subagents.ToolFactory{Guard: guard, MCPRuntime: mcpRuntime}
 	runner := &subagents.Runner{
 		WorkingDir: workingDir,
 		Config:     cfg,
 		GetProfiles: func() []subagents.Profile {
 			return appState.GetSubagents().Profiles
 		},
-		NewClient: llm.NewClient,
-		Registry:  appState.GetToolRegistry(),
+		NewClient:   llm.NewClient,
+		GetRegistry: appState.EffectiveToolRegistry,
+		NewRegistry: toolFactory.Registry,
+		ResolveConfig: func(profile subagents.Profile) (*config.ResolvedConfig, error) {
+			return config.ResolveProvider(globalCfg, profile.Provider, profile.Model, profile.ThinkingEffort)
+		},
+		ProjectContext:   func() string { return llm.ProjectInstructions(workingDir) },
+		GetSkillsCatalog: appState.SkillsCatalog,
+		Activity:         activity,
 	}
 	appState.RegisterTool(tools.NewDelegateTool(runner))
 }

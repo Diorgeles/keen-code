@@ -19,6 +19,7 @@ import (
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
 	"github.com/user/keen-code/internal/providers"
+	"github.com/user/keen-code/internal/subagents"
 )
 
 func TestHandleLLMChunk(t *testing.T) {
@@ -81,6 +82,37 @@ func TestContextStatus_UpdatesOnUsageEvent(t *testing.T) {
 	updatedAfterUsage, _ := updatedAfterChunk.handleLLMUsage(&llm.TokenUsage{InputTokens: 1000})
 	if updatedAfterUsage.contextStatus.Percent != 50.0 {
 		t.Fatalf("expected 50%% after usage event, got %.2f", updatedAfterUsage.contextStatus.Percent)
+	}
+}
+
+func TestHandleLLMDoneDrainsSubagentActivity(t *testing.T) {
+	sh := NewStreamHandler(nil)
+	sh.Start(make(chan llm.StreamEvent), "Loading...")
+	activity := make(chan subagents.ToolActivity, 2)
+	activity <- subagents.ToolActivity{RunID: "run-1", CallID: "tool-1", Agent: "worker", Event: llm.StreamEvent{
+		Type:     llm.StreamEventTypeToolStart,
+		ToolCall: &llm.ToolCall{Name: "bash", Input: map[string]any{"command": "go test ./..."}},
+	}}
+	activity <- subagents.ToolActivity{RunID: "run-1", CallID: "tool-1", Agent: "worker", Event: llm.StreamEvent{
+		Type:     llm.StreamEventTypeToolEnd,
+		ToolCall: &llm.ToolCall{Name: "bash"},
+	}}
+	m := replModel{
+		stream:           streamState{handler: sh},
+		loading:          loadingState{showSpinner: true},
+		width:            80,
+		appState:         replappstate.New(nil, t.TempDir()),
+		output:           reploutput.NewOutputBuilder(80, ""),
+		subagentActivity: activity,
+	}
+
+	updated, _ := m.handleLLMDone()
+	output := strings.Join(updated.output.GetLines(), "\n")
+	if !strings.Contains(output, "[worker]") || !strings.Contains(output, "go test ./...") {
+		t.Fatalf("expected drained subagent activity in completed output, got %q", output)
+	}
+	if len(activity) != 0 {
+		t.Fatalf("expected activity channel to be drained, got %d pending events", len(activity))
 	}
 }
 

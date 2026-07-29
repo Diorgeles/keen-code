@@ -169,28 +169,50 @@ func FormatToolStart(toolCall *llm.ToolCall, workingDir string) string {
 func FormatToolDone(startCall, endCall *llm.ToolCall, workingDir string) string {
 	detail := formatToolInputDetail(startCall.Name, startCall.Input, workingDir)
 	metadata, failed := formatToolResultMetadata(startCall.Name, endCall)
-	var errText *string
-	if endCall.Error != "" {
-		e := compactDisplayValue(endCall.Error, maxDisplayErrorRunes)
-		errText = &e
-	}
+	errText := formatToolError(startCall.Name, endCall.Error)
 	if failed {
 		return "  " + renderToolStatus("✗", toolDisplayName(startCall.Name), detail, metadata, errText, true)
 	}
 	return "  " + renderToolStatus("✓", toolDisplayName(startCall.Name), detail, metadata, errText, false)
 }
 
+func FormatSubagentTool(agent string, startCall, endCall *llm.ToolCall, workingDir string) string {
+	prefix := "[" + agent + "] "
+	if startCall == nil {
+		if endCall == nil {
+			return ""
+		}
+		cloned := *endCall
+		cloned.Output = nil
+		return strings.Replace(FormatToolEnd(&cloned), toolDisplayName(cloned.Name), prefix+toolDisplayName(cloned.Name), 1)
+	}
+	if endCall == nil {
+		return strings.Replace(FormatToolStart(startCall, workingDir), toolDisplayName(startCall.Name), prefix+toolDisplayName(startCall.Name), 1)
+	}
+	cloned := *endCall
+	cloned.Output = nil
+	return strings.Replace(FormatToolDone(startCall, &cloned, workingDir), toolDisplayName(startCall.Name), prefix+toolDisplayName(startCall.Name), 1)
+}
+
 func FormatToolEnd(toolCall *llm.ToolCall) string {
 	metadata, failed := formatToolResultMetadata(toolCall.Name, toolCall)
-	var errText *string
-	if toolCall.Error != "" {
-		e := compactDisplayValue(toolCall.Error, maxDisplayErrorRunes)
-		errText = &e
-	}
+	errText := formatToolError(toolCall.Name, toolCall.Error)
 	if failed {
 		return "  " + renderToolStatus("✗", toolDisplayName(toolCall.Name), "", metadata, errText, true)
 	}
 	return "  " + renderToolStatus("✓", toolDisplayName(toolCall.Name), "", metadata, errText, false)
+}
+
+func formatToolError(toolName, message string) *string {
+	if message == "" {
+		return nil
+	}
+	if toolName == "call_mcp_tool" {
+		minimal := "failed"
+		return &minimal
+	}
+	compacted := compactDisplayValue(message, maxDisplayErrorRunes)
+	return &compacted
 }
 
 func renderToolStatus(marker, label, detail string, metadata []string, errText *string, failed bool) string {
@@ -618,14 +640,9 @@ func intValue(value any) (int, bool) {
 	}
 }
 
-func formatToolPathForUI(path, workingDir string) string {
-	if path == "" || workingDir == "" || !filepath.IsAbs(path) {
-		return path
+func formatToolPathForUI(path, _ string) string {
+	if path == "" {
+		return ""
 	}
-
-	relPath, err := filepath.Rel(workingDir, path)
-	if err != nil {
-		return path
-	}
-	return relPath
+	return filepath.Base(path)
 }

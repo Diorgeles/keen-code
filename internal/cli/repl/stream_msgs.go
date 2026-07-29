@@ -7,6 +7,7 @@ import (
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	"github.com/user/keen-code/internal/llm"
 	keenmcp "github.com/user/keen-code/internal/mcp"
+	"github.com/user/keen-code/internal/subagents"
 )
 
 type llmChunkMsg string
@@ -30,6 +31,9 @@ type llmToolEndMsg struct {
 }
 type llmUsageMsg struct {
 	usage *llm.TokenUsage
+}
+type subagentActivityMsg struct {
+	activity subagents.ToolActivity
 }
 type permissionReadyMsg struct {
 	req *replpermissions.Request

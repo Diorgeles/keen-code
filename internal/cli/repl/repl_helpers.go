@@ -22,6 +22,7 @@ import (
 	"github.com/user/keen-code/internal/mcpskills"
 	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/internal/skills"
+	"github.com/user/keen-code/internal/subagents"
 	"github.com/user/keen-code/internal/updater"
 )
 
@@ -624,13 +625,15 @@ func renderInputArea(content string, width int, focused bool, shellMode bool, bt
 	return topRule + "\n" + content + "\n" + bottomRule
 }
 
-func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpermissions.Request, diffCh <-chan repltooling.DiffRequest) tea.Cmd {
+func waitForAsyncEvent(llmCh <-chan llm.StreamEvent, permissionCh <-chan *replpermissions.Request, diffCh <-chan repltooling.DiffRequest, subagentCh <-chan subagents.ToolActivity) tea.Cmd {
 	if llmCh == nil {
 		return nil
 	}
 
 	return func() tea.Msg {
 		select {
+		case activity := <-subagentCh:
+			return subagentActivityMsg{activity: activity}
 		case req := <-permissionCh:
 			return permissionReadyMsg{req: req}
 		case req := <-diffCh:

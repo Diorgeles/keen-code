@@ -49,7 +49,19 @@ func (m *replModel) handleLLMReasoningChunk(chunk string) (replModel, tea.Cmd) {
 	return *m, tea.Batch(m.afterStreamUpdate(), m.waitForAsyncEvent())
 }
 
+func (m *replModel) drainSubagentActivity() {
+	for m.subagentActivity != nil {
+		select {
+		case activity := <-m.subagentActivity:
+			m.stream.handler.HandleSubagentActivity(activity)
+		default:
+			return
+		}
+	}
+}
+
 func (m *replModel) handleLLMDone() (replModel, tea.Cmd) {
+	m.drainSubagentActivity()
 	m.flushStreamRender()
 	if m.compaction.active {
 		return m.handleCompactionDone()
@@ -229,6 +241,7 @@ func (m *replModel) handleToolStart(toolCall *llm.ToolCall) (replModel, tea.Cmd)
 
 func (m *replModel) handleToolEnd(toolCall *llm.ToolCall) (replModel, tea.Cmd) {
 	m.flushStreamRender()
+	toolCall = sanitizeDelegateToolCall(toolCall)
 	if toolCall.Name == "bash" {
 		m.stream.handler.HandleBashEnd(toolCall)
 	} else {
@@ -239,6 +252,25 @@ func (m *replModel) handleToolEnd(toolCall *llm.ToolCall) (replModel, tea.Cmd) {
 	m.updateViewportContent()
 	m.scrollToBottomIfFollowing()
 	return *m, m.waitForAsyncEvent()
+}
+
+func sanitizeDelegateToolCall(toolCall *llm.ToolCall) *llm.ToolCall {
+	if toolCall == nil || toolCall.Name != "delegate_task" {
+		return toolCall
+	}
+	cloned := *toolCall
+	output, ok := toolCall.Output.(map[string]any)
+	if !ok {
+		return &cloned
+	}
+	clonedOutput := make(map[string]any, 4)
+	for _, key := range []string{"completed", "failed", "completed_by_agent", "failed_by_agent"} {
+		if value, exists := output[key]; exists {
+			clonedOutput[key] = value
+		}
+	}
+	cloned.Output = clonedOutput
+	return &cloned
 }
 
 // extractAtToken scans backwards from cursorPos in input to find a @<token>.

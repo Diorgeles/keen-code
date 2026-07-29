@@ -12,6 +12,7 @@ import (
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	"github.com/user/keen-code/internal/config"
 	"github.com/user/keen-code/internal/llm"
+	keenmcp "github.com/user/keen-code/internal/mcp"
 	"github.com/user/keen-code/internal/session"
 )
 
@@ -21,13 +22,15 @@ const (
 )
 
 type HeadlessRunOptions struct {
-	WorkingDir string
-	Config     *config.ResolvedConfig
-	Client     llm.LLMClient
-	SessionID  string
-	Prompt     string
-	Format     string
-	Out        io.Writer
+	WorkingDir   string
+	Config       *config.ResolvedConfig
+	GlobalConfig *config.GlobalConfig
+	MCPRuntime   keenmcp.Runtime
+	Client       llm.LLMClient
+	SessionID    string
+	Prompt       string
+	Format       string
+	Out          io.Writer
 }
 
 type HeadlessRunResult struct {
@@ -64,7 +67,7 @@ func RunHeadless(ctx context.Context, opts HeadlessRunOptions) (*HeadlessRunResu
 	appState := replappstate.New(opts.Client, opts.WorkingDir)
 	permissionRequester := replpermissions.NewAutoApproveRequester()
 	diffEmitter := repltooling.NewDiffEmitter()
-	repltooling.SetupToolRegistry(opts.WorkingDir, appState, permissionRequester, diffEmitter, nil, opts.Config)
+	repltooling.SetupToolRegistry(opts.WorkingDir, appState, permissionRequester, diffEmitter, opts.MCPRuntime, opts.Config, opts.GlobalConfig, nil)
 
 	sessions := newReplSessionState(opts.WorkingDir)
 	if sessions == nil {
@@ -163,6 +166,7 @@ func handleHeadlessToolEnd(handler *StreamHandler, toolCall *llm.ToolCall) {
 	if toolCall == nil {
 		return
 	}
+	toolCall = sanitizeDelegateToolCall(toolCall)
 	if toolCall.Name == "bash" {
 		handler.HandleBashEnd(toolCall)
 		return

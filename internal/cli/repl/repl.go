@@ -31,6 +31,7 @@ import (
 	"github.com/user/keen-code/internal/providers"
 	"github.com/user/keen-code/internal/session"
 	"github.com/user/keen-code/internal/skills"
+	"github.com/user/keen-code/internal/subagents"
 )
 
 const (
@@ -92,6 +93,7 @@ type replModel struct {
 	notification        notificationState
 	queuedInputs        []string
 	gitBranch           string
+	subagentActivity    <-chan subagents.ToolActivity
 }
 
 type bangState struct {
@@ -206,7 +208,17 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 	fileGuard := filesystem.NewGuard(ctx.workingDir, fileGitAwareness)
 	fileSearcher := replfilesearch.NewFileSearcher(ctx.workingDir, fileGuard)
 
-	repltooling.SetupToolRegistry(ctx.workingDir, appState, permissionRequester, diffEmitter, ctx.mcp, ctx.cfg)
+	subagentActivity := make(chan subagents.ToolActivity, 64)
+	repltooling.SetupToolRegistry(
+		ctx.workingDir,
+		appState,
+		permissionRequester,
+		diffEmitter,
+		ctx.mcp,
+		ctx.cfg,
+		ctx.globalCfg,
+		subagentActivity,
+	)
 
 	mdRenderer, err := replmarkdown.New(defaultWidth)
 
@@ -247,8 +259,9 @@ func initialModel(ctx *replContext, llmClient llm.LLMClient, needsSetup bool) re
 			spinner:       as,
 			streamHandler: NewStreamHandler(mdRenderer),
 		},
-		lastSession:     lastSession,
-		projectPermsErr: projectPermsErr,
+		lastSession:      lastSession,
+		projectPermsErr:  projectPermsErr,
+		subagentActivity: subagentActivity,
 	}
 	if ctx.globalCfg != nil && ctx.globalCfg.ShowThinking != nil {
 		model.showThinking = *ctx.globalCfg.ShowThinking
@@ -527,6 +540,7 @@ func (m replModel) waitForAsyncEvent() tea.Cmd {
 		m.stream.handler.eventCh,
 		permissionCh,
 		diffCh,
+		m.subagentActivity,
 	)
 }
 
@@ -589,6 +603,12 @@ func (m replModel) updateNormalMode(msg tea.Msg) (replModel, tea.Cmd) {
 			m.adjustTextareaHeight()
 		}
 		return m, nil
+	case subagentActivityMsg:
+		m.stream.handler.HandleSubagentActivity(msg.activity)
+		m.updateViewportContent()
+		m.scrollToBottomIfFollowing()
+		return m, m.waitForAsyncEvent()
+
 	case diffReadyMsg:
 		m.stream.handler.HandleDiff(msg.req.Lines)
 		close(msg.req.Done)

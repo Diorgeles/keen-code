@@ -10,8 +10,54 @@ import (
 	replpermissions "github.com/user/keen-code/internal/cli/repl/permissions"
 	repltooling "github.com/user/keen-code/internal/cli/repl/tooling"
 	"github.com/user/keen-code/internal/llm"
+	"github.com/user/keen-code/internal/subagents"
 	"github.com/user/keen-code/internal/tools"
 )
+
+func TestStreamHandlerHidesSubagentFileNotFoundFailure(t *testing.T) {
+	h := NewStreamHandler(nil)
+	h.workingDir = "/repo"
+	h.Start(make(chan llm.StreamEvent), "Working")
+	h.HandleSubagentActivity(subagents.ToolActivity{RunID: "run-1", CallID: "tool-1", Agent: "worker", Event: llm.StreamEvent{
+		Type: llm.StreamEventTypeToolStart, ToolCall: &llm.ToolCall{Name: "read_file", Input: map[string]any{"path": "missing.go"}},
+	}})
+	if view := h.View(120); !strings.Contains(view, "missing.go") {
+		t.Fatalf("expected active tool call before its result, got %q", view)
+	}
+	h.HandleSubagentActivity(subagents.ToolActivity{RunID: "run-1", CallID: "tool-1", Agent: "worker", Event: llm.StreamEvent{
+		Type: llm.StreamEventTypeToolEnd, ToolCall: &llm.ToolCall{Name: "read_file", Error: "not found: file missing.go"},
+	}})
+	if view := h.View(120); strings.Contains(view, "missing.go") || strings.Contains(view, "<worker>") {
+		t.Fatalf("expected completed file-not-found call to be hidden, got %q", view)
+	}
+	if transcript := strings.Join(h.renderTranscriptLines(), "\n"); strings.Contains(transcript, "missing.go") || strings.Contains(transcript, "<worker>") {
+		t.Fatalf("expected file-not-found call to be hidden from transcript, got %q", transcript)
+	}
+}
+
+func TestStreamHandlerRendersInterleavedSubagentActivityWithoutResults(t *testing.T) {
+	h := NewStreamHandler(nil)
+	h.workingDir = "/repo"
+	h.Start(make(chan llm.StreamEvent), "Working")
+	h.HandleSubagentActivity(subagents.ToolActivity{RunID: "run-1", CallID: "tool-1", Agent: "worker", Event: llm.StreamEvent{
+		Type: llm.StreamEventTypeToolStart, ToolCall: &llm.ToolCall{Name: "bash", Input: map[string]any{"command": "go test ./..."}},
+	}})
+	h.HandleSubagentActivity(subagents.ToolActivity{RunID: "run-2", CallID: "tool-1", Agent: "reviewer", Event: llm.StreamEvent{
+		Type: llm.StreamEventTypeToolStart, ToolCall: &llm.ToolCall{Name: "read_file", Input: map[string]any{"path": "README.md"}},
+	}})
+	h.HandleSubagentActivity(subagents.ToolActivity{RunID: "run-1", CallID: "tool-1", Agent: "worker", Event: llm.StreamEvent{
+		Type: llm.StreamEventTypeToolEnd, ToolCall: &llm.ToolCall{Name: "bash", Output: map[string]any{"stdout": "hidden-output"}},
+	}})
+	view := h.View(120)
+	for _, want := range []string{"[worker]", "go test ./...", "[reviewer]", "README.md"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("view missing %q: %q", want, view)
+		}
+	}
+	if strings.Contains(view, "hidden-output") {
+		t.Fatalf("view leaked child result: %q", view)
+	}
+}
 
 func TestStreamHandler_HandleChunk(t *testing.T) {
 	sh := NewStreamHandler(nil)
@@ -546,7 +592,7 @@ func TestWaitForAsyncEvent_Chunk(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest), nil)
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd")
 	}
@@ -568,7 +614,7 @@ func TestWaitForAsyncEvent_Done(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest), nil)
 	msg := cmd()
 
 	_, ok := msg.(llmDoneMsg)
@@ -585,7 +631,7 @@ func TestWaitForAsyncEvent_ReasoningChunk(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest), nil)
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd")
 	}
@@ -609,7 +655,7 @@ func TestWaitForAsyncEvent_Error(t *testing.T) {
 	}
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest), nil)
 	msg := cmd()
 
 	errMsg, ok := msg.(llmErrorMsg)
@@ -625,7 +671,7 @@ func TestWaitForAsyncEvent_ChannelClosed(t *testing.T) {
 	eventCh := make(chan llm.StreamEvent)
 	close(eventCh)
 
-	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest))
+	cmd := waitForAsyncEvent(eventCh, make(chan *replpermissions.Request), make(chan repltooling.DiffRequest), nil)
 	msg := cmd()
 
 	_, ok := msg.(llmDoneMsg)
@@ -696,7 +742,7 @@ func TestWaitForAsyncEvent_Permission(t *testing.T) {
 	req := makeTestPermissionRequest(false)
 	permissionCh <- req
 
-	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), permissionCh, make(chan repltooling.DiffRequest))
+	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), permissionCh, make(chan repltooling.DiffRequest), nil)
 	msg := cmd()
 
 	permissionMsg, ok := msg.(permissionReadyMsg)
@@ -713,7 +759,7 @@ func TestWaitForAsyncEvent_Diff(t *testing.T) {
 	req := repltooling.DiffRequest{Done: make(chan struct{})}
 	diffCh <- req
 
-	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), make(chan *replpermissions.Request), diffCh)
+	cmd := waitForAsyncEvent(make(chan llm.StreamEvent), make(chan *replpermissions.Request), diffCh, nil)
 	msg := cmd()
 
 	diffMsg, ok := msg.(diffReadyMsg)

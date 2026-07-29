@@ -99,38 +99,38 @@ func TestOutputBuilder_IsEmpty(t *testing.T) {
 	}
 }
 
-func TestFormatToolInput_ShowsRelativePathToWorkingDir(t *testing.T) {
+func TestFormatToolInput_ShowsOnlyPathBaseName(t *testing.T) {
 	workingDir := filepath.Join(string(filepath.Separator), "tmp", "project")
 	got := FormatToolInput("read_file", map[string]any{
 		"path": filepath.Join(workingDir, "internal", "cli", "repl", "output.go"),
 	}, workingDir)
 
-	if got != "internal/cli/repl/output.go" {
-		t.Fatalf("expected relative path display, got %q", got)
+	if got != "output.go" {
+		t.Fatalf("expected path base name display, got %q", got)
 	}
 }
 
-func TestFormatToolInput_KeepsRelativePathInput(t *testing.T) {
+func TestFormatToolInput_ShowsOnlyRelativePathBaseName(t *testing.T) {
 	got := FormatToolInput("read_file", map[string]any{"path": "internal/cli/repl/output.go"}, "/tmp/project")
 
-	if got != "internal/cli/repl/output.go" {
-		t.Fatalf("expected relative input path to remain unchanged, got %q", got)
+	if got != "output.go" {
+		t.Fatalf("expected relative input path base name, got %q", got)
 	}
 }
 
-func TestFormatToolInput_WriteFileShowsOnlyRelativePath(t *testing.T) {
+func TestFormatToolInput_WriteFileShowsOnlyPathBaseName(t *testing.T) {
 	workingDir := filepath.Join(string(filepath.Separator), "tmp", "project")
 	got := FormatToolInput("write_file", map[string]any{
-		"path":    filepath.Join(workingDir, "README.md"),
+		"path":    filepath.Join(workingDir, "docs", "README.md"),
 		"content": "ignored",
 	}, workingDir)
 
 	if got != "README.md" {
-		t.Fatalf("expected write_file UI to show only relative path, got %q", got)
+		t.Fatalf("expected write_file UI to show only path base name, got %q", got)
 	}
 }
 
-func TestFormatToolInput_GrepShowsQuotedPatternInPath(t *testing.T) {
+func TestFormatToolInput_GrepShowsQuotedPatternInPathBaseName(t *testing.T) {
 	got := FormatToolInput("grep", map[string]any{
 		"include":     "*.go",
 		"output_mode": "content",
@@ -138,9 +138,9 @@ func TestFormatToolInput_GrepShowsQuotedPatternInPath(t *testing.T) {
 		"pattern":     "FormatToolInput",
 	}, "/tmp/project")
 
-	expected := `"FormatToolInput" in internal/cli/repl`
+	expected := `"FormatToolInput" in repl`
 	if got != expected {
-		t.Fatalf("expected quoted pattern with path, got %q", got)
+		t.Fatalf("expected quoted pattern with path base name, got %q", got)
 	}
 }
 
@@ -226,18 +226,12 @@ func TestFormatToolEnd_DoesNotAddTrailingNewline(t *testing.T) {
 	}
 }
 
-func TestFormatToolInput_CompactsLongPath(t *testing.T) {
+func TestFormatToolInput_ShowsLongPathBaseName(t *testing.T) {
 	longPath := "internal/cli/repl/" + strings.Repeat("deeply-nested-dir/", 8) + "output.go"
 	got := FormatToolInput("read_file", map[string]any{"path": longPath}, "/tmp/project")
 
-	if !strings.HasSuffix(got, "output.go") {
-		t.Fatalf("expected basename to be preserved, got %q", got)
-	}
-	if !strings.Contains(got, "…") {
-		t.Fatalf("expected compacted path to contain ellipsis, got %q", got)
-	}
-	if len([]rune(got)) > maxDisplayPathRunes {
-		t.Fatalf("expected path capped at %d runes, got %d: %q", maxDisplayPathRunes, len([]rune(got)), got)
+	if got != "output.go" {
+		t.Fatalf("expected path base name, got %q", got)
 	}
 }
 
@@ -417,6 +411,53 @@ func TestFormatToolDone_ErrorShowsReasonAndDuration(t *testing.T) {
 	for _, want := range []string{"✗ Edit", "output.go", "oldString not found", "2ms"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("FormatToolDone() = %q, want it to contain %q", got, want)
+		}
+	}
+}
+
+func TestMCPFailuresHideErrorDetailsForMainAndSubagent(t *testing.T) {
+	start := &llm.ToolCall{
+		Name:  "call_mcp_tool",
+		Input: map[string]any{"server": "context7", "tool": "query-docs"},
+	}
+	end := &llm.ToolCall{
+		Name:     "call_mcp_tool",
+		Error:    "transport failed\nsensitive MCP response content",
+		Duration: time.Second,
+	}
+
+	for name, got := range map[string]string{
+		"main":     FormatToolDone(start, end, "/tmp/project"),
+		"subagent": FormatSubagentTool("worker-0", start, end, "/tmp/project"),
+		"orphan":   FormatToolEnd(end),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, want := range []string{"MCP", "failed", "1.0s"} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("formatted MCP failure = %q, want %q", got, want)
+				}
+			}
+			for _, hidden := range []string{"transport", "sensitive", "response content"} {
+				if strings.Contains(got, hidden) {
+					t.Fatalf("formatted MCP failure leaked %q: %q", hidden, got)
+				}
+			}
+		})
+	}
+}
+
+func TestFormatSubagentToolPrefixesAgentAndHidesOutput(t *testing.T) {
+	start := &llm.ToolCall{Name: "bash", Input: map[string]any{"command": "go test -race ./..."}}
+	end := &llm.ToolCall{Name: "bash", Output: map[string]any{"stdout": "hidden-output", "exit_code": 9}, Error: "failed", Duration: time.Second}
+	got := FormatSubagentTool("worker", start, end, "/tmp/project")
+	for _, want := range []string{"[worker]", "Run", "failed", "1.0s"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("FormatSubagentTool() = %q, want %q", got, want)
+		}
+	}
+	for _, hidden := range []string{"hidden-output", "exit 9"} {
+		if strings.Contains(got, hidden) {
+			t.Fatalf("FormatSubagentTool leaked %q: %q", hidden, got)
 		}
 	}
 }
