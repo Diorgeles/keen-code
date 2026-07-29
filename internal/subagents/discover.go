@@ -8,11 +8,11 @@ import (
 	"strings"
 )
 
-func Discover(workingDir, bundledDir string) Discovery {
+func Discover(workingDir string) Discovery {
 	var result Discovery
 	seen := map[string]bool{}
 
-	for _, root := range discoveryRoots(workingDir, bundledDir) {
+	for _, root := range discoveryRoots(workingDir) {
 		matches, err := filepath.Glob(filepath.Join(root, "*.md"))
 		if err != nil {
 			continue
@@ -89,10 +89,12 @@ func Catalog(profiles []Profile) string {
 
 	var sb strings.Builder
 	sb.WriteString("## Available Subagents\n\n")
-	sb.WriteString("You can delegate bounded, independent read-only work with the `delegate_task` tool.\n")
-	sb.WriteString("Use a subagent only when the work can be handed off as a self-contained task, has a clear objective, and matches a listed subagent's description.\n")
-	sb.WriteString("Do not use subagents for quick lookups, direct edits, commands, ambiguous requests that need clarification, or tightly coupled implementation work.\n")
-	sb.WriteString("When delegating, choose the matching subagent and pass a targeted task with relevant paths or inputs, what to look for, and the expected concise findings. Synthesize returned findings yourself.\n\n")
+	sb.WriteString("You can delegate up to 10 bounded tasks to named subagents and run them in parallel. ")
+	sb.WriteString("Use a subagent only when the work can be handed off as a self-contained task with a clear objective. ")
+	sb.WriteString("Choose profiles according to their descriptions and configured capabilities, and pass relevant paths, inputs, constraints, and expected results. ")
+	sb.WriteString("Each delegated task is a one-shot run: you cannot ask the child follow-up questions or resume its context, so include everything needed in the initial task. ")
+	sb.WriteString("If more work is needed, start a new run and provide the relevant context again. ")
+	sb.WriteString("Avoid delegation for quick lookups, ambiguous requests that need clarification, or work that must remain tightly coupled to the parent.\n\n")
 	for _, profile := range visible {
 		sb.WriteString("- ")
 		sb.WriteString(profile.Name)
@@ -103,7 +105,7 @@ func Catalog(profiles []Profile) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func discoveryRoots(workingDir, bundledDir string) []string {
+func discoveryRoots(workingDir string) []string {
 	roots := []string{
 		filepath.Join(workingDir, ".agents", "agents"),
 		filepath.Join(workingDir, ".keen", "agents"),
@@ -115,9 +117,6 @@ func discoveryRoots(workingDir, bundledDir string) []string {
 			filepath.Join(home, ".keen", "agents"),
 			filepath.Join(home, ".claude", "agents"),
 		)
-	}
-	if strings.TrimSpace(bundledDir) != "" {
-		roots = append(roots, bundledDir)
 	}
 	return roots
 }

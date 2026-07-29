@@ -10,7 +10,7 @@ import (
 type frontmatter struct {
 	Name           string   `yaml:"name"`
 	Description    string   `yaml:"description"`
-	Tools          []string `yaml:"tools"`
+	Permissions    []string `yaml:"permissions"`
 	Provider       string   `yaml:"provider"`
 	Model          string   `yaml:"model"`
 	ThinkingEffort string   `yaml:"thinking_effort"`
@@ -40,6 +40,9 @@ func ParseProfile(path string, data []byte) (Profile, []string, error) {
 	if err := yaml.Unmarshal([]byte(fmText), &fm); err != nil {
 		return Profile{}, nil, fmt.Errorf("parse frontmatter: %w", err)
 	}
+	if _, usesTools := raw["tools"]; usesTools {
+		return Profile{}, nil, fmt.Errorf("frontmatter field %q is no longer supported; use permissions", "tools")
+	}
 
 	name := strings.TrimSpace(fm.Name)
 	if name == "" {
@@ -50,17 +53,26 @@ func ParseProfile(path string, data []byte) (Profile, []string, error) {
 		return Profile{}, nil, fmt.Errorf("missing required frontmatter field: description")
 	}
 
-	return Profile{
+	_, permissionsSet := raw["permissions"]
+	profile := Profile{
 		Name:           name,
 		Description:    description,
-		Tools:          trimStrings(fm.Tools),
+		Permissions:    trimStrings(fm.Permissions),
+		PermissionsSet: permissionsSet,
 		Provider:       strings.TrimSpace(fm.Provider),
 		Model:          strings.TrimSpace(fm.Model),
 		ThinkingEffort: strings.TrimSpace(fm.ThinkingEffort),
 		TimeoutSeconds: fm.TimeoutSeconds,
 		Hidden:         fm.Hidden,
 		Instructions:   strings.TrimSpace(body),
-	}, unknownFieldWarnings(name, raw), nil
+	}
+	if (profile.Provider == "") != (profile.Model == "") {
+		return Profile{}, nil, fmt.Errorf("provider and model must be specified together")
+	}
+	if err := validatePermissions(profile); err != nil {
+		return Profile{}, nil, err
+	}
+	return profile, unknownFieldWarnings(name, raw), nil
 }
 
 func splitFrontmatter(content string) (string, string, bool, error) {
@@ -80,7 +92,7 @@ func splitFrontmatter(content string) (string, string, bool, error) {
 
 func unknownFieldWarnings(name string, raw map[string]any) []string {
 	known := map[string]bool{
-		"name": true, "description": true, "tools": true, "provider": true,
+		"name": true, "description": true, "permissions": true, "provider": true,
 		"model": true, "thinking_effort": true, "timeout_seconds": true,
 		"hidden": true,
 	}

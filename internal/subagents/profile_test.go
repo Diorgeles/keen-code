@@ -16,14 +16,16 @@ func TestFind(t *testing.T) {
 	}
 }
 
-func TestReadOnlyToolsDefaultsAndFilters(t *testing.T) {
-	if got := readOnlyTools(Profile{}); !sameStrings(got, []string{"read_file", "glob", "grep"}) {
-		t.Fatalf("expected default read-only tools, got %v", got)
+func TestPermissionToolNamesInheritsAndMapsCapabilities(t *testing.T) {
+	inherited := []string{"read_file", "write_file", "delegate_task", "call_mcp_tool"}
+	if got := permissionToolNames(Profile{}, inherited); !sameStrings(got, []string{"read_file", "write_file"}) {
+		t.Fatalf("expected inherited child tools without special tools, got %v", got)
 	}
 
-	got := readOnlyTools(Profile{Tools: []string{"grep", "write_file", "", "read_file"}})
-	if !sameStrings(got, []string{"read_file", "grep"}) {
-		t.Fatalf("expected read-only intersection, got %v", got)
+	profile := Profile{Permissions: []string{"read", "write", "bash", "web"}, PermissionsSet: true}
+	want := []string{"read_file", "glob", "grep", "write_file", "edit_file", "bash", "web_fetch"}
+	if got := permissionToolNames(profile, inherited); !sameStrings(got, want) {
+		t.Fatalf("expected mapped capability tools, got %v", got)
 	}
 }
 

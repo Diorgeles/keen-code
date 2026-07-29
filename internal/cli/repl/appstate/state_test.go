@@ -346,6 +346,9 @@ func TestAppState_StreamChatPlanModeUsesPlanPromptAndRemovesWriteTools(t *testin
 		if _, ok := capturedRegistry.Get(name); ok {
 			t.Fatalf("expected %s to be removed from the plan mode registry", name)
 		}
+		if _, ok := state.EffectiveToolRegistry().Get(name); ok {
+			t.Fatalf("expected effective plan registry to exclude %s", name)
+		}
 	}
 	if _, ok := state.GetToolRegistry().Get("write_file"); !ok {
 		t.Fatal("expected original registry to keep write_file")

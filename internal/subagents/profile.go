@@ -1,11 +1,15 @@
 package subagents
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 type Profile struct {
 	Name           string
 	Description    string
-	Tools          []string
+	Permissions    []string
+	PermissionsSet bool
 	Provider       string
 	Model          string
 	ThinkingEffort string
@@ -29,20 +33,55 @@ func Find(profiles []Profile, name string) (Profile, bool) {
 	return Profile{}, false
 }
 
-func readOnlyTools(profile Profile) []string {
-	allowed := []string{"read_file", "glob", "grep"}
-	if len(profile.Tools) == 0 {
-		return allowed
+var permissionTools = map[string][]string{
+	"read":  {"read_file", "glob", "grep"},
+	"write": {"write_file", "edit_file"},
+	"bash":  {"bash"},
+	"web":   {"web_fetch"},
+}
+
+func validatePermissions(profile Profile) error {
+	if !profile.PermissionsSet {
+		return nil
 	}
-	requested := map[string]bool{}
-	for _, tool := range profile.Tools {
-		requested[strings.TrimSpace(tool)] = true
+	if len(profile.Permissions) == 0 {
+		return fmt.Errorf("permissions must not be empty")
 	}
-	var result []string
-	for _, tool := range allowed {
-		if requested[tool] {
-			result = append(result, tool)
+	for _, permission := range profile.Permissions {
+		if _, ok := permissionTools[strings.TrimSpace(permission)]; !ok {
+			return fmt.Errorf("unknown permission %q", permission)
 		}
+	}
+	return nil
+}
+
+func permissionToolNames(profile Profile, inherited []string) []string {
+	if !profile.PermissionsSet {
+		return filterChildToolNames(inherited)
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, permission := range profile.Permissions {
+		for _, name := range permissionTools[permission] {
+			if !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	return filterChildToolNames(names)
+}
+
+func filterChildToolNames(names []string) []string {
+	result := make([]string, 0, len(names))
+	seen := map[string]bool{}
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name == "" || name == "delegate_task" || name == "call_mcp_tool" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		result = append(result, name)
 	}
 	return result
 }

@@ -28,8 +28,28 @@ Explore with focus.
 	if profile.Instructions != "Explore with focus." {
 		t.Fatalf("unexpected instructions %q", profile.Instructions)
 	}
-	if len(profile.Tools) != 0 {
-		t.Fatalf("expected tools to inherit by omission, got %v", profile.Tools)
+	if profile.PermissionsSet || len(profile.Permissions) != 0 {
+		t.Fatalf("expected permissions to inherit by omission, got %v", profile.Permissions)
+	}
+}
+
+func TestParseProfileRejectsEmptyAndUnknownPermissions(t *testing.T) {
+	for _, data := range []string{
+		"---\nname: worker\ndescription: Worker.\npermissions: []\n---\nBody.",
+		"---\nname: worker\ndescription: Worker.\npermissions: [admin]\n---\nBody.",
+	} {
+		if _, _, err := ParseProfile("worker.md", []byte(data)); err == nil {
+			t.Fatalf("expected invalid permissions error for %s", data)
+		}
+	}
+}
+
+func TestParseProfileRequiresProviderModelPair(t *testing.T) {
+	for _, field := range []string{"provider: openai", "model: gpt-test"} {
+		data := "---\nname: worker\ndescription: Worker.\n" + field + "\n---\nBody."
+		if _, _, err := ParseProfile("worker.md", []byte(data)); err == nil || !strings.Contains(err.Error(), "together") {
+			t.Fatalf("expected provider/model pairing error, got %v", err)
+		}
 	}
 }
 
@@ -92,8 +112,8 @@ func TestParseProfileParsesOptionalFields(t *testing.T) {
 	profile, warnings, err := ParseProfile("reviewer.md", []byte(`---
 name: reviewer
 description: Reviews code.
-tools:
-  - grep
+permissions:
+  - read
   - ""
 provider: anthropic
 model: claude
@@ -115,7 +135,7 @@ Review with focus.
 	if profile.TimeoutSeconds != 30 || !profile.Hidden {
 		t.Fatalf("unexpected runtime fields: %+v", profile)
 	}
-	if len(profile.Tools) != 1 || profile.Tools[0] != "grep" {
-		t.Fatalf("expected trimmed tools, got %v", profile.Tools)
+	if !profile.PermissionsSet || len(profile.Permissions) != 1 || profile.Permissions[0] != "read" {
+		t.Fatalf("expected trimmed permissions, got %v", profile.Permissions)
 	}
 }

@@ -132,12 +132,7 @@ func (s *AppState) ReloadSubagents() subagents.Discovery {
 		s.subagents = subagents.Discovery{}
 		return s.GetSubagents()
 	}
-	bundledDir, bundledErr := subagents.EnsureBundled()
-	discovery := subagents.LoadMetadata(subagents.Discover(s.workingDir, bundledDir))
-	if bundledErr != nil {
-		discovery.Warnings = append(discovery.Warnings, "Bundled subagents failed to extract: "+bundledErr.Error())
-	}
-	s.subagents = discovery
+	s.subagents = subagents.LoadMetadata(subagents.Discover(s.workingDir))
 	return s.GetSubagents()
 }
 
@@ -179,11 +174,7 @@ func (s *AppState) StreamChat(ctx context.Context, cfg *config.ResolvedConfig, o
 		Content: llm.Build(s.workingDir, s.SkillsCatalog(), s.SubagentsCatalog(), s.mode),
 	}
 	messages := append([]llm.Message{systemMsg}, s.GetMessages()...)
-	registry := s.toolRegistry
-	if s.mode == llm.ModePlan {
-		registry = s.toolRegistry.Without("write_file", "edit_file")
-	}
-	return s.llmClient.StreamChat(ctx, messages, registry, opts...)
+	return s.llmClient.StreamChat(ctx, messages, s.EffectiveToolRegistry(), opts...)
 }
 
 func (s *AppState) buildCompactionRequest(cfg *config.ResolvedConfig, extraPrompt string) ([]llm.Message, error) {
@@ -308,6 +299,13 @@ func (s *AppState) GetClient() llm.LLMClient {
 }
 
 func (s *AppState) GetToolRegistry() *tools.Registry {
+	return s.toolRegistry
+}
+
+func (s *AppState) EffectiveToolRegistry() *tools.Registry {
+	if s.mode == llm.ModePlan {
+		return s.toolRegistry.Without("write_file", "edit_file")
+	}
 	return s.toolRegistry
 }
 

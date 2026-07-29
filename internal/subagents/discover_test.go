@@ -19,44 +19,31 @@ func TestDiscoverAndLoadMetadata(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(projectDir, "reviewer.md"), []byte(`---
 name: reviewer
 description: Reviews code.
-tools:
-  - grep
+permissions:
+  - read
 ---
 Review with focus.
 `), 0o644); err != nil {
 		t.Fatalf("write project profile: %v", err)
 	}
 
-	bundledDir := filepath.Join(t.TempDir(), "bundled")
-	if err := os.MkdirAll(bundledDir, 0o755); err != nil {
-		t.Fatalf("create bundled dir: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(bundledDir, "explorer.md"), []byte(`---
-name: explorer
-description: Explores code.
----
-Explore with focus.
-`), 0o644); err != nil {
-		t.Fatalf("write bundled profile: %v", err)
-	}
-
-	discovery := Discover(workingDir, bundledDir)
-	if len(discovery.Profiles) != 2 {
-		t.Fatalf("expected 2 discovered profiles, got %d: %+v", len(discovery.Profiles), discovery.Profiles)
+	discovery := Discover(workingDir)
+	if len(discovery.Profiles) != 1 {
+		t.Fatalf("expected 1 discovered profile, got %d: %+v", len(discovery.Profiles), discovery.Profiles)
 	}
 
 	loaded := LoadMetadata(discovery)
 	if len(loaded.Warnings) != 0 {
 		t.Fatalf("expected no warnings, got %v", loaded.Warnings)
 	}
-	if len(loaded.Profiles) != 2 {
-		t.Fatalf("expected 2 loaded profiles, got %d: %+v", len(loaded.Profiles), loaded.Profiles)
+	if len(loaded.Profiles) != 1 {
+		t.Fatalf("expected 1 loaded profile, got %d: %+v", len(loaded.Profiles), loaded.Profiles)
 	}
-	if loaded.Profiles[0].Name != "explorer" || loaded.Profiles[1].Name != "reviewer" {
-		t.Fatalf("expected sorted profiles explorer/reviewer, got %+v", loaded.Profiles)
+	if loaded.Profiles[0].Name != "reviewer" {
+		t.Fatalf("expected reviewer profile, got %+v", loaded.Profiles)
 	}
-	if loaded.Profiles[1].Instructions != "Review with focus." {
-		t.Fatalf("unexpected reviewer instructions: %q", loaded.Profiles[1].Instructions)
+	if loaded.Profiles[0].Instructions != "Review with focus." {
+		t.Fatalf("unexpected reviewer instructions: %q", loaded.Profiles[0].Instructions)
 	}
 }
 
@@ -86,6 +73,29 @@ func TestCatalogSkipsHiddenProfiles(t *testing.T) {
 	}
 	if strings.Contains(catalog, "hidden") {
 		t.Fatalf("expected hidden profile to be omitted: %s", catalog)
+	}
+}
+
+func TestCatalogSupportsCapableWorkerProfiles(t *testing.T) {
+	catalog := Catalog([]Profile{{
+		Name:        "worker",
+		Description: "Implements focused changes with write and bash capabilities.",
+	}})
+	for _, expected := range []string{
+		"up to 10 bounded tasks",
+		"descriptions and configured capabilities",
+		"relevant paths, inputs, constraints, and expected results",
+		"one-shot run",
+		"cannot ask the child follow-up questions or resume its context",
+	} {
+		if !strings.Contains(catalog, expected) {
+			t.Fatalf("expected catalog guidance to contain %q, got %q", expected, catalog)
+		}
+	}
+	for _, discouraged := range []string{"independent read-only work", "direct edits, commands"} {
+		if strings.Contains(catalog, discouraged) {
+			t.Fatalf("catalog retained obsolete worker restriction %q: %q", discouraged, catalog)
+		}
 	}
 }
 
