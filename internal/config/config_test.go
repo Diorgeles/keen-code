@@ -5,6 +5,30 @@ import (
 	"testing"
 )
 
+func TestResolveProviderBuildsIndependentConfig(t *testing.T) {
+	global := &GlobalConfig{Providers: map[string]ProviderConfig{
+		ProviderOpenAICompatible: {
+			APIKey:  " key ",
+			BaseURL: "https://example.test",
+			Headers: map[string]string{"X-Test": "value"},
+		},
+	}}
+	resolved, err := ResolveProvider(global, ProviderOpenAICompatible, "cheap-model", "medium")
+	if err != nil {
+		t.Fatalf("ResolveProvider returned error: %v", err)
+	}
+	if resolved.Provider != ProviderOpenAICompatible || resolved.Model != "cheap-model" || resolved.ThinkingEffort != "medium" || resolved.APIKey != "key" {
+		t.Fatalf("unexpected resolved config: %+v", resolved)
+	}
+	resolved.Headers["X-Test"] = "changed"
+	if global.Providers[ProviderOpenAICompatible].Headers["X-Test"] != "value" {
+		t.Fatal("expected resolved headers to be cloned")
+	}
+	if _, err := ResolveProvider(global, ProviderAnthropic, "model", ""); err == nil {
+		t.Fatal("expected unconfigured provider error")
+	}
+}
+
 func TestGlobalConfig_GetProviderConfig(t *testing.T) {
 	g := &GlobalConfig{
 		Providers: map[string]ProviderConfig{

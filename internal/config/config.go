@@ -166,23 +166,51 @@ func runAPIKeyHelperCommand(ctx context.Context, provider string, cmd *exec.Cmd)
 	return apiKey, nil
 }
 
-func ResolveAdversary(global *GlobalConfig) (*ResolvedConfig, error) {
-	if global.AdversaryProvider == "" || global.AdversaryModel == "" {
-		return nil, fmt.Errorf("adversary model not configured")
+func ResolveProvider(global *GlobalConfig, provider, model, thinkingEffort string) (*ResolvedConfig, error) {
+	if global == nil {
+		return nil, fmt.Errorf("global config not initialized")
 	}
-	provCfg := global.Providers[global.AdversaryProvider]
-	apiKey, err := ResolveProviderAPIKey(global.AdversaryProvider, provCfg)
+	provider = strings.TrimSpace(provider)
+	model = strings.TrimSpace(model)
+	if provider == "" || model == "" {
+		return nil, fmt.Errorf("provider and model are required")
+	}
+	provCfg, ok := global.Providers[provider]
+	if !ok {
+		return nil, fmt.Errorf("provider %q is not configured", provider)
+	}
+	apiKey, err := ResolveProviderAPIKey(provider, provCfg)
 	if err != nil {
 		return nil, err
 	}
 	return &ResolvedConfig{
-		Provider: global.AdversaryProvider,
-		Model:    global.AdversaryModel,
-		APIKey:   apiKey,
-		BaseURL:  provCfg.BaseURL,
-		AuthMode: AuthModeForProvider(global.AdversaryProvider),
-		Headers:  provCfg.Headers,
+		Provider:       provider,
+		Model:          model,
+		ThinkingEffort: strings.TrimSpace(thinkingEffort),
+		APIKey:         apiKey,
+		APIKeyHelper:   provCfg.APIKeyHelper,
+		BaseURL:        provCfg.BaseURL,
+		AuthMode:       AuthModeForProvider(provider),
+		Headers:        cloneHeaders(provCfg.Headers),
 	}, nil
+}
+
+func ResolveAdversary(global *GlobalConfig) (*ResolvedConfig, error) {
+	if global.AdversaryProvider == "" || global.AdversaryModel == "" {
+		return nil, fmt.Errorf("adversary model not configured")
+	}
+	return ResolveProvider(global, global.AdversaryProvider, global.AdversaryModel, "")
+}
+
+func cloneHeaders(headers map[string]string) map[string]string {
+	if headers == nil {
+		return nil
+	}
+	cloned := make(map[string]string, len(headers))
+	for key, value := range headers {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func ConfigPath() string {
