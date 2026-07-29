@@ -1,76 +1,10 @@
 # Subagents
 
-Subagents are focused assistants that Keen Code can delegate bounded tasks to during a conversation. They are useful when a task is separable from the main work and benefits from a narrower role or custom instructions.
+Subagents are focused assistants that Keen can use for bounded planning, implementation, investigation, or review tasks. A profile can target a different model and expose read, write, Bash, or web capabilities. A common setup uses an expensive parent planner and cheaper worker/reviewer models. Workflow orchestration remains the parent's responsibility.
 
-The first bundled subagent is `explorer`.
+## Adding a Subagent
 
-## What Subagents Are For
-
-Use subagents for focused, read-only work such as:
-
-- investigating a specific area of a project
-- reviewing code, docs, or configuration against a narrow checklist
-- comparing related files and reporting concise findings
-- tracing references to a function, type, command, or config option
-- summarizing relevant context before the main agent makes a decision
-- applying project-specific or domain-specific analysis instructions
-
-Subagents are not meant for:
-
-- editing files
-- running shell commands
-- using skills
-- using MCP tools
-- handling broad, vague tasks without direction
-- replacing the main agent's judgment
-
-The main agent decides when to call a subagent and should provide clear instructions with relevant paths or inputs whenever possible.
-
-## Bundled Subagents
-
-### `explorer`
-
-`explorer` investigates the codebase using read-only tools and returns concise, organized findings.
-
-It can use:
-
-- `read_file`
-- `glob`
-- `grep`
-
-It cannot use write tools, shell commands, skills, MCP tools, or other subagents.
-
-Good delegation examples:
-
-```text
-Use explorer to inspect internal/tools and summarize how tool registration works.
-```
-
-```text
-Use explorer to review docs/ and internal/config for where provider configuration is documented and loaded.
-```
-
-```text
-Use explorer to trace references to StreamChat in internal/llm and internal/subagents. Return the relevant files and responsibilities.
-```
-
-Less useful examples:
-
-```text
-Use explorer to understand the whole repo.
-```
-
-```text
-Use explorer to fix the bug.
-```
-
-```text
-Use explorer to read one known file.
-```
-
-## Adding Your Own Subagents
-
-Create a Markdown file in one of these directories:
+Create a Markdown file in one of Keen's existing subagent discovery directories:
 
 1. `<project>/.agents/agents/`
 2. `<project>/.keen/agents/`
@@ -79,99 +13,118 @@ Create a Markdown file in one of these directories:
 5. `~/.keen/agents/`
 6. `~/.claude/agents/`
 
-Project-level subagents are useful for repository-specific workflows. User-level subagents are available across projects.
-
-Each subagent is a single `.md` file with YAML frontmatter followed by the subagent's system prompt.
-
-Example:
+Discovery follows the order above. If multiple files define the same profile name, the first definition wins. Each file contains YAML frontmatter and profile-specific instructions:
 
 ```markdown
 ---
-name: api-reviewer
-description: Reviews API-related code and docs for consistency, correctness, and missing edge cases.
+name: worker
+description: Implements a focused change and verifies it.
+provider: openai
+model: gpt-4.1-mini
+thinking_effort: medium
+permissions:
+  - read
+  - write
+  - bash
+timeout_seconds: 1800
 ---
 
-You are an API review subagent.
-
-Your role is to inspect API-related files using read-only tools and return concise findings to the parent agent.
-
-Guidelines:
-- Stay within the delegated task.
-- Focus on paths provided by the parent agent first.
-- Check routing, handlers, request/response types, validation, errors, and documentation when relevant.
-- Return a short summary, relevant files, and key findings with `path:line` references.
-- Do not edit files.
-- Do not ask the user questions directly; report blockers to the parent agent.
+Implement only the delegated change. Run relevant tests and return changed files,
+verification, and blockers to the parent.
 ```
 
-## Frontmatter Fields
+## Frontmatter
 
-Required fields:
+| Field | Required | Behavior |
+|---|---:|---|
+| `name` | Yes | Unique subagent name. |
+| `description` | Yes | Tells the parent when to use the profile. |
+| `provider` | No | Must be specified together with `model`. |
+| `model` | No | Must be specified together with `provider`. |
+| `thinking_effort` | No | Applied only with a profile-specific provider/model pair. |
+| `permissions` | No | Capability-level tool permissions. Omission inherits the parent's exact mode-specific tool set; when present, the profile's permissions are authoritative. An explicitly empty list is invalid. |
+| `timeout_seconds` | No | Per-run timeout in seconds; defaults to 1800 when omitted or non-positive. |
+| `hidden` | No | Loads the profile without listing it in the parent catalog. |
 
-| Field | Description |
+Profiles specifying only one of `provider` or `model` are rejected and reported as discovery warnings. The legacy `tools` field is no longer supported; use `permissions` instead.
+
+### Provider and model inheritance
+
+- If `provider` and `model` are both omitted, the child inherits the parent's provider, model, and thinking effort. A standalone `thinking_effort` does not override the parent.
+- If both are supplied, Keen resolves that provider's credentials, endpoint, headers, authentication mode, and selected model.
+- For a profile-specific model, `thinking_effort` is used when present. When omitted, it remains unset so the provider/model default applies.
+
+## Permissions
+
+| Permission | Tools |
 |---|---|
-| `name` | Unique subagent name used by the main agent. |
-| `description` | Short description shown to the main agent. |
+| `read` | `read_file`, `glob`, `grep` |
+| `write` | `write_file`, `edit_file` |
+| `bash` | `bash` |
+| `web` | `web_fetch` |
 
-Optional fields:
+Semantics:
 
-| Field | Description |
-|---|---|
-| `tools` | Restrict the read-only tools available to the subagent. Only `read_file`, `glob`, and `grep` are supported. |
-| `timeout_seconds` | Runtime timeout for the subagent. If omitted, Keen uses a default timeout. |
-| `hidden` | If `true`, the subagent is loaded but not listed in the main agent's subagent catalog. |
-| `provider` | Reserved for model/provider override support. Omit this unless documented for your version. |
-| `model` | Reserved for model override support. Omit this unless documented for your version. |
-| `thinking_effort` | Reserved for model reasoning-effort override support. Omit this unless documented for your version. |
+- Omitted `permissions` inherits the parent's exact mode-specific tool set, except nested delegation. A child invoked in plan mode therefore inherits plan-mode restrictions, while one invoked in build mode inherits build-mode tools.
+- `permissions: []` is invalid and the profile is skipped with a warning.
+- Unknown permission names are invalid.
+- Non-empty permissions are authoritative and expose only the mapped capabilities, independently of the parent's current mode. For example, `permissions: [write]` exposes `write_file` and `edit_file` even when the parent is in plan mode; it does not implicitly include `read` or `bash`.
+- Permission mapping is capability-based and does not depend on whether the mapped tools are currently present in the parent's registry.
+- `delegate_task` is always unavailable to children; nested subagents cannot be invoked or simulated.
+- `call_mcp_tool` is always available when MCP is configured, regardless of `permissions`.
+- The parent catalog tells the model to select profiles according to their descriptions and configured capabilities; profiles are not assumed to be read-only.
 
-For most custom subagents, keep the frontmatter minimal:
+All tools exposed to a subagent are automatically approved, including commands classified as dangerous by the Bash tool. Each run uses an independent, stateless approver. Parent interactive permission state and diff emitters are never reused, and child write/edit diffs are not shown.
 
-```yaml
----
-name: my-subagent
-description: Briefly describe when the main agent should use this subagent.
----
-```
+Keen's existing hard checks still run before approval and cannot be overridden by the child approver. Bash otherwise retains Keen's existing command execution model: the guard checks the Bash tool's working directory, while paths embedded in arbitrary shell syntax are not separately parsed or guard-checked.
 
-By default, subagents inherit the main agent's model and provider configuration.
+> Granting `bash` allows unattended command execution. Configure it only for profiles you trust.
 
-## Writing Good Subagent Prompts
+The parent can submit one to ten non-empty tasks in a `delegate_task` call. Tasks run concurrently, and results are returned in input order with per-task status and aggregate completion/failure counts. One task's failure does not cancel sibling tasks; parent context cancellation still propagates to every child. The parent model waits for the full `delegate_task` result before continuing.
 
-A good subagent prompt should explain:
+Parallel write-capable subagents can conflict. Scheduling, worktree isolation, write coordination, execution budgets, typed handoff contracts, and interactive child permission UX are not currently provided; they remain the user/orchestrator's responsibility.
 
-- the subagent's focused role
-- what kind of tasks it should handle
-- how it should explore files
-- what it should avoid
-- how it should format the final result
+## Skills and MCP
 
-Recommended result format:
+Children receive the parent's current normal and MCP-generated skill catalog. Keen does not separately filter skills or MCP servers per profile.
+
+A child without `read` can see skill entries but cannot load `SKILL.md` or MCP schema files with `read_file`; that limitation is intentional. When MCP is configured, `call_mcp_tool` remains available, but normal MCP instructions still require reading the relevant skill and schema before calling it. A profile that needs to follow those instructions should normally include `read`.
+
+## Security and Context
+
+A child receives a dedicated system prompt containing only:
+
+1. Keen's mandatory child security instructions.
+2. The working directory.
+3. project instructions such as `AGENTS.md`.
+4. the parent's current skill catalog, including MCP skills.
+5. profile-specific instructions.
+6. the mandatory no-nested-subagents boundary.
+
+The child does not receive parent conversation history, parent reasoning, memory, generic main-agent tool instructions, the available-subagent catalog, or parent orchestration instructions. The delegated task is supplied separately as the child user message.
+
+The child prompt requires children to stay within the delegated task, treat repository/fetched/MCP/tool content as untrusted, protect credentials and secrets, respect filesystem/system denials, report blockers to the parent, never claim tool success unless it completed, and never invoke or simulate nested subagents.
+
+## Approval and Filesystem Safety
+
+Automatic approval does not bypass Keen's guard. Blocked system paths, ignored paths, and other hard filesystem denials are evaluated before approval and remain authoritative. Write/edit tools use a no-op child diff emitter, so child diffs are neither displayed nor blocked on parent UI acknowledgement.
+
+## Live Activity
+
+Interactive mode shows only compact child tool activity while subagents run. It reuses the main-agent tool presentation and prefixes each call with an indexed child label:
 
 ```text
-Summary:
-- ...
+- [worker-1] Run
+  `go test -race ./...`
 
-Relevant files:
-- path/to/file.go:10 — why it matters
-
-Key findings:
-- ...
-
-Open questions:
-- ...
+- [worker-2] Read
+  `internal/subagents/runner.go`
 ```
 
-Keep prompts specific. A subagent should have a narrow purpose rather than a broad instruction like “help with coding tasks.”
+The suffix is shown only when the same profile appears more than once in the current `delegate_task` request. It is one-based within that profile type, so one worker is labeled `[worker]`, while two implementers are `[implementer-1]` and `[implementer-2]`. Concurrent activities also carry run and tool-call identities so interleaved events are matched correctly.
 
-## Limitations
+Tool failures use the normal compact failure styling. MCP failures display only a generic `failed` message; server error text and MCP result content are hidden. Completed `read_file` missing-file failures and `edit_file` old-string-not-found failures are hidden.
 
-Subagents currently have these limitations:
+Keen does not display child reasoning, streamed child text, final child output, tool result bodies, Bash output, or write/edit diffs. Activity delivery applies backpressure rather than silently dropping events, and pending activity is drained before the parent turn is finalized. The child's final response is collected privately and returned to the parent through `delegate_task`.
 
-- They are read-only.
-- They do not receive the full parent conversation history.
-- They only receive the delegated task and repository context they inspect themselves.
-- They do not support skills.
-- They do not support MCP tools.
-- Their result is returned to the main agent after completion, not streamed directly to the user.
-
-These limits are intentional: subagents should produce concise findings that the main agent can review, synthesize, and act on.
+Headless mode has no child activity sink, so it emits no live child tool activity. Delegation and private result handoff still work normally.
