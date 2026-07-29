@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-07-29
+
+### Added
+- Configurable subagent profiles with custom instructions, model overrides, and permission-scoped tool access.
+- Isolated child-agent execution with auto-approved permitted operations and sanitized activity in the REPL.
+- Provider-specific model configuration resolution for profile overrides.
+- Documentation for configuring and using subagents.
+
+### Changed
+- Replace the bundled read-only explorer profile with discoverable, user-configurable profiles.
+
+### Fixed
+- Hide OpenAI-compatible providers from interactive model selection.
+- Suppress expected tool failures from REPL error output.
+
 ## [0.37.0] - 2026-07-26
 
 ### Added
@@ -794,7 +809,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/mochow13/keen-code/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/mochow13/keen-code/compare/v0.36.3...v0.37.0
 [0.36.3]: https://github.com/mochow13/keen-code/compare/v0.36.2...v0.36.3
 [0.36.2]: https://github.com/mochow13/keen-code/compare/v0.36.1...v0.36.2
