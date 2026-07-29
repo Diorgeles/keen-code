@@ -75,9 +75,15 @@ type Model struct {
 }
 
 func New(registry *providers.Registry, globalCfg *config.GlobalConfig, loader *config.Loader, resolvedCfg *config.ResolvedConfig, onComplete func(provider, model, apiKey string) error) *Model {
+	providerList := make([]providers.Provider, 0, len(registry.Providers))
+	for _, provider := range registry.Providers {
+		if provider.ID != config.ProviderOpenAICompatible {
+			providerList = append(providerList, provider)
+		}
+	}
 	return &Model{
 		Step:         StepProvider,
-		ProviderList: registry.Providers,
+		ProviderList: providerList,
 		authManager:  keenauth.NewOAuthManager(nil),
 		registry:     registry,
 		globalCfg:    globalCfg,

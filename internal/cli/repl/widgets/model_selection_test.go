@@ -11,6 +11,20 @@ import (
 	"github.com/user/keen-code/internal/providers"
 )
 
+func TestModelSelectionHidesOpenAICompatibleProvider(t *testing.T) {
+	registry := &providers.Registry{Providers: []providers.Provider{
+		{ID: config.ProviderOpenAICompatible, Name: "OpenAI Compatible"},
+		{ID: config.ProviderOpenAI, Name: "OpenAI"},
+	}}
+	m := New(registry, config.DefaultGlobalConfig(), config.NewLoader(), &config.ResolvedConfig{}, nil)
+	if len(m.ProviderList) != 1 || m.ProviderList[0].ID != config.ProviderOpenAI {
+		t.Fatalf("provider list = %+v, want only OpenAI", m.ProviderList)
+	}
+	if len(registry.Providers) != 2 {
+		t.Fatalf("model selection mutated provider registry: %+v", registry.Providers)
+	}
+}
+
 func TestIsValidBaseURL_Empty(t *testing.T) {
 	if err := isValidBaseURL(""); err != nil {
 		t.Errorf("expected empty URL to be valid, got %v", err)
