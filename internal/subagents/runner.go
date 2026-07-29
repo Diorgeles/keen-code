@@ -3,7 +3,9 @@ package subagents
 import (
 	"context"
 	"fmt"
+	"maps"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/user/keen-code/internal/config"
@@ -12,18 +14,23 @@ import (
 )
 
 type ClientFactory func(*config.ResolvedConfig) (llm.LLMClient, error)
+type ConfigResolver func(Profile) (*config.ResolvedConfig, error)
+type RegistryFactory func(Profile, *tools.Registry) *tools.Registry
 
 const defaultTimeoutSeconds = 1800
 
-type ProfileProvider func() []Profile
-
 type Runner struct {
-	WorkingDir  string
-	Config      *config.ResolvedConfig
-	Profiles    []Profile
-	GetProfiles ProfileProvider
-	NewClient   ClientFactory
-	Registry    *tools.Registry
+	WorkingDir       string
+	Config           *config.ResolvedConfig
+	GetProfiles      func() []Profile
+	NewClient        ClientFactory
+	GetRegistry      func() *tools.Registry
+	ResolveConfig    ConfigResolver
+	NewRegistry      RegistryFactory
+	ProjectContext   func() string
+	GetSkillsCatalog func() string
+	Activity         chan<- ToolActivity
+	runCounter       atomic.Uint64
 }
 
 type Result struct {
@@ -33,116 +40,106 @@ type Result struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func (r *Runner) RunDelegate(ctx context.Context, agent, task string) (any, error) {
-	return r.Run(ctx, agent, task)
+func (r *Runner) RunDelegate(ctx context.Context, agent string, instanceIndex, instanceCount int, task string) (any, error) {
+	return r.run(ctx, agent, activityAgentName(agent, instanceIndex, instanceCount), task)
 }
 
 func (r *Runner) Run(ctx context.Context, agent, task string) (Result, error) {
-	profile, ok := Find(r.profiles(), strings.TrimSpace(agent))
+	return r.run(ctx, agent, strings.TrimSpace(agent), task)
+}
+
+func (r *Runner) run(ctx context.Context, agent, activityAgent, task string) (Result, error) {
+	if r.GetProfiles == nil {
+		err := fmt.Errorf("subagent profile provider not initialized")
+		return failedResult(agent, "", err.Error(), err)
+	}
+	profile, ok := Find(r.GetProfiles(), strings.TrimSpace(agent))
 	if !ok {
-		return Result{Agent: agent, Status: "error", Error: "unknown subagent"}, fmt.Errorf("unknown subagent %q", agent)
+		err := fmt.Errorf("unknown subagent %q", agent)
+		return failedResult(agent, "", "unknown subagent", err)
 	}
 	if strings.TrimSpace(task) == "" {
-		return Result{Agent: profile.Name, Status: "error", Error: "task is required"}, fmt.Errorf("task is required")
-	}
-	if r.Config == nil {
-		return Result{Agent: profile.Name, Status: "error", Error: "LLM config not initialized"}, fmt.Errorf("LLM config not initialized")
-	}
-	newClient := r.NewClient
-	if newClient == nil {
-		newClient = llm.NewClient
+		err := fmt.Errorf("task is required")
+		return failedResult(profile.Name, "", err.Error(), err)
 	}
 
-	client, err := newClient(cloneConfig(r.Config))
+	cfg, err := r.resolvedConfig(profile)
 	if err != nil {
-		return Result{Agent: profile.Name, Status: "error", Error: err.Error()}, err
+		return failedResult(profile.Name, "", err.Error(), err)
+	}
+	if r.NewClient == nil {
+		err := fmt.Errorf("subagent client factory not initialized")
+		return failedResult(profile.Name, "", err.Error(), err)
+	}
+	client, err := r.NewClient(cfg)
+	if err != nil {
+		return failedResult(profile.Name, "", err.Error(), err)
+	}
+	registry, err := r.toolRegistry(profile)
+	if err != nil {
+		return failedResult(profile.Name, "", err.Error(), err)
 	}
 
-	timeoutSeconds := profile.TimeoutSeconds
-	if timeoutSeconds <= 0 {
-		timeoutSeconds = defaultTimeoutSeconds
-	}
-	childCtx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSeconds)*time.Second)
+	childCtx, cancel := context.WithTimeout(ctx, profileTimeout(profile))
 	defer cancel()
 
-	messages := []llm.Message{
-		{
-			Role:    llm.RoleSystem,
-			Content: buildChildPrompt(r.WorkingDir, profile),
-		},
-		{
-			Role:    llm.RoleUser,
-			Content: buildUserTask(task),
-		},
-	}
-	events, err := client.StreamChat(childCtx, messages, r.toolRegistry(profile), llm.StreamOptions{OneShot: true})
+	events, err := client.StreamChat(childCtx, r.childMessages(profile, task), registry, llm.StreamOptions{OneShot: true})
 	if err != nil {
-		return Result{Agent: profile.Name, Status: "error", Error: err.Error()}, err
+		return failedResult(profile.Name, "", err.Error(), err)
 	}
-	text, err := collectResult(childCtx, events)
+	runID := fmt.Sprintf("subagent-%d", r.runCounter.Add(1))
+	text, err := collectResult(childCtx, events, activityAgent, runID, r.Activity)
 	if err != nil {
-		return Result{Agent: profile.Name, Status: "error", Result: text, Error: err.Error()}, err
+		return failedResult(profile.Name, text, err.Error(), err)
 	}
 	return Result{Agent: profile.Name, Status: "completed", Result: strings.TrimSpace(text)}, nil
 }
 
-func (r *Runner) toolRegistry(profile Profile) *tools.Registry {
-	child := tools.NewRegistry()
-	if r.Registry == nil {
-		return child
-	}
-	for _, name := range readOnlyTools(profile) {
-		if tool, ok := r.Registry.Get(name); ok {
-			_ = child.Register(tool)
+func (r *Runner) resolvedConfig(profile Profile) (*config.ResolvedConfig, error) {
+	if profile.Provider != "" {
+		if r.ResolveConfig == nil {
+			return nil, fmt.Errorf("subagent provider resolver not initialized")
 		}
+		return r.ResolveConfig(profile)
 	}
-	return child
-}
-
-func (r *Runner) profiles() []Profile {
-	if r.GetProfiles != nil {
-		return r.GetProfiles()
+	if r.Config == nil {
+		return nil, fmt.Errorf("LLM config not initialized")
 	}
-	return append([]Profile(nil), r.Profiles...)
+	return cloneConfig(r.Config), nil
 }
 
-func collectResult(ctx context.Context, events <-chan llm.StreamEvent) (string, error) {
-	var sb strings.Builder
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return strings.TrimSpace(sb.String()), nil
-			}
-			switch event.Type {
-			case llm.StreamEventTypeChunk:
-				sb.WriteString(event.Content)
-			case llm.StreamEventTypeDone:
-				return strings.TrimSpace(sb.String()), nil
-			case llm.StreamEventTypeError, llm.StreamEventTypeIncomplete:
-				if event.Error != nil {
-					return strings.TrimSpace(sb.String()), event.Error
-				}
-				return strings.TrimSpace(sb.String()), fmt.Errorf("subagent stream incomplete")
-			}
-		case <-ctx.Done():
-			return strings.TrimSpace(sb.String()), ctx.Err()
-		}
+func (r *Runner) toolRegistry(profile Profile) (*tools.Registry, error) {
+	if r.GetRegistry == nil {
+		return nil, fmt.Errorf("parent tool registry provider not initialized")
 	}
+	if r.NewRegistry == nil {
+		return nil, fmt.Errorf("subagent tool registry factory not initialized")
+	}
+	registry := r.NewRegistry(profile, r.GetRegistry())
+	if registry == nil {
+		return nil, fmt.Errorf("subagent tool registry factory returned nil")
+	}
+	return registry, nil
 }
 
-func buildChildPrompt(workingDir string, profile Profile) string {
-	var sb strings.Builder
-	sb.WriteString(strings.TrimSpace(profile.Instructions))
-	sb.WriteString(fmt.Sprintf("\n\nWorking directory: %s", workingDir))
-	return sb.String()
+func profileTimeout(profile Profile) time.Duration {
+	seconds := profile.TimeoutSeconds
+	if seconds <= 0 {
+		seconds = defaultTimeoutSeconds
+	}
+	return time.Duration(seconds) * time.Second
 }
 
-func buildUserTask(task string) string {
-	var sb strings.Builder
-	sb.WriteString("Delegated task:\n")
-	sb.WriteString(strings.TrimSpace(task))
-	return sb.String()
+func activityAgentName(agent string, index, count int) string {
+	agent = strings.TrimSpace(agent)
+	if count <= 1 {
+		return agent
+	}
+	return fmt.Sprintf("%s-%d", agent, index)
+}
+
+func failedResult(agent, partial, message string, err error) (Result, error) {
+	return Result{Agent: agent, Status: "error", Result: partial, Error: message}, err
 }
 
 func cloneConfig(cfg *config.ResolvedConfig) *config.ResolvedConfig {
@@ -150,5 +147,9 @@ func cloneConfig(cfg *config.ResolvedConfig) *config.ResolvedConfig {
 		return nil
 	}
 	cloned := *cfg
+	if cfg.Headers != nil {
+		cloned.Headers = make(map[string]string, len(cfg.Headers))
+		maps.Copy(cloned.Headers, cfg.Headers)
+	}
 	return &cloned
 }

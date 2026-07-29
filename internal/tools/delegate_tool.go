@@ -8,7 +8,7 @@ import (
 )
 
 type SubagentRunner interface {
-	RunDelegate(ctx context.Context, agent, task string) (any, error)
+	RunDelegate(ctx context.Context, agent string, instanceIndex, instanceCount int, task string) (any, error)
 }
 
 const maxDelegateTasks = 10
@@ -88,10 +88,18 @@ func (t *DelegateTool) Execute(ctx context.Context, input any) (any, error) {
 	}
 
 	results := make([]delegateResult, len(parsed.Tasks))
+	counts := make(map[string]int, len(parsed.Tasks))
+	for _, task := range parsed.Tasks {
+		counts[task.Agent]++
+	}
+	indexes := make(map[string]int, len(counts))
 	var wg sync.WaitGroup
 	for i, task := range parsed.Tasks {
+		indexes[task.Agent]++
+		instanceIndex := indexes[task.Agent]
+		instanceCount := counts[task.Agent]
 		wg.Go(func() {
-			result, runErr := t.runner.RunDelegate(ctx, task.Agent, task.Task)
+			result, runErr := t.runner.RunDelegate(ctx, task.Agent, instanceIndex, instanceCount, task.Task)
 			results[i] = delegateResult{Agent: task.Agent, Result: result}
 			if runErr != nil {
 				results[i].Error = runErr.Error()

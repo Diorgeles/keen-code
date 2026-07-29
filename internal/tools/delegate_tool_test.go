@@ -11,8 +11,10 @@ import (
 )
 
 type delegateCall struct {
-	agent string
-	task  string
+	agent         string
+	instanceIndex int
+	instanceCount int
+	task          string
 }
 
 type mockSubagentRunner struct {
@@ -26,9 +28,9 @@ type mockSubagentRunner struct {
 	release chan struct{}
 }
 
-func (m *mockSubagentRunner) RunDelegate(ctx context.Context, agent, task string) (any, error) {
+func (m *mockSubagentRunner) RunDelegate(ctx context.Context, agent string, instanceIndex, instanceCount int, task string) (any, error) {
 	m.mu.Lock()
-	m.calls = append(m.calls, delegateCall{agent: agent, task: task})
+	m.calls = append(m.calls, delegateCall{agent: agent, instanceIndex: instanceIndex, instanceCount: instanceCount, task: task})
 	m.mu.Unlock()
 	if m.started != nil {
 		m.started <- struct{}{}
@@ -109,7 +111,7 @@ func TestDelegateTool_ExecutePassesTasksToRunner(t *testing.T) {
 	if len(calls) != 1 {
 		t.Fatalf("calls = %d, want 1", len(calls))
 	}
-	wantCall := delegateCall{agent: "explorer", task: "Inspect internal/tools."}
+	wantCall := delegateCall{agent: "explorer", instanceIndex: 1, instanceCount: 1, task: "Inspect internal/tools."}
 	if calls[0] != wantCall {
 		t.Fatalf("call = %+v, want %+v", calls[0], wantCall)
 	}
@@ -126,6 +128,36 @@ func TestDelegateTool_ExecutePassesTasksToRunner(t *testing.T) {
 	}
 	if !reflect.DeepEqual(output["failed_by_agent"], map[string]int{}) {
 		t.Fatalf("failed_by_agent = %#v, want empty", output["failed_by_agent"])
+	}
+}
+
+func TestDelegateTool_AssignsPerAgentInstancePositions(t *testing.T) {
+	runner := &mockSubagentRunner{}
+	tool := NewDelegateTool(runner)
+	_, err := tool.Execute(context.Background(), delegateTasks(
+		map[string]any{"agent": "explorer", "task": "inspect"},
+		map[string]any{"agent": "implementer", "task": "one"},
+		map[string]any{"agent": "implementer", "task": "two"},
+	))
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	calls := runner.recordedCalls()
+	if len(calls) != 3 {
+		t.Fatalf("calls = %d, want 3", len(calls))
+	}
+	byTask := make(map[string]delegateCall, len(calls))
+	for _, call := range calls {
+		byTask[call.task] = call
+	}
+	if got := byTask["inspect"]; got.instanceIndex != 1 || got.instanceCount != 1 {
+		t.Fatalf("explorer position = (%d, %d), want (1, 1)", got.instanceIndex, got.instanceCount)
+	}
+	for task, wantIndex := range map[string]int{"one": 1, "two": 2} {
+		got := byTask[task]
+		if got.instanceIndex != wantIndex || got.instanceCount != 2 {
+			t.Fatalf("implementer %s position = (%d, %d), want (%d, 2)", task, got.instanceIndex, got.instanceCount, wantIndex)
+		}
 	}
 }
 

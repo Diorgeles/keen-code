@@ -208,6 +208,10 @@ func memorySection(workingDir string) string {
 	return "# Memory\n\n" + content
 }
 
+func ProjectInstructions(workingDir string) string {
+	return projectInstructions(workingDir)
+}
+
 func projectInstructions(workingDir string) string {
 	candidates := []string{"AGENTS.md", "CLAUDE.md", "GEMINI.md"}
 	path, content := findUpward(workingDir, candidates)
