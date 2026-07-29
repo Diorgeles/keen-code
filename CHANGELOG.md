@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-07-29
+
+### Changed
+- Prompt before updating an already configured provider while changing its model.
+- Shorten REPL tool-input previews and render argument values without quotes.
+
 ## [0.38.0] - 2026-07-29
 
 ### Added
@@ -809,7 +815,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GoReleaser config for cross-platform binary distribution
 - npm wrapper package for installation via `npm install -g keen-code`
 
-[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/mochow13/keen-code/compare/v0.38.1...HEAD
+[0.38.1]: https://github.com/mochow13/keen-code/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/mochow13/keen-code/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/mochow13/keen-code/compare/v0.36.3...v0.37.0
 [0.36.3]: https://github.com/mochow13/keen-code/compare/v0.36.2...v0.36.3
